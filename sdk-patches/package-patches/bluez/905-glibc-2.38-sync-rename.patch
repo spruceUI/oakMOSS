@@ -1,0 +1,28 @@
+glibc 2.38 declares sync() in <unistd.h>; the file-scope driver named "sync" now collides.
+--- a/obexd/client/sync.c	2026-09-15 00:37:54.991197633 -0500
++++ b/obexd/client/sync.c	2026-09-15 00:37:54.991197633 -0500
+@@ -222,7 +222,7 @@
+ 	g_dbus_unregister_interface(conn, path, SYNC_INTERFACE);
+ }
+ 
+-static struct obc_driver sync = {
++static struct obc_driver sync_driver = {
+ 	.service = "SYNC",
+ 	.uuid = SYNC_UUID,
+ 	.target = OBEX_SYNC_UUID,
+@@ -241,7 +241,7 @@
+ 	if (!conn)
+ 		return -EIO;
+ 
+-	err = obc_driver_register(&sync);
++	err = obc_driver_register(&sync_driver);
+ 	if (err < 0) {
+ 		dbus_connection_unref(conn);
+ 		conn = NULL;
+@@ -258,5 +258,5 @@
+ 	dbus_connection_unref(conn);
+ 	conn = NULL;
+ 
+-	obc_driver_unregister(&sync);
++	obc_driver_unregister(&sync_driver);
+ }

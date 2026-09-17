@@ -1,0 +1,49 @@
+diff --git a/awimage.c b/awimage.c
+index 94e9996..60bef92 100644
+--- a/awimage.c
++++ b/awimage.c
+@@ -410,7 +410,7 @@ decrypt_image(const char *infn, const char *outfn)
+ 
+ 
+     /* Check version of header and setup our local state */
+-    if (header->header_version == 0x0300) {
++    if ((header->header_version == 0x0300 || header->header_version == 0x0415)) {
+         num_files = header->v3.num_files;
+         hardware_id = header->v3.hardware_id;
+         firmware_id = header->v3.firmware_id;
+@@ -435,7 +435,7 @@ decrypt_image(const char *infn, const char *outfn)
+         void *next;
+ 
+         filehdr = (struct imagewty_file_header*)(image + 1024 + (i * 1024));
+-        if (header->header_version == 0x0300) {
++        if ((header->header_version == 0x0300 || header->header_version == 0x0415)) {
+             stored_length = filehdr->v3.stored_length;
+             filename = filehdr->v3.filename;
+         } else {
+@@ -510,7 +510,7 @@ unpack_image(const char *infn, const char *outdn)
+ 
+ 
+     /* Check version of header and setup our local state */
+-    if (header->header_version == 0x0300) {
++    if ((header->header_version == 0x0300 || header->header_version == 0x0415)) {
+         num_files = header->v3.num_files;
+         hardware_id = header->v3.hardware_id;
+         firmware_id = header->v3.firmware_id;
+@@ -535,7 +535,7 @@ unpack_image(const char *infn, const char *outdn)
+         void *next;
+ 
+         filehdr = (struct imagewty_file_header*)(image + 1024 + (i * 1024));
+-        if (header->header_version == 0x0300) {
++        if ((header->header_version == 0x0300 || header->header_version == 0x0415)) {
+             stored_length = filehdr->v3.stored_length;
+             filename = filehdr->v3.filename;
+         } else {
+@@ -598,7 +598,7 @@ unpack_image(const char *infn, const char *outdn)
+         uint32_t offset;
+ 
+         filehdr = (struct imagewty_file_header*)(image + 1024 + (i * 1024));
+-        if (header->header_version == 0x0300) {
++        if ((header->header_version == 0x0300 || header->header_version == 0x0415)) {
+             stored_length = filehdr->v3.stored_length;
+             original_length = filehdr->v3.original_length;
+             filename = filehdr->v3.filename;

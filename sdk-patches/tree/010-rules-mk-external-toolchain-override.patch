@@ -1,0 +1,58 @@
+--- a/rules.mk
++++ b/rules.mk
+@@ -162,6 +162,27 @@
+   CONFIG_LIBSTDCPP_ROOT_DIR=$(CONFIG_TOOLCHAIN_ROOT)
+   CONFIG_LIBASAN_ROOT_DIR=$(CONFIG_TOOLCHAIN_ROOT)
+ 
++  # External prebuilt toolchain override, driven by the
++  # environment so the SDK's own sunxi prebuilt stays the default. See
++  # docs/sdk-mods.md. SYSROOT must expose ./lib and ./usr/lib (a shim
++  # with symlinks is fine). The kernel keeps the vendor compiler via KERNEL_CROSS.
++  ifneq ($(TINA_EXT_TOOLCHAIN_ROOT),)
++    CONFIG_TOOLCHAIN_ROOT=$(TINA_EXT_TOOLCHAIN_ROOT)
++    CONFIG_TOOLCHAIN_PREFIX=$(TINA_EXT_TOOLCHAIN_PREFIX)
++    CONFIG_TARGET_NAME=$(TINA_EXT_TOOLCHAIN_TARGET_NAME)
++    CONFIG_TOOLCHAIN_BIN_PATH="./wrap ./bin"
++    CONFIG_TOOLCHAIN_LIB_PATH=""
++    CONFIG_LIBATOMIC_ROOT_DIR=$(TINA_EXT_TOOLCHAIN_SYSROOT)
++    CONFIG_LIBC_ROOT_DIR=$(TINA_EXT_TOOLCHAIN_SYSROOT)
++    CONFIG_LIBGCC_ROOT_DIR=$(TINA_EXT_TOOLCHAIN_SYSROOT)
++    CONFIG_LIBPTHREAD_ROOT_DIR=$(TINA_EXT_TOOLCHAIN_SYSROOT)
++    CONFIG_LIBRT_ROOT_DIR=$(TINA_EXT_TOOLCHAIN_SYSROOT)
++    CONFIG_LIBSSP_ROOT_DIR=$(TINA_EXT_TOOLCHAIN_SYSROOT)
++    CONFIG_LIBSTDCPP_ROOT_DIR=$(TINA_EXT_TOOLCHAIN_SYSROOT)
++    CONFIG_LIBASAN_ROOT_DIR=$(TINA_EXT_TOOLCHAIN_SYSROOT)
++    KERNEL_CROSS:=$(TINA_EXT_KERNEL_CROSS)
++  endif
++
+   ifneq ($(ARCH), riscv)
+     CONFIG_LIBATOMIC_FILE_SPEC="./lib/libatomic.so.*"
+     CONFIG_LIBGCC_FILE_SPEC="./lib/libgcc_s.so.*"
+@@ -170,6 +191,16 @@
+     CONFIG_LIBSSP_FILE_SPEC="./lib/libssp.so.*"
+     CONFIG_LIBSTDCPP_FILE_SPEC="./lib/libstdc++.so.*"
+     CONFIG_LIBASAN_FILE_SPEC="./lib/libasan.so.*"
++    ifneq ($(TINA_EXT_TOOLCHAIN_ROOT),)
++      CONFIG_LIBATOMIC_FILE_SPEC="./usr/lib/libatomic.so.*"
++      CONFIG_LIBGCC_FILE_SPEC="./usr/lib/libgcc_s.so.*"
++      CONFIG_LIBPTHREAD_FILE_SPEC="./lib/libpthread.so.*"
++      CONFIG_LIBRT_FILE_SPEC="./lib/librt.so.*"
++      CONFIG_LIBSSP_FILE_SPEC=""
++      CONFIG_LIBSTDCPP_FILE_SPEC="./usr/lib/libstdc++.so.*"
++      CONFIG_LIBASAN_FILE_SPEC=""
++      CONFIG_LIBC_FILE_SPEC="./lib/ld-linux-aarch64.so.1 ./lib/libc.so ./lib/lib{anl,c,crypt,dl,m,mvec,nsl,nss_compat,nss_dns,nss_files,resolv,util,BrokenLocale,thread_db,c_malloc_debug}.so.*"
++    endif
+   else
+     CONFIG_LIBC_ROOT_DIR="$(CONFIG_TOOLCHAIN_ROOT)/sysroot/"
+     CONFIG_LIBGCC_ROOT_DIR="$(CONFIG_TOOLCHAIN_ROOT)/riscv64-unknown-linux-gnu/"
+@@ -188,6 +219,10 @@
+     CONFIG_TOOLCHAIN_INC_PATH="./usr/include ./include"
+     ifneq ($(ARCH), riscv)
+       CONFIG_LIBC_FILE_SPEC="./lib/ld-{*.so,linux*.so.*} ./lib/lib{anl,c,cidn,gomp,crypt,dl,m,nsl,nss_dns,nss_files,resolv,util}{-*.so,.so*}"
++  # TINA_EXT_LIBC_SPEC_LATE: the external-toolchain override must win over the glibc spec above
++  ifneq ($(TINA_EXT_TOOLCHAIN_ROOT),)
++    CONFIG_LIBC_FILE_SPEC="./lib/ld-linux-aarch64.so.1 ./lib/libc.so ./lib/lib{anl,c,crypt,dl,m,mvec,nsl,nss_compat,nss_dns,nss_files,resolv,util,BrokenLocale,thread_db,c_malloc_debug}.so.*"
++  endif
+     endif
+     CONFIG_LDD_ROOT_DIR=$(CONFIG_TOOLCHAIN_ROOT)
+     CONFIG_LDD_FILE_SPEC="./usr/bin/ldd"

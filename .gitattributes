@@ -1,0 +1,23 @@
+# Everything in this repository is LF. The scripts run inside an Ubuntu 18.04
+# build container and the overlay files land in a Linux rootfs, so a CRLF
+# checkout on Windows would break both. Pin it rather than trusting core.autocrlf.
+* text=auto eol=lf
+
+# Patches must survive byte-for-byte: `patch -p1` matches context exactly, and
+# several of these carry trailing whitespace on purpose.
+*.patch  -text
+*.config -text
+
+# Vendor binaries: never touched, never diffed as text.
+*.so     binary
+*.so.*   binary
+*.bmp    binary
+*.img    binary
+*.xz     binary
+*.zip    binary
+*.tgz    binary
+*.fex    binary
+
+# Keep build/CI plumbing out of source tarballs.
+/.gitattributes export-ignore
+/.gitignore     export-ignore

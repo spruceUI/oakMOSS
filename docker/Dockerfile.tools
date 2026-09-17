@@ -1,0 +1,6 @@
+# Optional second layer for running a prebuilt OpenixCard binary inside the container
+# (it needs libconfuse2). Not used by the scripts: build-openixcard.sh builds it on the host. Build: docker build -t oakmoss-tina-build:ubuntu18-tools -f docker/Dockerfile.tools docker
+FROM oakmoss-tina-build:ubuntu18
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends libconfuse2 && rm -rf /var/lib/apt/lists/*
+USER builder

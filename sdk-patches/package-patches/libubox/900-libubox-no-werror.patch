@@ -1,0 +1,12 @@
+GCC 13 promotes an array-bounds warning in blobmsg.c to an error under the
+project's own -Werror; drop -Werror.
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -3,7 +3,7 @@
+ 
+ PROJECT(ubox C)
+-ADD_DEFINITIONS(-Os -Wall -Werror --std=gnu99 -g3 -Wmissing-declarations)
++ADD_DEFINITIONS(-Os -Wall --std=gnu99 -g3 -Wmissing-declarations)
+ 
+ OPTION(BUILD_LUA "build Lua plugin" ON)
+ OPTION(BUILD_EXAMPLES "build examples" ON)

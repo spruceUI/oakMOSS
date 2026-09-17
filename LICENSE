@@ -1,0 +1,39 @@
+oakMOSS
+
+The files that are oakMOSS's own work (the scripts, the build configuration,
+the documentation, the hand-off script, the container recipe and the patches
+authored here) are licensed under the Creative Commons
+Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0), the same
+terms spruceOS uses. You may copy, modify and share them for non-commercial
+purposes with attribution. To view a copy of this license, visit
+https://creativecommons.org/licenses/by-nc/4.0/
+
+This repository also carries, builds against, or downloads work by others;
+those parts keep their own terms and are listed, with their origin, in
+ATTRIBUTION.md. In particular:
+
+- configs/phase1.config, configs/phase2.config, overlay/etc/rc.local and
+  overlay/etc/banner are Shaun Inman's Moss-zero28 files, used with attribution
+  (that repository carries no license file);
+- overlay/usr/magicx/lib/ contains TrimUI's SDL2 builds (zlib-licensed libraries);
+- sdk-patches/ncurses-6.2/ and sdk-patches/gcc-7.5.0-patches/ are OpenWrt
+  material (GPL-2.0); the other patches under sdk-patches/ modify GPL/LGPL/ISC
+  packages and are offered under the license of the package they touch;
+- the Tina SDK, the Zero 40 kernel object, the Arm GNU Toolchain, OpenixCard and
+  the main-zero40 release image are never stored here; the build downloads or
+  expects them under their own terms.
+
+A note on the built images. Nothing proprietary is stored in this repository,
+but the images the build produces are a different matter: they contain the
+Allwinner/MagicX kernel and U-Boot, Imagination's PowerVR GE8300 userland blobs,
+the XR829 driver and firmware, the prebuilt SDL2 libraries above, and - in the
+hybrid and stock-chain lanes - kernel modules and boot components taken from the
+board's own stock firmware. Building those images for your own device is
+ordinary use of a vendor SDK on vendor hardware. Publishing them redistributes
+those vendor components, which this project does on the same footing as the rest
+of the embedded-Linux ecosystem rather than under any explicit grant from the
+vendors. Publishing a release here is therefore always a deliberate, manual
+step. If a rights holder objects to any of it, it will be removed.
+
+The images are provided as-is, without warranty of any kind. Flashing a device
+replaces the firmware it boots from and is at your own risk.

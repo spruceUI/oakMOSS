@@ -1,0 +1,55 @@
+# Large or proprietary inputs and everything derived from them (see README.md).
+# inputs/ holds the SDK zip, the vendor encrypt object and the stock firmware
+# images; none of them are redistributable, all of them are fetched or supplied
+# by the builder. The two small manifests below ARE part of the build.
+/inputs/*
+!/inputs/README.md
+!/inputs/xu20-pvr-1.11.sha256
+
+# Work trees: unpacked SDK, toolchains, host tools, build outputs.
+/sdk/
+/toolchains/
+/tools/
+/builds/
+
+# CI collects release artefacts here before uploading them.
+/out/
+
+# Vendor kernel encrypt object, copied in by the build.
+/boards/zero40/encrypt
+
+# Local drop-in boot logo (see ATTRIBUTION.md, "Boot logo").
+/overlay/bootlogo.bmp
+
+# Build and download leftovers.
+*.part
+*.tmp
+*.log
+core
+core.[0-9]*
+*.o
+*.ko
+*.img
+*.img.xz
+*.fex
+
+# Python.
+__pycache__/
+*.py[cod]
+
+# Local environment and secrets. Nothing in this repository should ever need
+# one, but an accidental .env must not be committable.
+.env
+.env.*
+*.pem
+*.key
+!sdk-patches/**/*.key
+
+# Editor and OS cruft.
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db

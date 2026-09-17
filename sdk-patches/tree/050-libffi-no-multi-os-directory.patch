@@ -1,0 +1,11 @@
+--- a/package/libs/libffi/Makefile
++++ b/package/libs/libffi/Makefile
+@@ -92,5 +92,8 @@
+ 
+ endef
+ 
++# Arm GNU gcc reports a lib64 multi-os dir; keep libffi in /usr/lib
++CONFIGURE_ARGS += --disable-multi-os-directory
++
+ $(eval $(call HostBuild))
+ $(eval $(call BuildPackage,libffi))

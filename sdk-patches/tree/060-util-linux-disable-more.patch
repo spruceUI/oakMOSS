@@ -1,0 +1,10 @@
+--- a/package/utils/util-linux/Makefile
++++ b/package/utils/util-linux/Makefile
+@@ -55,6 +55,7 @@
+ 	--disable-sulogin	\
+ 	--without-python	\
+ 	--without-udev		\
++	--disable-more		\
+ 	$(if $(CONFIG_PACKAGE_cal)$(CONFIG_PACKAGE_cfdisk)$(CONFIG_PACKAGE_setterm),--with-ncurses,--without-ncurses)
+ 
+ HOST_TARGET_CFLAGS += $(FPIC) -std=gnu99

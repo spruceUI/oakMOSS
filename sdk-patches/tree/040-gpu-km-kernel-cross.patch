@@ -1,0 +1,11 @@
+--- a/package/kernel/gpu-km/Makefile
++++ b/package/kernel/gpu-km/Makefile
+@@ -17,7 +17,7 @@
+ endif
+ 
+ MAKE_OPTS:=\
+-	CROSS_COMPILE=$(TARGET_CROSS) \
++	CROSS_COMPILE=$(KERNEL_CROSS) \
+ 	KDIR=$(LINUX_DIR) \
+ 	KERNELDIR=$(LINUX_DIR) \
+ 	LICHEE_PLATFORM=linux \

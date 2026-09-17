@@ -1,0 +1,51 @@
+glibc >= 2.28 removed makedev/major/minor from <sys/types.h>; include <sys/sysmacros.h> as e2fsprogs 1.43 does.
+--- a/misc/mk_hugefiles.c	2026-09-15 00:43:52.891137266 -0500
++++ b/misc/mk_hugefiles.c	2026-09-15 00:43:52.891137266 -0500
+@@ -33,6 +33,7 @@
+ #endif
+ #include <sys/ioctl.h>
+ #include <sys/types.h>
++#include <sys/sysmacros.h>
+ #include <sys/stat.h>
+ #include <libgen.h>
+ #include <limits.h>
+--- a/lib/ext2fs/ismounted.c	2026-09-15 00:43:52.891137266 -0500
++++ b/lib/ext2fs/ismounted.c	2026-09-15 00:43:52.891137266 -0500
+@@ -10,6 +10,7 @@
+  */
+ 
+ #include "config.h"
++#include <sys/sysmacros.h>
+ #include <stdio.h>
+ #if HAVE_UNISTD_H
+ #include <unistd.h>
+--- a/lib/ext2fs/finddev.c	2026-09-15 00:43:52.891137266 -0500
++++ b/lib/ext2fs/finddev.c	2026-09-15 00:43:52.891137266 -0500
+@@ -20,6 +20,7 @@
+ #include <string.h>
+ #if HAVE_SYS_TYPES_H
+ #include <sys/types.h>
++#include <sys/sysmacros.h>
+ #endif
+ #if HAVE_SYS_STAT_H
+ #include <sys/stat.h>
+--- a/lib/blkid/devno.c	2026-09-15 00:43:52.891137266 -0500
++++ b/lib/blkid/devno.c	2026-09-15 00:43:52.891137266 -0500
+@@ -20,6 +20,7 @@
+ #include <string.h>
+ #if HAVE_SYS_TYPES_H
+ #include <sys/types.h>
++#include <sys/sysmacros.h>
+ #endif
+ #if HAVE_SYS_STAT_H
+ #include <sys/stat.h>
+--- a/lib/blkid/devname.c	2026-09-15 00:43:52.891137266 -0500
++++ b/lib/blkid/devname.c	2026-09-15 00:43:52.891137266 -0500
+@@ -25,6 +25,7 @@
+ #include <ctype.h>
+ #if HAVE_SYS_TYPES_H
+ #include <sys/types.h>
++#include <sys/sysmacros.h>
+ #endif
+ #include <dirent.h>
+ #if HAVE_SYS_STAT_H

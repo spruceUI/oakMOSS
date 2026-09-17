@@ -1,0 +1,15 @@
+#!/bin/sh /etc/rc.common
+# Tina's wifimanager package installs a wpa_supplicant service here (S96): a
+# supplicant on wlan0 against the empty /etc/wifi/wpa_supplicant.conf, started
+# by procd as soon as rc.local hands off to the launcher on SD2. That launcher
+# owns the radio and runs its own supplicant; a second one on the interface
+# sent a DISCONNECT after every association the first had made (Zero 28,
+# 2026-09-16: dmesg "End to Connection without 4-way", then
+# cfg80211_rtw_disconnect 5 ms later, until WiFi was toggled off and on).
+# Kept as a no-op so the S96/K98 links installed by the package still resolve.
+START=96
+STOP=98
+boot() { return 0; }
+start() { return 0; }
+stop() { return 0; }
+restart() { return 0; }
