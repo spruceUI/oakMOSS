@@ -1,0 +1,386 @@
+--- a/lichee/linux-4.9/init/main.c
++++ b/lichee/linux-4.9/init/main.c
+@@ -773,6 +773,67 @@
+ 	return ret;
+ }
+ 
++/*
++ * oakMOSS KDEBUG_MARK (debug kernels only, sdk-patches/debug): oakmoss_mark=<phys>
++ * names a 32-bit register that keeps its value through a reset and a power-off
++ * (RTC general-purpose register 5); the next boot's U-Boot reads it. oakmoss_mark()
++ * writes the whole register: each initcall its own address before it runs, the
++ * hand-off to init stages 1-6, and drivers under suspicion step codes 0x4859SSNN
++ * (Hynitron) / 0x4158SSNN (AXS15205), stored packed as DD.ss.0000 (DD the driver
++ * byte, ss = NN for init steps (SS 01), 0x80|NN for probe steps (02), 0x40|NN for
++ * reset-pulse steps (03), 0xff for the probe's error path). oakmoss_mark2() records touch-bus I2C phases (0x4931AAPP) in the low half
++ * while a driver step is current, so a hang inside a transfer still shows which step
++ * started it. Only register 5 is ever written: clearing register 4 from U-Boot as
++ * well stopped both MagicX boards in U-Boot (2026-09-18). Initcall addresses stop
++ * once init is about to run; driver steps and I2C phases go on, so a driver loaded
++ * later from userland is traced the same way.
++ */
++static phys_addr_t oakmoss_mark_phys;
++static void __iomem *oakmoss_mark_reg;
++static bool oakmoss_initcalls_done;
++static u32 oakmoss_last;
++
++static int __init oakmoss_mark_setup(char *s)
++{
++	unsigned long long v;
++
++	if (!kstrtoull(s, 0, &v))
++		oakmoss_mark_phys = v;
++	return 1;
++}
++__setup("oakmoss_mark=", oakmoss_mark_setup);
++
++static void oakmoss_mark_write(u32 v)
++{
++	if (!oakmoss_mark_phys)
++		return;
++	if (!oakmoss_mark_reg)
++		oakmoss_mark_reg = ioremap(oakmoss_mark_phys, 4);
++	if (oakmoss_mark_reg)
++		writel(v, oakmoss_mark_reg);
++	oakmoss_last = v;
++}
++
++void oakmoss_mark(u32 v)
++{
++	u32 drv = v >> 16, ss = (v >> 8) & 0xff, nn = v & 0xff;
++
++	if (drv == 0x4859 || drv == 0x4158)
++		v = (v & 0xff000000) | ((ss == 1 ? nn : ss == 3 ? 0x40 | nn :
++					    nn == 0xee ? 0xff : 0x80 | nn) << 16);
++	oakmoss_mark_write(v);
++}
++EXPORT_SYMBOL(oakmoss_mark);
++
++void oakmoss_mark2(u32 v)
++{
++	u32 d = oakmoss_last >> 24;
++
++	if (d == 0x48 || d == 0x41)
++		oakmoss_mark_write((oakmoss_last & 0xffff0000) | (v & 0xffff));
++}
++EXPORT_SYMBOL(oakmoss_mark2);
++
+ int __init_or_module do_one_initcall(initcall_t fn)
+ {
+ 	int count = preempt_count();
+@@ -782,6 +843,8 @@
+ 	if (initcall_blacklisted(fn))
+ 		return -EPERM;
+ 
++	if (!oakmoss_initcalls_done)
++		oakmoss_mark((u32)(unsigned long)fn);
+ 	if (initcall_debug)
+ 		ret = do_one_initcall_debug(fn);
+ 	else
+@@ -1041,8 +1104,10 @@
+ 	kernel_init_freeable();
+ 	/* need to finish all async __init code before freeing the memory */
+ 	async_synchronize_full();
++	oakmoss_mark(4);
+ 	free_initmem();
+ 	mark_readonly();
++	oakmoss_mark(5);
+ 	system_state = SYSTEM_RUNNING;
+ 	numa_default_policy();
+ 
+@@ -1063,6 +1128,8 @@
+ 	 * trying to recover a really broken machine.
+ 	 */
+ 	if (execute_command) {
++		oakmoss_mark(6);
++		oakmoss_initcalls_done = true;
+ 		ret = run_init_process(execute_command);
+ 		if (!ret)
+ 			return 0;
+@@ -1113,10 +1180,12 @@
+ 	page_alloc_init_late();
+ 
+ 	do_basic_setup();
++	oakmoss_mark(1);
+ 
+ 	/* Open the /dev/console on the rootfs, this should never fail */
+ 	if (sys_open((const char __user *) "/dev/console", O_RDWR, 0) < 0)
+ 		pr_err("Warning: unable to open an initial console.\n");
++	oakmoss_mark(2);
+ 
+ 	(void) sys_dup(0);
+ 	(void) sys_dup(0);
+@@ -1132,6 +1201,7 @@
+ 		ramdisk_execute_command = NULL;
+ 		prepare_namespace();
+ 	}
++	oakmoss_mark(3);
+ 
+ 	/*
+ 	 * Ok, we have completed the initial bootup, and
+--- a/lichee/linux-4.9/drivers/input/touchscreen/hynitron/hynitron_core.c
++++ b/lichee/linux-4.9/drivers/input/touchscreen/hynitron/hynitron_core.c
+@@ -22,6 +22,7 @@
+ #include "hynitron_core.h"
+ 
+ #include "hynitron_update_firmware.h"
++extern void oakmoss_mark(u32 v); /* oakMOSS KDEBUG_MARK: step codes 0x4859SSNN */
+ 
+ /*****************************************************************************
+ Main control platform----allwinner
+@@ -104,15 +105,19 @@
+  *  Return: 0 - Get correct Device ID
+  *****************************************************************************/
+ int hyn_reset_proc(int hdelayms) {
++	oakmoss_mark(0x48590301);
+ 	gpio_direction_output(hyn_ts_data->pdata->reset_gpio, 0);
+ 	mdelay(20);
++	oakmoss_mark(0x48590302);
+ 	hyn_reset_watchdog_proc();
+ 	gpio_direction_output(hyn_ts_data->pdata->reset_gpio, 1);
++	oakmoss_mark(0x48590303);
+ 
+ 	if (hdelayms) {
+ 		mdelay(hdelayms);
+ 	}
+ 
++	oakmoss_mark(0x48590304);
+ 	return 0;
+ }
+ /*****************************************************************************
+@@ -1861,6 +1866,7 @@
+ 	int ret = -1;
+ 	struct hynitron_ts_data *ts_data = NULL;
+ 	HYN_FUNC_ENTER();
++	oakmoss_mark(0x48590201);
+ 	if (config_info.dev == NULL)
+ 		config_info.dev = &client->dev;
+ 
+@@ -1881,6 +1887,7 @@
+ 	// ts_data->device_id = id->driver_data; //if null,may cause dump
+ 
+ 	ret = hyn_platform_data_init(ts_data);
++	oakmoss_mark(0x48590202);
+ 	if (ret < 0) {
+ 		HYN_ERROR("hyn_platform_data_init fail,please check DTS.");
+ 		kfree(ts_data);
+@@ -1888,18 +1895,24 @@
+ 	}
+ 
+ 	ret = hyn_gpio_configure(ts_data);
++	oakmoss_mark(0x48590203);
+ 	if (ret < 0) {
+ 		HYN_ERROR("hyn_gpio_configure fail");
+ 		return -1;
+ 	}
+ 	hyn_ts_data_init(client);
++	oakmoss_mark(0x48590204);
+ 
+ 	mdelay(60);
+ 
++	oakmoss_mark(0x48590205);
+ 	ret = hyn_firmware_info(client);
++	oakmoss_mark(0x48590206);
+ 	if (ret < 0) {
+ 		HYN_ERROR("hyn_firmware_info failed,start check boot.\n");
++		oakmoss_mark(0x48590207);
+ 		ret = hyn_detect_bootloader(client);
++		oakmoss_mark(0x48590208);
+ 		if (ret < 0) {
+ 			HYN_ERROR("Touch Probe : detect hynitron ic type "
+ 				  "fail...");
+@@ -1909,19 +1922,24 @@
+ 	} else {
+ 		HYN_INFO("hyn_firmware_info success.\n");
+ 	}
++	oakmoss_mark(0x48590209);
+ 	ret = hyn_input_dev_int(ts_data);
++	oakmoss_mark(0x4859020a);
+ 	if (ret < 0) {
+ 		HYN_ERROR("Touch Probe : hyn_input_dev_int  fail...");
+ 		goto err_end;
+ 	}
+ 	ret = hyn_irq_init(client);
++	oakmoss_mark(0x4859020b);
+ 	if (ret < 0) {
+ 		HYN_ERROR("Touch Probe : hyn_irq_init  fail...");
+ 		goto err_end;
+ 	}
+ 	hyn_irq_disable();
++	oakmoss_mark(0x4859020c);
+ 
+ 	ret = hyn_update_firmware_init(client);
++	oakmoss_mark(0x4859020d);
+ 	if (ret < 0) {
+ 		HYN_ERROR("Touch Probe : hyn_update_firmware_init  fail...");
+ 		goto err_end;
+@@ -1975,13 +1993,17 @@
+ 	 * is 0); the reset hyn_gpio_configure pulsed is the one it needs. On the XU20 this
+ 	 * one, pulsed after the touch IRQ is requested, froze the whole board on 10 of 11
+ 	 * late loads (RTC step marker, 2026-09-18). */
++	oakmoss_mark(0x4859020f);
+ 	hyn_irq_enable();
++	oakmoss_mark(0x48590210);
+ 
+ 	HYN_DEBUG("Touch Panel Device Probe %s!", (ret < 0) ? "FAIL" : "PASS");
+ 	HYN_FUNC_EXIT();
++	oakmoss_mark(0x48590211);
+ 	return 0;
+ 
+ err_end:
++	oakmoss_mark(0x485902ee);
+ 	if (gpio_is_valid(ts_data->pdata->reset_gpio))
+ 		gpio_free(ts_data->pdata->reset_gpio);
+ 	if (gpio_is_valid(ts_data->pdata->irq_gpio))
+@@ -2136,13 +2158,16 @@
+ static int __init hynitron_driver_init(void) {
+ 	int ret = -1;
+ 	HYN_FUNC_ENTER();
++	oakmoss_mark(0x48590101);
+ 	HYN_INFO("Driver version: %s", HYN_DRIVER_VERSION);
+ 
+ 	if (input_sensor_startup(&(config_info.input_type))) {
+ 		HYN_ERROR("%s: ctp_fetch_sysconfig_para err.\n", __func__);
+ 		return 0;
+ 	} else {
++		oakmoss_mark(0x48590102);
+ 		ret = input_sensor_init(&(config_info.input_type));
++		oakmoss_mark(0x48590103);
+ 		if (0 != ret) {
+ 			HYN_ERROR("%s:ctp_ops.init_platform_resource err. \n",
+ 				  __func__);
+@@ -2153,15 +2178,20 @@
+ 			  "to 1.\n");
+ 		return 0;
+ 	}
++	oakmoss_mark(0x48590104);
+ 	if (!ctp_get_system_config()) {
+ 		HYN_INFO("%s:read config fail!\n", __func__);
+ 		return ret;
+ 	}
++	oakmoss_mark(0x48590105);
+ 	input_set_power_enable(&(config_info.input_type), 1);
++	oakmoss_mark(0x48590106);
+ 
+ 	mdelay(20);
+ 
++	oakmoss_mark(0x48590107);
+ 	ret = i2c_add_driver(&hynitron_i2c_driver);
++	oakmoss_mark(0x48590108);
+ 	if (ret != 0) {
+ 		HYN_ERROR("Hynitron touch screen driver init failed!");
+ 	}
+--- a/lichee/linux-4.9/drivers/input/touchscreen/axs15205/axs15205.c
++++ b/lichee/linux-4.9/drivers/input/touchscreen/axs15205/axs15205.c
+@@ -193,6 +193,8 @@
+ 	return 0;
+ }
+ 
++extern void oakmoss_mark(u32 v); /* oakMOSS KDEBUG_MARK: step codes 0x4158SSNN */
++
+ static int axs_probe(struct i2c_client *client, const struct i2c_device_id *id)
+ {
+ 	struct device *dev = &client->dev;
+@@ -201,6 +203,7 @@
+ 	u8 ver[2];
+ 	int ret, retry;
+ 
++	oakmoss_mark(0x41580201);
+ 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
+ 		dev_err(dev, "adapter lacks I2C_FUNC_I2C\n");
+ 		return -ENODEV;
+@@ -240,14 +243,17 @@
+ 	}
+ 	/* The stock driver waits this long for the panel (which resets the chip)
+ 	 * to finish its own init before touching the controller. */
++	oakmoss_mark(0x41580202);
+ 	msleep(120);
+ 
++	oakmoss_mark(0x41580203);
+ 	for (retry = 0; retry < 3; retry++) {
+ 		ret = axs_read_version(ts, ver);
+ 		if (ret == 0)
+ 			break;
+ 		msleep(20);
+ 	}
++	oakmoss_mark(0x41580204);
+ 	if (ret)
+ 		dev_warn(dev, "firmware version read failed (%d); continuing\n", ret);
+ 	else
+@@ -278,10 +284,12 @@
+ 				  INPUT_MT_DIRECT | INPUT_MT_DROP_UNUSED);
+ 	if (ret)
+ 		return ret;
++	oakmoss_mark(0x41580205);
+ 	ret = input_register_device(input);
+ 	if (ret)
+ 		return ret;
+ 
++	oakmoss_mark(0x41580206);
+ 	ret = devm_request_threaded_irq(dev, ts->irq, NULL, axs_irq,
+ 					IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
+ 					AXS_NAME, ts);
+@@ -291,6 +299,7 @@
+ 	}
+ 	dev_info(dev, "%s: %ux%u, %d slots, irq %d\n", AXS_NAME, ts->max_x, ts->max_y,
+ 		 AXS_MAX_POINTS, ts->irq);
++	oakmoss_mark(0x41580207);
+ 	return 0;
+ }
+ 
+@@ -345,6 +354,7 @@
+ 
+ static int __init axs_init(void)
+ {
++	oakmoss_mark(0x41580101);
+ 	return i2c_add_driver(&axs_driver);
+ }
+ /* After the display driver: the panel's reset line is what resets the chip. */
+--- a/lichee/linux-4.9/drivers/i2c/busses/i2c-sunxi.c
++++ b/lichee/linux-4.9/drivers/i2c/busses/i2c-sunxi.c
+@@ -1856,6 +1856,9 @@
+ 	return ret;
+ }
+ 
++extern void oakmoss_mark2(u32 v); /* oakMOSS KDEBUG_MARK */
++#define OAK_I2C_MARK(i2c, msgs, p) do { if ((i2c)->bus_num == 1) oakmoss_mark2(0x49310000 | (((msgs)->addr & 0xff) << 8) | (p)); } while (0)
++
+ static int
+ sunxi_i2c_do_xfer(struct sunxi_i2c *i2c, struct i2c_msg *msgs, int num)
+ {
+@@ -1863,6 +1866,7 @@
+ 	int ret = SUNXI_I2C_FAIL;
+ 	unsigned long flags = 0;
+ 
++	OAK_I2C_MARK(i2c, msgs, 1);
+ 	twi_soft_reset(i2c->base_addr, TWI_SRST_REG, TWI_SRST_SRST);
+ 	udelay(100);
+ 
+@@ -1873,6 +1877,7 @@
+ 		dprintk(DEBUG_INFO, "[i2c%d] bus is busy, status = %x\n",
+ 			i2c->bus_num, twi_query_irq_status(i2c->base_addr));
+ 		if (twi_send_clk_9pulse(i2c->base_addr, i2c->bus_num) != SUNXI_I2C_OK) {
++			OAK_I2C_MARK(i2c, msgs, 6);
+ 			ret = SUNXI_I2C_RETRY;
+ 			goto out;
+ 		} else
+@@ -1895,6 +1900,7 @@
+ 	/* START signal, needn't clear int flag */
+ 	ret = twi_start(i2c->base_addr, i2c->bus_num);
+ 	if (ret == SUNXI_I2C_FAIL) {
++		OAK_I2C_MARK(i2c, msgs, 5);
+ 		I2C_ERR("[i2c%d] twi_regulator: %s\n",
+ 			i2c->bus_num,
+ 			((struct sunxi_i2c_platform_data *)(i2c->adap.dev.parent->platform_data))->regulator_id);
+@@ -1906,9 +1912,11 @@
+ 	}
+ 
+ 	i2c->status  = I2C_XFER_RUNNING;
++	OAK_I2C_MARK(i2c, msgs, 2);
+ 	/* sleep and wait,do the transfer at interrupt handler,timeout = 5*HZ */
+ 	timeout = wait_event_timeout(i2c->wait, i2c->msg_num == 0,
+ 						i2c->adap.timeout);
++	OAK_I2C_MARK(i2c, msgs, timeout ? 3 : 4);
+ 	/* return code,if(msg_idx == num) succeed */
+ 	ret = i2c->msg_idx;
+ 	if (timeout == 0) {
