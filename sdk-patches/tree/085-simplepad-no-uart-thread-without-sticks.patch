@@ -1,0 +1,32 @@
+--- a/lichee/linux-4.9/drivers/input/keyboard/simplepad.c
++++ b/lichee/linux-4.9/drivers/input/keyboard/simplepad.c
+@@ -895,11 +895,15 @@
+     }
+ 
+     // cerate one kernel thread for read data from uart
+-    uart_thread = kthread_run(joystick_thread_fn, pdata, "joystick_reader_thread");
+-    if (IS_ERR(uart_thread)) {
+-        simplepad_err("Failed to create UART reader thread\n");
+-        filp_close(uart_filp, NULL);
+-        return PTR_ERR(uart_thread);
++    // oakMOSS: only when the UART was opened above (joysticks != 0); a board
++    // without sticks (XU20) oopsed in joystick_thread_fn on the NULL uart_filp.
++    if (pdata->joysticks && uart_filp && !IS_ERR(uart_filp)) {
++        uart_thread = kthread_run(joystick_thread_fn, pdata, "joystick_reader_thread");
++        if (IS_ERR(uart_thread)) {
++            simplepad_err("Failed to create UART reader thread\n");
++            filp_close(uart_filp, NULL);
++            return PTR_ERR(uart_thread);
++        }
+     }
+     device_init_wakeup(&pdev->dev, wakeup);
+     simplepad_info("Simplepad Driver Initialized\n");
+@@ -942,7 +946,7 @@
+ }
+ 
+ static void __exit simplepad_exit(void) {
+-    if (uart_thread) {
++    if (uart_thread && !IS_ERR(uart_thread)) {
+         kthread_stop(uart_thread);
+     }
+ 

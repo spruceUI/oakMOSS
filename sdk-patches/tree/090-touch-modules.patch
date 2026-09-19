@@ -1,0 +1,39 @@
+--- a/target/allwinner/a133-aw3/modules.mk
++++ b/target/allwinner/a133-aw3/modules.mk
+@@ -4,3 +4,36 @@
+ # This is free software, licensed under the GNU General Public License v2.
+ # See /build/LICENSE for more information.
+ 
++
++# oakMOSS: the XU20's Hynitron touch driver as a module that nothing autoloads
++# (no AUTOLOAD, so no /etc/modules.d entry). Built in, its late_initcall stalled
++# 6 of 8 XU20 boots before init (initcall marker, 2026-09-18). The launcher loads
++# it once the board has settled, as it does the onboard radio
++# (spruce magicx_load_touch / magicx_load_onboard_radio).
++define KernelPackage/touchscreen-hynitron
++  SUBMENU:=$(INPUT_MODULES_MENU)
++  TITLE:=Hynitron hyn_ts touchscreen (MagicX XU20 V32)
++  KCONFIG:=CONFIG_TOUCHSCREEN_HYNITRON_TS=m
++  FILES:=$(LINUX_DIR)/drivers/input/touchscreen/hynitron/hynitron.ko
++endef
++
++define KernelPackage/touchscreen-hynitron/description
++ Hynitron CST340 touch panel driver (Allwinner ctp framework), loaded on demand.
++endef
++
++$(eval $(call KernelPackage,touchscreen-hynitron))
++
++# oakMOSS: the Zero 40's AXS15205 touch driver, the same way: a module nothing
++# autoloads, loaded by the launcher once the board has settled.
++define KernelPackage/touchscreen-axs15205
++  SUBMENU:=$(INPUT_MODULES_MENU)
++  TITLE:=AXS15205 touchscreen (MagicX Zero 40)
++  KCONFIG:=CONFIG_TOUCHSCREEN_AXS15205=m
++  FILES:=$(LINUX_DIR)/drivers/input/touchscreen/axs15205/axs15205.ko
++endef
++
++define KernelPackage/touchscreen-axs15205/description
++ AXS15205 touch panel driver (MagicX Zero 40), loaded on demand.
++endef
++
++$(eval $(call KernelPackage,touchscreen-axs15205))

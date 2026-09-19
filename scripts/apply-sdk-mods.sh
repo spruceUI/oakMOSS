@@ -20,22 +20,87 @@ missing=0
 note() { printf '  %-8s %s\n' "$1" "$2" >&2; }
 
 # 1. Tree patches (rules.mk, kernel config, toolchain menu, package Makefiles).
+
+# patch_targets <patch> : the b/ paths a patch writes to, one per line.
+# awk rather than grep: the tree patches carry vendor sources whose non-ASCII
+# comments make some grep builds (ugrep among them) call the file binary and
+# print nothing at all, which silently emptied this list and skipped every
+# backup. The b/ path may also carry a tab and a timestamp, which word-splitting
+# turned into extra bogus filenames.
+patch_targets() {
+    awk '/^\+\+\+ b\//{ sub(/^\+\+\+ b\//, ""); sub(/\t.*$/, ""); print }' "$1"
+}
+
+# patch_effect_present <patch> : true when every line the patch adds is already
+# in its target file. The unpacked SDK tree may already carry an equivalent change
+# from other work against the same tree, written under different comments, so a
+# change can be genuinely in place while `patch -R` still refuses it for want of
+# matching context. Comments and blank lines are ignored precisely because that is
+# where two versions of the same fix differ; a patch that adds nothing but comments
+# is not eligible for this test and falls through to being applied.
+patch_effect_present() {
+    local patch=$1 f line added=0
+    while IFS= read -r f; do
+        [ -f "$f" ] || return 1
+    done < <(patch_targets "$patch")
+    while IFS=$'\t' read -r f line; do
+        added=$((added + 1))
+        grep -a -qF -- "$line" "$f" 2>/dev/null || return 1
+    done < <(awk '
+        /^\+\+\+ b\//     { file = $0; sub(/^\+\+\+ b\//, "", file); sub(/\t.*$/, "", file); next }
+        /^\+\+\+/          { next }
+        /^\+/ {
+            line = substr($0, 2)
+            gsub(/^[ \t]+|[ \t]+$/, "", line)
+            if (line == "" || line ~ /^[#\/\*]/) next
+            print file "\t" line
+        }' "$patch")
+    [ "$added" -gt 0 ]
+}
+
 for patch in "$P"/tree/*.patch; do
     name=$(basename "$patch" .patch)
     if patch -p1 -R --dry-run -s -f < "$patch" >/dev/null 2>&1; then note applied "$name"; continue; fi
+    if patch_effect_present "$patch"; then note "in-tree" "$name"; continue; fi
     if [ "$CHECK" = 1 ]; then note MISSING "$name"; missing=1; continue; fi
-    for f in $(grep '^+++ b/' "$patch" | sed 's|^+++ b/||'); do
+    while IFS= read -r f; do
         [ -f "$f.orig" ] || cp -a "$f" "$f.orig"; chmod u+w "$f"
-    done
-    patch -p1 -N -s -f < "$patch" || die "patch $name did not apply cleanly"
+    done < <(patch_targets "$patch")
+    # --no-backup-if-mismatch: GNU patch otherwise saves the file it could not match as
+    # <file>.orig - the very name the loop above keeps the pristine SDK copy under - so
+    # one failed attempt overwrites the pristine backup (config-4.9.orig, 2026-09-18).
+    patch -p1 -N -s -f --no-backup-if-mismatch < "$patch" || die "patch $name did not apply cleanly"
     note patched "$name"
 done
 
 # 2. Package patches (OpenWrt quilt style: dropped into package/<pkg>/patches/).
+
+# patch_body <file> : the diff itself, without the prose header above it. These
+# quilt patches explain themselves in a paragraph before the first ---, and the
+# same fix may already be present with a different provenance line in that
+# paragraph. Comparing whole files called those MISSING and would have
+# overwritten equivalent copies with byte-identical diffs under a different
+# comment; comparing bodies asks the question that matters.
+patch_body() {
+    awk 'f || /^(--- |diff |Index:)/ { f = 1; print }' "$1"
+}
+
 while read -r pkgdir sub; do
     for src in "$P"/package-patches/"$sub"/*.patch; do
         dst=$pkgdir/patches/$(basename "$src")
         if [ -f "$dst" ] && cmp -s "$src" "$dst"; then note present "$dst"; continue; fi
+        # The same fix may already be there under another name: an equivalent libubox
+        # -Werror patch can already sit in this directory, and installing ours beside
+        # it made quilt apply the change twice and fail the build outright. Match on
+        # the diff body across the whole directory, not on the filename.
+        same=""
+        for cand in "$pkgdir"/patches/*.patch; do
+            [ -f "$cand" ] || continue
+            if diff -q <(patch_body "$src") <(patch_body "$cand") >/dev/null 2>&1; then
+                same=$cand; break
+            fi
+        done
+        if [ -n "$same" ]; then note "same-fix" "$same"; continue; fi
         if [ "$CHECK" = 1 ]; then note MISSING "$dst"; missing=1; continue; fi
         mkdir -p "$pkgdir/patches"; cp -a "$src" "$dst"; note added "$dst"
     done
@@ -84,6 +149,6 @@ done
 if [ "$CHECK" = 1 ]; then
     [ "$missing" = 0 ] && log "all SDK modifications are in place" || die "SDK modifications missing (run without --check)"
 else
-    { echo "oakmoss_mods_version=3"; echo "applied=$(date -u +%FT%TZ)"; echo "oakmoss=$(oakmoss_version)"; } > .oakmoss-mods
+    { echo "oakmoss_mods_version=6"; echo "applied=$(date -u +%FT%TZ)"; echo "oakmoss=$(oakmoss_version)"; } > .oakmoss-mods
     log "SDK modifications applied; ledger: docs/sdk-mods.md"
 fi

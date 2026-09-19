@@ -11,7 +11,9 @@
 #
 # Env: JOBS, TOOLCHAIN (armgnu13|vendor), EXT_CONFIG (configs/ext-armgnu13.config),
 #      PHASE2_CONFIG (phase2-gcc750.config), OPENIXCARD_BIN, ZERO40_ENCRYPT_OBJ,
-#      COMPRESS=1 (also write an .img.xz), OAKMOSS_WORK / BUILDS_DIR (see lib.sh).
+#      COMPRESS=1 (also write an .img.xz), OAKMOSS_WORK / BUILDS_DIR (see lib.sh),
+#      KDEBUG_FBCON=1 (kernel console on the panel; debug cards only, see apply_overlay),
+#      KDEBUG_MARK=1 (initcall progress marker for oakmoss_mark=; debug cards only).
 # Everything runs inside the container except OpenixCard, which runs on the host.
 . "$(dirname "$0")/lib.sh"
 need_sdk; need_mods
@@ -38,6 +40,22 @@ zero40_encrypt_obj() {
     else die "no Zero 40 encrypt object: put $ZERO40_LICHEE_ZIP in $INPUTS_DIR (inputs/README.md) or set ZERO40_ENCRYPT_OBJ"; fi
     [ "$(md5_of "$obj")" = "$ZERO40_ENCRYPT_MD5" ] || die "$obj md5 $(md5_of "$obj") != $ZERO40_ENCRYPT_MD5"
     echo "$obj"
+}
+
+# encrypt_stub_obj: sdk-patches/sunxi_encrypt/encrypt_stub.c compiled by the kernel's
+# own build (same compiler, flags and headers as the vendor objects), cached in
+# $BUILDS_DIR. For boards with no matching MagicX object: theirs reboot the kernel
+# when the board's security chip does not answer to their key.
+encrypt_stub_obj() {
+    local src=$OAKMOSS_ROOT/sdk-patches/sunxi_encrypt/encrypt_stub.c out=$BUILDS_DIR/encrypt-stub.o
+    if [ ! -f "$out" ] || [ "$src" -nt "$out" ]; then
+        cp -a "$src" "$ENC/encrypt_stub.c"
+        "$OAKMOSS_ROOT/scripts/run-in-sdk.sh" 'cd lichee/linux-4.9 && make ARCH=arm64 CROSS_COMPILE=/home/builder/lichee/prebuilt/gcc/linux-x86/aarch64/toolchain-sunxi-glibc/toolchain/bin/aarch64-openwrt-linux-gnu- drivers/char/sunxi_encrypt/encrypt_stub.o 2>&1 | grep -vE "STAGING_DIR|^\s*$" | tail -3' >&2 || { rm -f "$ENC/encrypt_stub.c"; return 1; }
+        [ -f "$ENC/encrypt_stub.o" ] || { rm -f "$ENC/encrypt_stub.c"; log "encrypt stub did not compile"; return 1; }
+        mv "$ENC/encrypt_stub.o" "$out"; rm -f "$ENC/encrypt_stub.c" "$ENC/.encrypt_stub.o.cmd"
+        log "encrypt stub compiled: $out" >&2
+    fi
+    printf '%s' "$out"
 }
 
 # apply_overlay <board>: rootfs overlay + device marker + board kernel object into the SDK tree.
@@ -68,6 +86,64 @@ apply_overlay() {
     else
         cp -a "$dts.orig" "$dts"
     fi
+
+    # Board sys_config: boards/<board>/sys_config.fex, same dance. This is where the
+    # U-Boot-visible power_sply node comes from (battery_exist, charge_mode), which
+    # decides whether a board powered on by charger insertion boots straight through
+    # or waits for the power key. Boards without their own file get the SDK's back.
+    local sysc=$SDK_DIR/device/config/chips/a133/configs/aw3/sys_config.fex
+    [ -f "$sysc.orig" ] || cp -a "$sysc" "$sysc.orig"
+    if [ -f "$OAKMOSS_ROOT/boards/$board/sys_config.fex" ]; then
+        cp -a "$OAKMOSS_ROOT/boards/$board/sys_config.fex" "$sysc"; log "sys_config.fex: boards/$board/sys_config.fex"
+    else
+        cp -a "$sysc.orig" "$sysc"
+    fi
+    # Kernel console on the panel: KDEBUG_FBCON=1 builds a kernel whose console is
+    # the display, so a panic or oops before userland is readable on the device
+    # itself. These boards expose no serial header on the lab units, so without it
+    # an early failure leaves U-Boot's logo on screen and says nothing - which is
+    # exactly how the XU20's reboot loop and the diagnostic cards both present.
+    # Debug cards only: it replaces the boot logo with scrolling kernel text. The
+    # else-branch puts it back, so a normal build after a debug one is unaffected.
+    # This file is $(LINUX_KCONFIG_LIST) in build/kernel-build.mk, so editing it
+    # invalidates the kernel's configure stamp and the kernel reconfigures itself.
+    local kcfg=$SDK_DIR/device/config/chips/a133/configs/aw3/linux/config-4.9
+    # Every symbol fbcon pulls in has to be answered here: the kernel is configured
+    # through silentoldconfig with stdin redirected, so one unanswered NEW prompt
+    # aborts the whole build. ROTATION is not optional decoration - the XU20's panel
+    # is mounted upside down, so without it the debug text comes out inverted; with
+    # it the card can pass fbcon=rotate:2 (EXTRA_BOOTARGS in make-own-kernel-stock.sh).
+    # Both branches rewrite from whatever state the file is in rather than testing for
+    # one expected state: a half-applied config (fbcon on but a sub-symbol missing) is
+    # exactly what an aborted build leaves behind, and silently skipping the fix there
+    # costs another full build to discover. FONTS/FONT_8x16 come with fbcon: it selects
+    # FONT_SUPPORT, which opens the "select compiled-in fonts" prompt, and the stock
+    # config answers neither because it has no console font at all.
+    if [ "${KDEBUG_FBCON:-0}" = 1 ]; then
+        sed -i -e '/^CONFIG_FRAMEBUFFER_CONSOLE_DETECT_PRIMARY=y$/d' \
+               -e '/^CONFIG_FRAMEBUFFER_CONSOLE_ROTATION=y$/d' \
+               -e '/^# CONFIG_FONTS is not set$/d' \
+               -e '/^CONFIG_FONT_8x16=y$/d' \
+               -e 's|^# CONFIG_FRAMEBUFFER_CONSOLE is not set$|CONFIG_FRAMEBUFFER_CONSOLE=y|' \
+               -e 's|^CONFIG_FRAMEBUFFER_CONSOLE=y$|CONFIG_FRAMEBUFFER_CONSOLE=y\nCONFIG_FRAMEBUFFER_CONSOLE_DETECT_PRIMARY=y\nCONFIG_FRAMEBUFFER_CONSOLE_ROTATION=y\n# CONFIG_FONTS is not set\nCONFIG_FONT_8x16=y|' \
+               "$kcfg"
+        log "kernel config: CONFIG_FRAMEBUFFER_CONSOLE=y (KDEBUG_FBCON; the panel is the kernel console)"
+    elif grep -q '^CONFIG_FRAMEBUFFER_CONSOLE=y' "$kcfg"; then
+        sed -i '/^CONFIG_FRAMEBUFFER_CONSOLE_DETECT_PRIMARY=y$/d; /^CONFIG_FRAMEBUFFER_CONSOLE_ROTATION=y$/d; /^# CONFIG_FONTS is not set$/d; /^CONFIG_FONT_8x16=y$/d; s|^CONFIG_FRAMEBUFFER_CONSOLE=y|# CONFIG_FRAMEBUFFER_CONSOLE is not set|' "$kcfg"
+        log "kernel config: CONFIG_FRAMEBUFFER_CONSOLE off again (no KDEBUG_FBCON)"
+    fi
+    # Initcall marker: KDEBUG_MARK=1 applies sdk-patches/debug/kdebug-mark.patch,
+    # which lets a card pass oakmoss_mark=<phys> (an RTC general-purpose register) so
+    # each initcall and the init hand-off stages write where the boot has got to; the
+    # next boot's U-Boot reads it (make-own-kernel-stock.sh KMARK=1). Inert without the
+    # boot argument, but still reverted when not asked for, like KDEBUG_FBCON.
+    local kmark=$OAKMOSS_ROOT/sdk-patches/debug/kdebug-mark.patch
+    if [ "${KDEBUG_MARK:-0}" = 1 ]; then
+        if ( cd "$SDK_DIR" && patch -p1 -R --dry-run -s -f < "$kmark" >/dev/null 2>&1 ); then log "kernel: initcall marker already applied (KDEBUG_MARK)"
+        else ( cd "$SDK_DIR" && patch -p1 -N -s -f --no-backup-if-mismatch < "$kmark" ) || die "KDEBUG_MARK: patch did not apply"; log "kernel: initcall marker applied (KDEBUG_MARK)"; fi
+    elif ( cd "$SDK_DIR" && patch -p1 -R --dry-run -s -f < "$kmark" >/dev/null 2>&1 ); then
+        ( cd "$SDK_DIR" && patch -p1 -R -s -f --no-backup-if-mismatch < "$kmark" ) || die "could not revert the initcall marker"; log "kernel: initcall marker reverted (no KDEBUG_MARK)"
+    fi
     # Kernel object: the SDK's own for the Zero 28, MagicX's Zero 40 object otherwise.
     [ -f "$ENC/encrypt.zero28" ] || die "no $ENC/encrypt.zero28 backup (scripts/apply-sdk-mods.sh)"
     chmod u+w "$ENC/encrypt" 2>/dev/null || true
@@ -75,7 +151,8 @@ apply_overlay() {
     case $ENCRYPT_OBJ in
         sdk)     obj=$ENC/encrypt.zero28 ;;
         zero40)  obj=$(zero40_encrypt_obj) || exit 1 ;;
-        *) die "boards/$board/board.conf: ENCRYPT_OBJ must be sdk or zero40" ;;
+        stub)    obj=$(encrypt_stub_obj) || exit 1 ;;
+        *) die "boards/$board/board.conf: ENCRYPT_OBJ must be sdk, zero40 or stub" ;;
     esac
     cp -a "$obj" "$ENC/encrypt"
     touch "$ENC/encrypt"
@@ -119,7 +196,13 @@ case $STEP in
     [ -x "$OPENIXCARD_BIN" ] || die "OpenixCard not found at $OPENIXCARD_BIN (scripts/build-openixcard.sh)"
     apply_overlay "$BOARD"
     ST=$(stamp); OUT=$BUILDS_DIR/$ST-$BOARD; mkdir -p "$OUT"; LOG=$BUILDS_DIR/logs/image-$BOARD-$ST.log
-    if ! "$RUN" "$LUNCH echo '=== kernel+rootfs refresh' \$(date); make -j$JOBS 2>&1 | tail -40; [ \${PIPESTATUS[0]} = 0 ] || { echo '=== image: make FAILED'; exit 1; }; gzip -c .config > package/add-rootfs-demo/usr/magicx/tina_config.gz; add-rootfs-demo 2>&1 | tail -5; echo '=== pack' \$(date); pack 2>&1 | tail -25; ls -la out/a133-aw3/*.img" 2>&1 | tee "$LOG"; then
+    # pack's output is checked: it reports a partition overflow ("dl file
+    # boot-resource.fex size too large", "update_mbr failed") and still returns, and
+    # the card was then built from the PREVIOUS pack's stale output (2026-09-18, a Zero 28
+    # image with the old logo and the old hand-off). Its exit status and the word ERROR
+    # are no use: a good pack prints ERROR lines too. A good pack ends with Dragon's
+    # "image.cfg SUCCESS".
+    if ! "$RUN" "$LUNCH echo '=== kernel+rootfs refresh' \$(date); make -j$JOBS 2>&1 | tail -40; [ \${PIPESTATUS[0]} = 0 ] || { echo '=== image: make FAILED'; exit 1; }; gzip -c .config > package/add-rootfs-demo/usr/magicx/tina_config.gz; add-rootfs-demo 2>&1 | tail -5; echo '=== pack' \$(date); pack 2>&1 | tee /tmp/oakmoss-pack.log | tail -25; if grep -q 'update_mbr failed\|size too large' /tmp/oakmoss-pack.log || ! grep -q 'Dragon execute image.cfg SUCCESS' /tmp/oakmoss-pack.log; then echo '=== image: pack FAILED'; exit 1; fi; ls -la out/a133-aw3/*.img" 2>&1 | tee "$LOG"; then
         die "image step failed (log: $LOG)"
     fi
     IMG=$(ls -t "$SDK_DIR"/out/a133-aw3/tina_a133-aw3_*.img | head -1)
@@ -144,6 +227,9 @@ case $STEP in
       echo "libstdcxx=$(for f in "$ROOTFS"/usr/lib/libstdc++.so.6.0.*; do [ -e "$f" ] && basename "$f" && break; done)"
       echo "outputs=$(basename "$FINAL") (raw GPT image: dd or Etcher to SD1, whole card); $(basename "$IMG") (Allwinner PhoenixSuit image); $(basename "$IMG").dump/rootfs.fex (rootfs squashfs, used by the hybrid and diag images)"
     } > "$OUT/BUILD-INFO.txt"
+    # System.map beside the build: a KDEBUG_MARK card reports initcall addresses, and
+    # scripts/analyze-card-readback.py names them from this file.
+    cp "$SDK_DIR/lichee/linux-4.9/System.map" "$OUT/System.map" 2>/dev/null || true
     [ "${COMPRESS:-0}" = 1 ] && { log "compressing"; xz -T0 -6 -k "$FINAL"; }
     log "image ready: $OUT"; ls -la "$OUT" >&2 ;;
   all)

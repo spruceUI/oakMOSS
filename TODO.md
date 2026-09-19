@@ -54,21 +54,28 @@ because the base does not.
 
 ## Kernel: drivers and device trees, per board
 
-- [ ] **Zero 40 panel `RTP40WV101B` (480x800) and `axs15205` touch (twi)**: not in
-      the SDK drop; the board only boots the hybrid image (main-zero40's boot0 /
-      U-Boot / DTB / kernel + our rootfs, `scripts/make-hybrid-zero40.sh`). Needs
-      the LCD panel init sequence (`lcd_panels/`) and the ctp driver ported into
-      our lichee tree plus the `lcd0`/twi nodes in `board.dts` (HN Boards, Known gaps).
+- [x] **Zero 40 panel `RTP40WV101B` (480x800) and `axs15205` touch (twi)** (2026-09-17/18):
+      not in the SDK drop, so ported: the panel in `070-*`, the AXS15205 in `080-*`, the
+      `lcd0`/twi nodes in `boards/zero40/board.dts`. The board runs our kernel on its
+      stock chain (`make-own-kernel-stock.sh`), touch loaded after boot as a module.
 - [x] **Zero 40 hybrid: MagicX's modules, not ours** (2026-09-16): its kernel has
       `CONFIG_BUG=n`/`KALLSYMS=n` and a modular netfilter core; our round-8 modules
       never came up under it. `scripts/adapt-zero40-rootfs.sh` swaps in the set
       out of the main-zero40 image (HN "Zero 40 hybrid: whose modules"). Our own
       modules matter again only once our kernel drives the board.
-- [ ] **Route 1: our kernel on the stock chain** (2026-09-16 evening; `make-own-kernel-stock.sh`,
-      first images `builds/20260916-1744-xu20-own`, `20260916-1745-zero40-own`): UNTESTED. Then:
-      touch drivers (Hynitron hyn_ts for the XU20, axs15205 for the Zero 40) + their nodes in
-      `boards/*/board.dts`; Zero 40 WiFi with our xradio under our kernel (`chip_en` boolean in
-      the stock node); retire the Android-kernel lane once both boards show the UI.
+- [x] **Route 1: our kernel on the stock chain** (`make-own-kernel-stock.sh`): both boards run
+      spruce on our kernel (2026-09-17; the XU20 with ENCRYPT_OBJ=zero40), with WiFi, and with
+      touch since 2026-09-18 (`080-*` as modules, `090-*`; HN "Touch drivers stalled the boot").
+- [ ] **Retire the Android-kernel lanes** (`make-hybrid-stock.sh`, `make-hybrid-xu20.sh`, the
+      main-zero40 hybrid) now that both boards show the UI on our kernel.
+- [ ] **Touch reset with the IRQ installed**: the Hynitron driver's `hyn_resume` and its
+      I2C-error recovery still pulse reset after requesting the IRQ, the pattern that froze the
+      XU20 at probe. Harmless while nothing suspends; test before real suspend is used.
+- [ ] **Suspend-to-RAM never resumes** (XU20, 2026-09-18: `echo mem`, an RTC alarm did not
+      wake it). The path is PSCI SYSTEM_SUSPEND into the stock ATF and SCP. spruce uses a
+      pseudo-sleep on these boards meanwhile. Next: `freeze`, then `pm_test` levels.
+- [ ] **Backlight polarity**: 0 and 1 have each been read as inverted on the XU20/Zero 40
+      (HN "Backlight polarity"); spruce mirrors the level on those two boards meanwhile.
 - [ ] **Zero 40 on its own stock chain** (2026-09-16, `scripts/make-hybrid-stock.sh zero40`,
       one-slot image 1240 BOOTS; two-slot 1255 carries the repaired boot package
       checksum, untested). Once a two-slot image boots, spruce's `Zero40.cfg` needs `WIFI_ONBOARD_MODULE=xr829` and no

@@ -15,13 +15,21 @@
 # CI collects release artefacts here before uploading them.
 /out/
 
-# Vendor kernel encrypt object, copied in by the build.
-/boards/zero40/encrypt
+# Vendor kernel encrypt objects, copied in by the build. A pattern, not one exact
+# path: these are MagicX's proprietary security-chip objects and a per-board name
+# variant must not become committable by being spelled differently.
+/boards/*/encrypt
+/boards/*/encrypt.*
 
-# Local drop-in boot logo (see ATTRIBUTION.md, "Boot logo").
-/overlay/bootlogo.bmp
+# Local drop-in boot logo (see ATTRIBUTION.md, "Boot logo"). Covers a renamed or a
+# second logo too: nothing in overlay/ should acquire an image by accident.
+/overlay/*.bmp
 
-# Build and download leftovers.
+# Build and download leftovers, including the byproducts of applying patches to the
+# unpacked SDK (this repository's own workflow produces .orig and .rej files).
+*.orig
+*.rej
+*.bak
 *.part
 *.tmp
 *.log
@@ -32,6 +40,11 @@ core.[0-9]*
 *.img
 *.img.xz
 *.fex
+# ...except a board's own sys_config, which build.sh installs when a board has one.
+!/boards/*/sys_config.fex
+# Card read-backs in any tool's format (a DiskGenius .pmfx is a whole card):
+# they carry the reader's data and vendor partitions, never this repository's.
+*.pmfx
 
 # Python.
 __pycache__/

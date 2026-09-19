@@ -8,15 +8,15 @@ It follows the shape of Shaun Inman's [Moss-zero28](https://github.com/shauninma
 and [main-zero40](https://github.com/dedicated-os/main-zero40); see
 [ATTRIBUTION.md](ATTRIBUTION.md).
 
-What comes out, per board, as raw GPT images (686 MB, mostly empty) that are
-written to the internal microSD with `dd` or Etcher:
+What comes out, per board, as raw GPT images (686-796 MB, mostly empty) that are
+written to the internal microSD (see "Using the image"):
 
 | image | board | what it is |
 |---|---|---|
 | `oakmoss-zero28-<stamp>-sd1.img` | Zero 28 | our full chain: boot0, U-Boot, DTB, kernel, rootfs |
 | `oakmoss-zero40-<stamp>-sd1.img` | Zero 40 | same chain with the Zero 40 kernel object; **white screen on the real board** (the SDK drop lacks its panel and touch drivers) |
-| `oakmoss-zero40-hybrid-<stamp>-sd1.img` | Zero 40 | **the one to flash**: main-zero40's boot chain (panel, touch, kernel) with our rootfs in its rootfs partition, carrying MagicX's own kernel modules (`scripts/adapt-zero40-rootfs.sh`) |
-| `oakmoss-<board>-own-<stamp>-sd1.img` | XU20 V32, Zero 40 | **the newest lane**: the board's stock boot0 and U-Boot with OUR kernel, device tree and rootfs (`scripts/make-own-kernel-stock.sh`); the panels come from `sdk-patches/tree/070-*`, the trees from `boards/<board>/board.dts` |
+| `oakmoss-zero40-hybrid-<stamp>-sd1.img` | Zero 40 | the earlier way in: main-zero40's boot chain (panel, touch, kernel) with our rootfs in its rootfs partition, carrying MagicX's own kernel modules (`scripts/adapt-zero40-rootfs.sh`) |
+| `oakmoss-<board>-own-<stamp>-sd1.img` | XU20 V32, Zero 40 | **the one to flash on these two**: the board's stock boot0 and U-Boot with OUR kernel, device tree and rootfs (`scripts/make-own-kernel-stock.sh`); the panels come from `sdk-patches/tree/070-*`, the touch drivers from `080-*`, the trees from `boards/<board>/board.dts` |
 | `oakmoss-zero40-stock-<stamp>-sd1.img` | Zero 40 | **new lane (2026-09-16)**: the Zero 40's own stock firmware chain (MagicX release Zero40_V1 `adb.img`: boot0, U-Boot, DTB, Android kernel 4.9.170) with the Zero 40 rootfs as ext4 and the vendor's modules, the same recipe as the XU20 image; built because no round-8 rootfs ever came up on the main-zero40 chain |
 | `oakmoss-xu20-hybrid-<stamp>-sd1.img` | XU20 V32 | the stock firmware's own boot chain and Android kernel (its panel and touch driver are in neither our SDK nor main-zero40) with the Zero 40 rootfs as ext4; both extra SD controllers enabled so the second card is visible. **Not yet booted on a unit.** |
 
@@ -38,7 +38,9 @@ fetched automatically.
 
 Host: Linux with Docker (the SDK needs an Ubuntu 18.04 userland; the container
 is built for you) and these packages:
-`git curl unzip xz-utils squashfs-tools util-linux cmake build-essential libconfuse-dev pkg-config automake autoconf`.
+`git curl unzip xz-utils squashfs-tools util-linux cmake build-essential libconfuse-dev pkg-config automake autoconf`,
+plus `python3-pil fonts-dejavu-core` for the boot logo and bootloader screens
+(`scripts/make-boot-resource.py`).
 
 Disk: budget about 45 GB for the inputs plus one board's build. The unpacked SDK
 alone is ~18 GB clean and ~30 GB once built, `inputs/` holds ~13 GB of SDK and
@@ -51,6 +53,7 @@ scripts/prepare-toolchain.sh       # Arm GNU 13.3 + the Tina sysroot/wrapper shi
 scripts/build-openixcard.sh        # OpenixCard from source (Allwinner image -> raw image)
 scripts/unpack-sdk.sh --remove-zip # streams the SDK out of the zip, verifies its md5
 scripts/apply-sdk-mods.sh          # every SDK change (docs/sdk-mods.md), idempotent
+scripts/make-boot-resource.py --logo zero28 overlay/bootlogo.bmp   # optional: the oakMOSS boot logo (else the SDK's)
 scripts/build.sh all               # userland build (~20-40 min on 8 cores) + both images
 scripts/make-hybrid-zero40.sh builds/<stamp>-zero40     # the image a Zero 40 boots
 scripts/build-awutils.sh           # XU20 only: the unpacker for its PhoenixSuit image (patched for its header)
@@ -59,7 +62,12 @@ scripts/make-hybrid-xu20.sh builds/<stamp>-zero40       # the XU20 image (from t
 scripts/unpack-zero40-stock.sh     # Zero 40 stock lane: items + vendor modules out of MagicX's adb.img
 scripts/make-hybrid-zero40-stock.sh builds/<stamp>-zero40   # the Zero 40 image on its own stock chain (Android kernel; no GL)
 scripts/build.sh image xu20                                  # our kernel + rootfs for the XU20 (boards/xu20/board.dts, panel in 070-*)
-scripts/make-own-kernel-stock.sh xu20 builds/<stamp>-xu20    # stock boot0/U-Boot + our kernel, tree and rootfs (same for zero40)
+scripts/make-boot-resource.py inputs/xu20-stock/user.img.dump/RFSFAT16_BOOT-RESOURCE_FE \
+    builds/bootres-xu20.fex xu20                               # bootloader screens + boot logo sized for the panel
+DIAG=0 EARLY_PROBE=0 CONSOLE=tty0 BOOTRES=builds/bootres-xu20.fex \
+    scripts/make-own-kernel-stock.sh xu20 builds/<stamp>-xu20  # the card: stock boot0/U-Boot + our kernel, tree and rootfs
+#   (zero40 the same, from inputs/zero40-stock/adb.img.dump; without DIAG=0 the card carries the
+#   diagnostic hand-off, and the script's header lists the debug options)
 #   (both wrappers run scripts/make-hybrid-stock.sh <board>: one recipe, two boards)
 ```
 
@@ -88,9 +96,13 @@ processes blocked behind it, and a build hung with nothing left to write).
 > to the wrong board, or interrupting the write, leaves a device that will not
 > start. Image the stock SD1 card first and keep that backup: for these boards it
 > is the only way back. Write the image **raw** (`dd`, Rufus in DD mode, Etcher,
-> Win32DiskImager, Raspberry Pi Imager) to the whole card, then eject. Do **not**
-> open a written card in a partition tool - a table "repair" zeroes boot0 and the
-> card stops booting.
+> Raspberry Pi Imager) to the whole card, then eject. Do **not** open a written
+> card in a partition tool - a table "repair" zeroes boot0 and the card stops
+> booting. On Windows, the system itself rewrites the table of an XU20 or Zero 40
+> card whenever it detects the card again (`docs/hardware-notes.md`): write it with
+> Raspberry Pi Imager, verification on, take it to the device when Imager ejects
+> it, and do not plug it back in before it has booted. `scripts/verify-card.ps1`
+> compares a written card with its image without Windows storage management.
 
 1. Write the image to the **internal** microSD (SD1, the whole card). The system
    card goes back in the slot the board's own system card came from.
@@ -106,11 +118,13 @@ processes blocked behind it, and a build hung with nothing left to write).
 
 | path | what |
 |---|---|
-| `scripts/` | the build, in order: `fetch-inputs`, `prepare-toolchain`, `build-openixcard`, `unpack-sdk`, `apply-sdk-mods`, `build`, `make-hybrid-zero40` (which runs `adapt-zero40-rootfs`), `make-diag-image`; the stock-chain lane: `unpack-xu20-stock` / `unpack-zero40-stock`, then `make-hybrid-stock <board>` (wrappers `make-hybrid-xu20`, `make-hybrid-zero40-stock`); for the XU20 `build-awutils`, `unpack-xu20-stock`, `make-hybrid-xu20`; `run-in-sdk.sh` runs a command in the container; `replace-rootfs.sh` writes a squashfs into an image's rootfs partition and proves the rest untouched; `fdt-enable-nodes.py` enables device-tree nodes in place; `lib.sh` holds paths, pinned checksums and `flush_file` |
+| `scripts/` | the build, in order: `fetch-inputs`, `prepare-toolchain`, `build-openixcard`, `unpack-sdk`, `apply-sdk-mods`, `build`, `make-hybrid-zero40` (which runs `adapt-zero40-rootfs`), `make-diag-image`; the stock-chain lane: `unpack-xu20-stock` / `unpack-zero40-stock`, then `make-hybrid-stock <board>` (wrappers `make-hybrid-xu20`, `make-hybrid-zero40-stock`); for the XU20 `build-awutils`, `unpack-xu20-stock`, `make-hybrid-xu20`; `run-in-sdk.sh` runs a command in the container; `replace-rootfs.sh` writes a squashfs into an image's rootfs partition and proves the rest untouched; `fdt-enable-nodes.py` enables device-tree nodes in place; `lib.sh` holds paths, pinned checksums and `flush_file`; the own-kernel lane: `make-own-kernel-stock.sh`, `make-board-dts.py` (board trees from the stock ones), `make-boot-resource.py` (bootloader screens and the boot logo); `analyze-card-readback.py` reads the boot record off a card read back raw; `verify-card.ps1` checks a written card on Windows |
 | `tools-patches/` | patches to tools built from source: awutils' image-format check for the XU20 firmware's header |
 | `configs/` | Tina configs: `ext-armgnu13.config` (the build), `phase1.config` / `phase2.config` (Moss-zero28's originals, plus libmad) and `phase2-gcc750.config` (the from-source fallback toolchain) |
-| `sdk-patches/` | every change to the SDK tree: `tree/` (unified diffs applied with `patch -p1`), `package-patches/` (dropped into `package/<pkg>/patches/`), `ncurses-6.2/` (OpenWrt 21.02 package port), `gcc-7.5.0-patches/` (OpenWrt 19.07 set), `toolchain/` (compiler wrapper) |
-| `overlay/` | rootfs additions: `etc/rc.local` (audio defaults + the hand-off), `etc/banner`, `etc/modules.d/net-xr829` (empty: no xradio autoload), `etc/init.d/wpa_supplicant` (no-op: the launcher owns the radio, the SDK's service ran a second supplicant on wlan0), `usr/magicx/bin/runmagicx.sh`, `usr/magicx/lib/` (TrimUI SDL2 blobs). Drop a `bootlogo.bmp` here to replace the SDK's |
+| `sdk-patches/` | every change to the SDK tree: `tree/` (unified diffs applied with `patch -p1`), `package-patches/` (dropped into `package/<pkg>/patches/`), `ncurses-6.2/` (OpenWrt 21.02 package port), `gcc-7.5.0-patches/` (OpenWrt 19.07 set), `toolchain/` (compiler wrapper), `sunxi_encrypt/` (`ENCRYPT_OBJ=stub`), `debug/` (kernel instrumentation `build.sh` applies only when asked, `KDEBUG_MARK=1`) |
+| `assets/` | `spruce-tree.png`, spruceOS's tree mark, which `make-boot-resource.py` turns into the boot logo |
+| `LICENSES/` | license texts for the third-party code carried here (GPL-2.0) |
+| `overlay/` | rootfs additions: `etc/rc.local` (audio defaults + the hand-off), `etc/banner`, `etc/modules.d/net-xr829` (empty: no xradio autoload), `etc/init.d/wpa_supplicant` (no-op: the launcher owns the radio, the SDK's service ran a second supplicant on wlan0), `usr/magicx/bin/runmagicx.sh`, `usr/magicx/lib/` (TrimUI SDL2 blobs). A `bootlogo.bmp` here (gitignored) replaces the SDK's logo; `scripts/make-boot-resource.py --logo zero28` draws the oakMOSS one |
 | `TODO.md` | wishlist for the kernel (config, per-board drivers and DTB) and the rootfs overlay, with what is done and what still needs identifying |
 | `boards/<board>/board.conf` | device marker and kernel-object source per board; `boards/<board>/overlay/` (optional) is layered on top of `overlay/` |
 | `docker/` | the Ubuntu 18.04 build container |
@@ -120,20 +134,28 @@ processes blocked behind it, and a build hung with nothing left to write).
 
 ## Status
 
-Bench-tested on a Zero 28 and a Zero 40 with spruceOS on the user card
-(September 2026): launcher, pad, touch (Zero 40), audio, WiFi and the hand-off
-all exercised; not a release. Known gaps: the Zero 40's own panel and touch
-drivers are absent from the SDK drop (hence the hybrid), the newer-board-revision
-fixes in main-zero40 v20260202-1 are not in our inputs, kernel 4.9 has no exFAT
-(large SD2 cards need FAT32), busybox 1.27 has no `bc`, and the XR829 crystal
-variant is assumed 26 MHz. The tested boards' radio is a Realtek 8189es, driven
-by the in-kernel driver.
+Bench-tested on a Zero 28, a Zero 40 and an XU20 V32 with spruceOS on the user
+card (September 2026); not a release. The Zero 28 runs the SDK chain. The Zero 40
+and the XU20 run **our kernel behind their stock boot0 and U-Boot**
+(`scripts/make-own-kernel-stock.sh`): launcher, pad, touch, audio and WiFi
+exercised on both. Their panels (`sdk-patches/tree/070-*`) and touch controllers
+(`080-*`) are in our kernel, so the hybrid images that borrowed MagicX's Android
+kernel are no longer the way in. Touch is a module that spruce loads once the
+board has settled: built in, its probe stalled boots at the logo
+(`docs/hardware-notes.md`, "Touch drivers stalled the boot").
+Known gaps: the newer-board-revision fixes in main-zero40 v20260202-1 are not in
+our inputs, suspend-to-RAM never resumes (seen on the XU20; spruce uses a
+pseudo-sleep on these boards), kernel 4.9 has no exFAT (large SD2 cards need FAT32), busybox 1.27
+has no `bc`, and the XR829 crystal variant is assumed 26 MHz. The Zero 28's and
+XU20's radio is a Realtek 8189es, the Zero 40's an XR829, both driven by
+in-kernel drivers.
 
-The **XU20 V32 has never booted** with any image in this repository: two attempts
-failed and the cause is unresolved (TODO.md). Its images are built and checksummed
-but untested, and a USB-TTL UART adapter on PB9 (TX) / PB10 (RX) at 115200 8N1 is
-the only diagnostic that has told us anything on these boards. Treat every image
-here marked untested as exactly that.
+Every board's MagicX kernel carries a `sunxi_encrypt` object that reboots the
+kernel unless the board's I2C security chip answers to its key
+(`docs/hardware-notes.md`); the XU20 boots with the Zero 40's object
+(`boards/xu20/board.conf`). A USB-TTL UART adapter on PB9 (TX) / PB10 (RX) at
+115200 8N1 and the diag lane's colour ladder are the diagnostics that have told
+us anything on these boards. Treat every image here marked untested as exactly that.
 
 The spruceOS side (platform files, PyUI device classes, the card builder) lives in
 spruceOS, not here.

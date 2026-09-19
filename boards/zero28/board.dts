@@ -77,7 +77,7 @@
 			};
 
 			twi1_pins_a: twi1@0 {
-				allwinner,pins = "PB4", "PB5";
+				allwinner,pins = "PH2", "PH3";
 				allwinner,pname = "twi1_scl", "twi1_sda";
 				allwinner,function = "twi1";
 				allwinner,muxsel = <2>;
@@ -86,7 +86,7 @@
 			};
 
 			twi1_pins_b: twi1@1 {
-				allwinner,pins = "PB4", "PB5";
+				allwinner,pins = "PH2", "PH3";
 				allwinner,function = "io_disabled";
 				allwinner,muxsel = <7>;
 				allwinner,drive = <1>;
@@ -336,33 +336,7 @@
 			clock-frequency = <200000>;
 			pinctrl-0 = <&twi1_pins_a>;
 			pinctrl-1 = <&twi1_pins_b>;
-			status = "okay";
-
-			/* xu20: touch controller node from the board's stock device tree */
-			ctp {
-				compatible = "hynitron,hyn_ts";
-				reg = <0x5a>;
-				ctp_name = "hynitron";
-				ctp_twi_id = <1>;
-				ctp_twi_addr = <90>;
-				ctp_screen_max_x = <1024>;
-				ctp_screen_max_y = <768>;
-				/* Measured on the unit 2026-09-17: the digitizer's X axis runs opposite
-				 * the display's, so top-left touches landed top-right. Flipping X here
-				 * puts the driver's output in the panel's own frame, which is what
-				 * PyUI's rotation inverse expects. Y is already correct: do not flip it.
-				 * The Zero 40's controller needs neither. */
-				ctp_revert_x_flag = <1>;
-				ctp_revert_y_flag = <0>;
-				ctp_exchange_x_y_flag = <0>;
-				ctp_int_port = <&pio PB 6 6 0xffffffff 0xffffffff 0>;
-				ctp_wakeup = <&pio PB 7 1 0 3 1>;
-				hynitron,reset-gpio = <&pio PB 7 1 0 3 1>;
-				hynitron,irq-gpio = <&pio PB 6 6 0xffffffff 0xffffffff 0>;
-				hynitron,max-touch-number = <5>;
-				hynitron,display-coords = <0x400 0x300>;
-				status = "okay";
-			};
+			status = "disabled";
 		};
 
 		twi2: twi@0x05002800{
@@ -401,7 +375,7 @@
 			tcs0: tcs@41 {
 				compatible = "ti,tcs4838";
 				reg = <0x41>;
-				status = "disabled";	/* xu20: no TCS4838 answers here; the CPU rail is dcdc1 (oakMOSS) */
+				status = "okay";
 				tcs4838_delay = <0>;
 				regulator1: regulators@1 {
 					reg_tcs0: dcdc0 {
@@ -463,8 +437,8 @@
 
 			pmu_chg_ic_temp = <0>;
 
-			pmu_battery_rdc = <170>;
-			pmu_battery_cap = <2800>;
+			pmu_battery_rdc= <203>;
+			pmu_battery_cap = <2600>;
 			pmu_runtime_chgcur = <1000>;
 			pmu_suspend_chgcur = <1500>;
 			pmu_shutdown_chgcur = <1500>;
@@ -1281,8 +1255,8 @@ chn_cfg_mode     : Hardware DE channel allocation config. 0:single display with 
 			hdmi_mode_check          = <1>;
 
 			fb0_format               = <0>;
-			fb0_width = <1024>;
-			fb0_height = <768>;
+			fb0_width                = <480>;
+			fb0_height               = <640>;
 
 			fb1_format               = <0>;
 			fb1_width                = <0>;
@@ -1296,7 +1270,6 @@ chn_cfg_mode     : Hardware DE channel allocation config. 0:single display with 
 
 			/*VCC-PD*/
 			cldo1-supply = <&reg_cldo1>;
-			cldo2-supply = <&reg_cldo2>;	/* xu20: lcd_power rail from the stock tree */
 		};
 /*----------------------------------------------------------------------------------
 ;lcd0 configuration
@@ -1357,44 +1330,63 @@ pull up or pull down(default 0), driver level(default 1), data>
 ;For lvds0: use lvds0_pins_a  and lvds0_pins_b instead
 ;----------------------------------------------------------------------------------*/
 		lcd0: lcd0@01c0c000 {
-			/* xu20: panel block from the board's stock device tree (oakMOSS make-board-dts.py) */
-			lcd_used = <1>;
-			lcd_driver_name = "RTP32HD016A";
-			lcd_if = <4>;
-			lcd_x = <1024>;
-			lcd_y = <768>;
-			lcd_width = <135>;
-			lcd_height = <216>;
-			lcd_dclk_freq = <51>;
-			lcd_hbp = <40>;
-			lcd_ht = <1084>;
-			lcd_hspw = <20>;
-			lcd_vbp = <7>;
-			lcd_vt = <784>;
-			lcd_vspw = <2>;
-			lcd_backlight = <128>;
-			lcd_pwm_used = <1>;
-			lcd_pwm_ch = <0>;
-			lcd_pwm_freq = <50000>;
-			lcd_pwm_pol = <1>;
-			lcd_pwm_max_limit = <200>;
-			lcd_dsi_if = <0>;
-			lcd_dsi_lane = <2>;
-			lcd_dsi_format = <0>;
-			lcd_dsi_te = <0>;
-			lcd_dsi_eotp = <0>;
-			lcd_frm = <0>;
-			lcd_gamma_en = <0>;
+			lcd_used            = <1>;
+			lcd_driver_name     = "h028b23";
+			
+			lcd_if              = <4>;
+			
+			lcd_x               = <480>;
+			lcd_y               = <640>;
+			lcd_width           = <135>;
+			lcd_height          = <216>;
+			lcd_dclk_freq       = <25>;
+			
+			lcd_hbp             = <64>;
+			lcd_ht              = <604>;
+			lcd_hspw            = <10>;
+			lcd_vbp             = <30>;
+			lcd_vt              = <690>;
+			lcd_vspw            = <10>;
+			
+			lcd_backlight       = <4>;
+			lcd_pwm_used        = <1>;
+			lcd_pwm_ch          = <0>;
+			lcd_pwm_freq        = <50000>;
+			lcd_pwm_pol         = <0>;   /* oakMOSS 2026-09-17: the SDK default of 1 drives this
+                                    * panel's backlight inverted (10 dim, 1 bright,
+                                    * confirmed on the unit). Everything else in this
+                                    * file is the SDK's aw3 tree unchanged. */
+			lcd_pwm_max_limit   = <200>;
+
+			lcd_dsi_if          = <0>;
+			lcd_dsi_lane        = <2>;
+			lcd_dsi_format      = <0>;
+			lcd_dsi_te          = <0>;
+			lcd_dsi_eotp        = <0>;
+
+			lcd_frm             = <0>;
+			lcd_gamma_en        = <0>;
 			lcd_bright_curve_en = <0>;
-			lcd_cmap_en = <0>;
+			lcd_cmap_en         = <0>;
+
+			deu_mode            = <0>;
+			lcdgamma4iep        = <22>;
+			smart_color         = <90>;
+
 			lcd_pin_power = "cldo1";
-			lcd_power = "cldo2";
+
+			lcd_power0 = "cldo1";
 			lcd_power1 = "cldo4";
-			lcd_gpio_0 = <&pio PD 22 1 0 3 1>;
-			lcd_gpio_1 = <&pio PB 2 1 0 3 0>;
+
+			lcd_gpio_0 = <&pio PD 22 1 0 3 1>;	/*LCD-RST*/
+			lcd_gpio_1 = <&pio PB 2 1 0 3 0>; //LED_CTRL
 
 			pinctrl-0 = <&dsi4lane_pins_a>;
 			pinctrl-1 = <&dsi4lane_pins_b>;
+
+			/*lcd_bl_en = <&pio PH 18 1 1 0 3 1>;*/
+			/*lcd_bl_0_percent	= <15>;
+			lcd_bl_100_percent  = <100>;*/
 		};
 
 		hall_para {
@@ -1413,159 +1405,158 @@ pull up or pull down(default 0), driver level(default 1), data>
 		};
 
 		simplepad {
-			/* xu20: from the board's stock device tree */
 			compatible = "simplepad";
-			joysticks = <0>;
-			ab_code2_def_behavior = <1>;
+			joysticks = <2>;
+			joystick1_invert = <1>;
+			joystick2_invert = <0>;
+			uart_path = "/dev/ttyS3";
+			virtual_mosue_used = <1>;
+			switch_mosue_key = <0x13e>;
+			switch_mouse_delay = <500>;
+			v_mosue_key_left = <0x13d>;
+			v_mosue_key_right = <0x13e>;
 			status = "okay";
-
+			
+			/*d-pad*/
 			DPAD_UP {
-				gpios = <&pio PD 17 0 1 1 1>;
-				linux,code = <103>;
+				gpios = <&pio PD 16 0 1 1 1>;
+				linux,code = <0x67>;
 				label = "DPAD_UP";
 				debounce-interval = <10>;
 			};
-
 			DPAD_DOWN {
 				gpios = <&pio PD 19 0 1 1 1>;
-				linux,code = <108>;
+				linux,code = <0x6c>;
 				label = "DPAD_DOWN";
 				debounce-interval = <10>;
 			};
-
 			DPAD_LEFT {
-				gpios = <&pio PD 16 0 1 1 1>;
-				linux,code = <105>;
+				gpios = <&pio PD 18 0 1 1 1>;
+				linux,code = <0x69>;
 				label = "DPAD_LEFT";
 				debounce-interval = <10>;
 			};
-
 			DPAD_RIGHT {
-				gpios = <&pio PD 18 0 1 1 1>;
-				linux,code = <106>;
+				gpios = <&pio PD 17 0 1 1 1>;
+				linux,code = <0x6a>;
 				label = "DPAD_RIGHT";
 				debounce-interval = <10>;
 			};
-
+			
+			/*ABXY*/
 			BTNA {
 				gpios = <&pio PD 14 0 1 1 1>;
-				linux,code = <304>;
-				linux,code2 = <353>;
+				linux,code = <0x130>;
+				linux,code2 = <0x161>;         //BTNA USED: DPAD_CENTER
 				label = "BTNA";
 				debounce-interval = <10>;
-				v_mosue_key_left;
 			};
-
 			BTNB {
-				gpios = <&pio PD 15 0 1 1 1>;
-				linux,code = <305>;
-				linux,code2 = <158>;
+				gpios = <&pio PD 13 0 1 1 1>;
+				linux,code = <0x131>;
 				label = "BTNB";
 				debounce-interval = <10>;
-				v_mosue_key_right;
 			};
-
 			BTNX {
-				gpios = <&pio PD 12 0 1 1 1>;
-				linux,code = <307>;
+				gpios = <&pio PD 15 0 1 1 1>;
+				linux,code = <0x133>;
 				label = "BTNX";
 				debounce-interval = <10>;
 			};
-
 			BTNY {
-				gpios = <&pio PD 13 0 1 1 1>;
-				linux,code = <308>;
+				gpios = <&pio PD 12 0 1 1 1>;
+				linux,code = <0x134>;
 				label = "BTNY";
 				debounce-interval = <10>;
 			};
-
+			
+			/*action*/
 			BTN_START {
 				gpios = <&pio PH 9 0 1 1 1>;
-				linux,code = <315>;
+				linux,code = <0x13b>;
 				label = "BTN_START";
 				debounce-interval = <10>;
 			};
-
 			BTN_SELECT {
-				gpios = <&pio PH 10 0 1 1 1>;
-				linux,code = <314>;
+				gpios = <&pio PH 11 0 1 1 1>;
+				linux,code = <0x13a>;
 				label = "BTN_SELECT";
 				debounce-interval = <10>;
 			};
-
 			BTN_G {
-				gpios = <&pio PH 14 0 1 1 1>;
-				linux,code = <158>;
-				linux,code2 = <256>;
+				gpios = <&pio PH 10 0 1 1 1>;
+				linux,code = <0x9e>;
 				label = "BTN_G";
 				debounce-interval = <10>;
 			};
-
+			
+			/*LR BTN*/
 			BTN_L1 {
-				gpios = <&pio PH 16 0 1 1 1>;
-				linux,code = <310>;
+				gpios = <&pio PH 19 0 1 1 1>;
+				linux,code = <0x136>;
 				label = "BTN_L1";
 				debounce-interval = <10>;
 			};
-
 			BTN_L2 {
-				gpios = <&pio PH 19 0 1 1 1>;
-				linux,code = <312>;
+				gpios = <&pio PH 16 0 1 1 1>;
+				linux,code = <0x138>;
 				label = "BTN_L2";
 				debounce-interval = <10>;
 			};
-
 			BTN_R1 {
-				gpios = <&pio PH 17 0 1 1 1>;
-				linux,code = <311>;
+				gpios = <&pio PH 18 0 1 1 1>;
+				linux,code = <0x137>;
 				label = "BTN_R1";
 				debounce-interval = <10>;
 			};
-
-			BTN_R2 {
-				gpios = <&pio PH 18 0 1 1 1>;
-				linux,code = <313>;
+			BTN_R2{
+				gpios = <&pio PH 17 0 1 1 1>;
+				linux,code = <0x139>;
 				label = "BTN_R2";
 				debounce-interval = <10>;
 			};
-
+			
+			/*THUMB*/
+			THUMB_L {
+				gpios = <&pio PH 13 0 1 1 1>;
+				linux,code = <0x13d>;
+				label = "THUMB_L";
+				debounce-interval = <10>;
+			};
+			THUMB_R {
+				gpios = <&pio PH 12 0 1 1 1>;
+				linux,code = <0x13e>;
+				label = "THUMB_R";
+				debounce-interval = <10>;
+			};
+			
+			/*vol*/
 			volume-up {
 				gpios = <&pio PD 21 0 1 1 1>;
-				linux,code = <115>;
+				linux,code = <0x73>;
 				label = "volume-up";
 				debounce-interval = <10>;
 			};
-
 			volume-down {
 				gpios = <&pio PD 20 0 1 1 1>;
-				linux,code = <114>;
+				linux,code = <0x72>;
 				label = "volume-down";
-				debounce-interval = <10>;
-			};
-
-			switch-key {
-				dpad_to_joystick;
-				gpios = <&pio PH 11 0 1 1 1>;
-				led_joy = <&pio PE 2 1 0 3 1>;
-				linux,code = <0>;
-				label = "switch-key";
 				debounce-interval = <10>;
 			};
 		};
 
 		wlan: wlan@0 {
-			/* xu20: pins from the board's stock tree, in the form our sunxi-wlan glue reads */
 			compatible    = "allwinner,sunxi-wlan";
 			clocks        = <&clk_losc_out>, <&clk_dcxo_out>;
 			pinctrl-0;
 			pinctrl-names;
-			wlan_busnum   = <1>;
+			wlan_busnum   = <0x1>;
 			wlan_power_num = <1>;
 			wlan_power1   = "axp2202-bldo1";
 			wlan_io_regulator;
 			wlan_regon    = <&r_pio PL 5 1 0xffffffff 0xffffffff 0>;
 			wlan_hostwake = <&r_pio PL 6 6 0xffffffff 0xffffffff 0>;
-			chip_en       = <&r_pio PL 7 1 0xffffffff 0xffffffff 0>;
+			chip_en		  = <&r_pio PL 7 1 0xffffffff 0xffffffff 0>;
 			power_en;
 			status        = "okay";
 		};
@@ -1643,13 +1634,5 @@ pull up or pull down(default 0), driver level(default 1), data>
 
 
 &cpu0 {
-	/* oakMOSS: the CPU is powered by the PMIC's dcdc1 on this board, as MagicX's own
-	 * tree says. The SDK's reference tree (which ours descend from) feeds it from a
-	 * TCS4838 buck at twi6 0x41 that this board does not answer on: the kernel then
-	 * scaled the CPU to 1.8 GHz while every voltage request went to that phantom and
-	 * the real rail stayed at whatever U-Boot left (0.94 V, read live 2026-09-18).
-	 * Taken at first for the intermittent boot stall, which turned out to be the
-	 * built-in touch drivers; the fix stands on its own. The tcs node is disabled below
-	 * so its driver stops wedging the PMIC bus (5 s xfer timeouts at boot). */
-	cpu-supply = <&reg_dcdc1>;
+	cpu-supply = <&reg_tcs0>;
 };

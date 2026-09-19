@@ -77,7 +77,7 @@
 			};
 
 			twi1_pins_a: twi1@0 {
-				allwinner,pins = "PH2", "PH3";
+				allwinner,pins = "PB4", "PB5";
 				allwinner,pname = "twi1_scl", "twi1_sda";
 				allwinner,function = "twi1";
 				allwinner,muxsel = <2>;
@@ -86,7 +86,7 @@
 			};
 
 			twi1_pins_b: twi1@1 {
-				allwinner,pins = "PH2", "PH3";
+				allwinner,pins = "PB4", "PB5";
 				allwinner,function = "io_disabled";
 				allwinner,muxsel = <7>;
 				allwinner,drive = <1>;
@@ -336,7 +336,15 @@
 			clock-frequency = <200000>;
 			pinctrl-0 = <&twi1_pins_a>;
 			pinctrl-1 = <&twi1_pins_b>;
-			status = "disabled";
+			status = "okay";
+
+			/* zero40: touch controller node from the board's stock device tree */
+			cap_touch@3b {
+				compatible = "axs15205,axs15205_touch";
+				reg = <0x3b>;
+				touch,irq-gpio = <&pio PB 6 6 0xffffffff 0xffffffff 0>;
+				status = "okay";
+			};
 		};
 
 		twi2: twi@0x05002800{
@@ -375,7 +383,7 @@
 			tcs0: tcs@41 {
 				compatible = "ti,tcs4838";
 				reg = <0x41>;
-				status = "okay";
+				status = "disabled";	/* zero40: no TCS4838 answers here; the CPU rail is dcdc1 (oakMOSS) */
 				tcs4838_delay = <0>;
 				regulator1: regulators@1 {
 					reg_tcs0: dcdc0 {
@@ -1270,6 +1278,7 @@ chn_cfg_mode     : Hardware DE channel allocation config. 0:single display with 
 
 			/*VCC-PD*/
 			cldo1-supply = <&reg_cldo1>;
+			cldo2-supply = <&reg_cldo2>;	/* zero40: lcd_power rail from the stock tree */
 		};
 /*----------------------------------------------------------------------------------
 ;lcd0 configuration
@@ -1349,7 +1358,7 @@ pull up or pull down(default 0), driver level(default 1), data>
 			lcd_pwm_used = <1>;
 			lcd_pwm_ch = <0>;
 			lcd_pwm_freq = <50000>;
-			lcd_pwm_pol = <0>;
+			lcd_pwm_pol = <1>;
 			lcd_pwm_max_limit = <200>;
 			lcd_dsi_if = <0>;
 			lcd_dsi_lane = <2>;
@@ -1617,5 +1626,13 @@ pull up or pull down(default 0), driver level(default 1), data>
 
 
 &cpu0 {
-	cpu-supply = <&reg_tcs0>;
+	/* oakMOSS: the CPU is powered by the PMIC's dcdc1 on this board, as MagicX's own
+	 * tree says. The SDK's reference tree (which ours descend from) feeds it from a
+	 * TCS4838 buck at twi6 0x41 that this board does not answer on: the kernel then
+	 * scaled the CPU to 1.8 GHz while every voltage request went to that phantom and
+	 * the real rail stayed at whatever U-Boot left (0.94 V, read live 2026-09-18).
+	 * Taken at first for the intermittent boot stall, which turned out to be the
+	 * built-in touch drivers; the fix stands on its own. The tcs node is disabled below
+	 * so its driver stops wedging the PMIC bus (5 s xfer timeouts at boot). */
+	cpu-supply = <&reg_dcdc1>;
 };

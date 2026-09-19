@@ -19,6 +19,11 @@ ATTRIBUTION.md. In particular:
 - sdk-patches/ncurses-6.2/ and sdk-patches/gcc-7.5.0-patches/ are OpenWrt
   material (GPL-2.0); the other patches under sdk-patches/ modify GPL/LGPL/ISC
   packages and are offered under the license of the package they touch;
+- sdk-patches/tree/080-touch-hynitron-axs15205.patch carries a complete
+  third-party kernel driver (GPL-2.0, see ATTRIBUTION.md) rather than a diff,
+  and sdk-patches/sunxi_encrypt/encrypt_stub.c is oakMOSS's own GPL-2.0 kernel
+  driver. The GPL-2.0 text is in LICENSES/GPL-2.0.txt, so anyone who receives
+  this repository receives those terms with it;
 - the Tina SDK, the Zero 40 kernel object, the Arm GNU Toolchain, OpenixCard and
   the main-zero40 release image are never stored here; the build downloads or
   expects them under their own terms.

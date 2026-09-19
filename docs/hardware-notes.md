@@ -13,7 +13,7 @@ need.
 |---|---|---|
 | SoC / board | Allwinner A133P, Tina board `a133-aw3`, DTB says `allwinner,a100` | same |
 | Panel | `h028b23`, 480x640 portrait-native, the launcher draws it rotated (640x480) | `RTP40WV101B`, 480x800 portrait-native, drawn unrotated; `axs15205` touch on twi |
-| Panel/touch drivers in the SDK drop | yes | **no**: our DTB/U-Boot/kernel drive the Zero 28 panel (white screen); hence the hybrid image on main-zero40's chain |
+| Panel/touch drivers in the SDK drop | yes | **no**: our DTB/U-Boot/kernel drive the Zero 28 panel (white screen); hence the hybrid image on main-zero40's chain. Since 2026-09-17 both are in our kernel: panels in `070-*`, touch controllers in `080-*` (see "Own kernel on the stock chain") |
 | PMIC / gauge | AXP2202; `axp2202-battery` reads fine (94 % at 4.18 V) | AXP2202; reads low on the same code with a low cell; neither DTB carries battery parameters (`pmu_battery_cap`, OCV table), so both boards run the driver's default 2600 mAh model and the Zero 40's larger cell reads skewed until a learned cycle |
 | Pad | UART MCU pad (`simplepad` driver on `/dev/ttyS3`), registers as **`magicx-input`**; was `event2` (also `js0`); no `event3` | same driver and name; was `event3`; touch `axs_ts` = `event0` |
 | Other input nodes | `axp2202-pek` (power key) = event0, `audiocodec sunxi Audio Jack` = event1 | power key and jack likewise, shifted by the touch node |
@@ -77,6 +77,278 @@ mounts, partitions, every `power_supply` uevent, `/proc/bus/input/devices`, each
 input node's key/abs bitmaps, SDIO ids, loaded modules, interfaces, rfkill and
 the full dmesg. `diag/decode-input-bitmap.py <base-boot.log>` prints each node's
 key codes and the SDL-order button labels.
+
+## Kernel console on the panel (2026-09-17)
+
+The colour ladder above only reports what userland reaches. Anything that fails
+before `/sbin/init` - a panic, a failed `init=`, a driver that hangs an initcall -
+leaves U-Boot's logo on the screen and says nothing, because the stock kernel
+config has `# CONFIG_FRAMEBUFFER_CONSOLE is not set`: `console=tty0` binds the
+dummy console, and these boards expose no serial header on the lab units. The
+XU20's reboot loop and the two diagnostic cards that never painted a colour all
+present identically under that blind spot, which is why neither could be read.
+
+`scripts/build.sh` with `KDEBUG_FBCON=1` builds a kernel whose console is the
+display. It rewrites five symbols in
+`device/config/chips/a133/configs/aw3/linux/config-4.9` (the board kernel config,
+which is `$(LINUX_KCONFIG_LIST)` in `build/kernel-build.mk`, so editing it
+invalidates the kernel's configure stamp and the kernel reconfigures itself -
+`arch/arm64/configs/sun50iw10p1smp_defconfig` is *not* the source of truth and is
+only consulted when the kernel tree has no `.config` at all):
+
+    CONFIG_FRAMEBUFFER_CONSOLE=y
+    CONFIG_FRAMEBUFFER_CONSOLE_DETECT_PRIMARY=y
+    CONFIG_FRAMEBUFFER_CONSOLE_ROTATION=y
+    # CONFIG_FONTS is not set
+    CONFIG_FONT_8x16=y
+
+All five are required. The kernel is configured through `silentoldconfig` with
+stdin redirected, so a single unanswered NEW prompt aborts the build; fbcon pulls
+in `ROTATION`, and it selects `FONT_SUPPORT`, which opens the "select compiled-in
+fonts" prompt that the stock config answers nowhere because it ships no console
+font. `ROTATION` is not decoration: the XU20's panel is mounted upside down, so
+without `fbcon=rotate:2` the log prints inverted.
+
+Pair it with the card builder:
+
+    KDEBUG_FBCON=1 scripts/build.sh image xu20
+    DIAG=0 EARLY_PROBE=0 CONSOLE="tty0" EXTRA_BOOTARGS="fbcon=rotate:2" \
+        scripts/make-own-kernel-stock.sh xu20 builds/<stamp>-xu20 builds/kdebug-xu20
+
+`CONSOLE` replaces the stock console list (`ttyS0,115200`); `EXTRA_BOOTARGS` is
+appended to the bootargs verbatim, for arguments with no env variable of their own.
+A build without `KDEBUG_FBCON` puts the config back, so the next shipped image is
+unaffected - debug cards only, since fbcon replaces the boot logo with scrolling
+kernel text.
+
+## Touch drivers stalled the boot (2026-09-18)
+
+The cause of the XU20's intermittent stuck-at-logo boots, and very likely of the Zero
+40's "picky" ones. Both touch drivers were built in, so their `late_initcall` probes
+ran on the kernel's init thread. A marker kernel (`sdk-patches/debug/kdebug-mark.patch`,
+`build.sh` `KDEBUG_MARK=1`) writes each initcall's address, then driver step codes, to
+RTC general-purpose register 5 when booted with `oakmoss_mark=0x07000114`; U-Boot
+copies the register into the saved env on the next power-on
+(`make-own-kernel-stock.sh KMARK=1`), and `scripts/analyze-card-readback.py` names
+it from `System.map`. It named `hynitron_driver_init` on 6 of 6 hung XU20 boots, and
+every good boot read "exec of init". The same built-in probe also cost every boot a
+5 s PMIC-bus stall (the `[i2c6] xfer timeout` in `regulator_init_complete`): with touch
+out of the boot it is gone on both boards, and init starts at 2.1 s instead of 7.4 s.
+
+The fix has two parts:
+
+- Both drivers are modules nothing autoloads. Tree patch 080 declares them tristate,
+  020 sets them `=m`, and 090 packages `kmod-touchscreen-{hynitron,axs15205}` with no
+  `AUTOLOAD`. The launcher loads the board's module once the board has settled
+  (spruce `magicx_load_touch`: backgrounded, with a bounded wait for the input node).
+  A diagnostic card built with `LATE_TOUCH=1` does the same from the hand-off when
+  there is no user card. Loaded late, touch registers after the pad, so the pad is
+  event2 and touch event3.
+- The Hynitron probe no longer pulses the controller's reset a second time after
+  requesting its IRQ. Loaded late, that reset froze the whole XU20 on 10 of 11 loads
+  (step marker "resetting the controller", no I2C after it), while the probe's first
+  reset, before the IRQ, never did. `cst3xx_firmware_info` already leaves the
+  controller in normal mode (`0xD1 0x09`) and nothing is flashed.
+
+Result, SD2 out: Zero 40 7/7 and XU20 8/8 (boot, late probe, power-off). Still open:
+`hyn_resume` and the report path's I2C-error recovery pulse reset with the IRQ
+installed, so sleep and wake need a test. Every reset pulse is marked (`0x4859030N`).
+
+Never write RTC general-purpose register 4 (`0x07000110`) from U-Boot. A `bootcmd`
+that read and cleared it alongside register 5 stopped both boards in U-Boot, before
+`saveenv`, on the first pass. Everything else U-Boot reads was byte-identical to a card
+that stamped.
+
+## The CPU was powered from a phantom regulator (2026-09-18)
+
+**Not the cause of the stalls (2026-09-18 night):** those were the built-in touch
+drivers (section above). The `cpu-supply` fix stands on configuration evidence.
+
+Taken on the day for the cause of the XU20's (and the Zero 40's "picky")
+intermittent, trace-less boot stalls. Our board trees descend from the SDK's a133-aw3 reference tree, whose
+`cpu-supply` is a TCS4838 buck converter at twi6 0x41 (`tcs0`). MagicX's own
+XU20 and Zero 40 trees point `cpu-supply` at the PMIC's `axp2202-dcdc1`, and on
+those boards the TCS4838 does not answer: the first boot to reach a shell showed
+`[i2c6] xfer timeout (dev addr:0x41)` five seconds into the regulator sweep,
+followed by `START can't sendout` (the PMIC bus wedged), while `axp2202-dcdc1`
+sat at a fixed 0.94 V with no consumer and cpufreq happily offered 408-1800 MHz
+against `tcs4838-dcdc0`. A CPU scaled to 1.8 GHz on U-Boot's 0.94 V browns out
+under early-boot load: intermittent, before the first mount, nothing on the
+card. That was the theory; the marker kernel later named the touch probes instead.
+
+Fix: `cpu-supply = <&reg_dcdc1>` and `tcs@41` disabled in `boards/xu20` and
+`boards/zero40`; `scripts/make-board-dts.py` step 7 now takes the CPU supply from
+the board's stock tree and disables the TCS node when the stock rail is not it.
+The Zero 28 keeps the reference tree (it has
+run for days; whether it carries a real TCS4838 is unverified). Lesson: when a
+stock tree exists, diff *every* consumer phandle against ours, not just the nodes
+we knowingly changed.
+
+## XU20 "stuck at the boot logo" (2026-09-17/18)
+
+**Resolved (2026-09-18 night): the built-in touch drivers** ("Touch drivers stalled
+the boot", above). What follows is the hunt, kept for the record: its findings about
+partition tables, Windows and the bootloader screens stand on their own, its guesses
+at the stall do not.
+
+**Retracted: "a poweroff is a reboot on the charger."** On 2026-09-17 this section
+blamed the charger-mode branch of an AXP `pm_power_off`
+(`drivers/power/supply/axp/axp2101/axp2101.c`: VBUS present and charging ->
+`machine_restart()`) and added `power_start = <1>` to every MagicX charger node to
+switch it off. That driver is not compiled into this kernel, and nothing that is
+compiled reads `power_start` from an AXP2202 node (`axp803_battery.c` is built but
+binds only AXP803 nodes). The power-off this kernel installs is PSCI's:
+`psci_0_2_set_functions()` sets `pm_power_off = psci_sys_poweroff` and
+`arm_pm_restart = psci_sys_reset` early in boot, and the AXP MFD
+(`drivers/mfd/axp2101.c`) installs its own `axp20x_power_off` only
+`if (!pm_power_off)`, which never holds. So power-off and reboot are carried out
+by the firmware in the (stock) boot package - the ATF monitor and the SCP - and no
+kernel AXP code runs on either path. The property, its generator step and its
+contracts were removed on 2026-09-18. Rule: before calling a device-tree property
+a fix, confirm the driver that reads it is built (`ls <dir>/<file>.o`) and binds
+this node's `compatible`.
+
+**Still open (2026-09-18).** With a clean SD2, a freshly flashed SD1 boots to
+spruce once; after a power-off from spruce the next power-on stops at the boot
+logo - the tagged logo (so our p1 was read) and no bootloader screen (so U-Boot
+took none of its pause, shutdown or low-battery paths). U-Boot's other
+diversions cannot hold across consecutive boots: a bootloader message in misc
+and a boot-mode flag in the RTC are both cleared after one read
+(`sunxi_get_bootcmd_from_misc`, `sunxi_get_bootcmd_from_rtc`), and a recovery
+request is ignored when there is no recovery partition. So the persistent state
+is on SD1 (the `rootfs_data` overlay, UDISK) or in the always-on domain the
+firmware's power-off leaves behind. The base starts `adbd` (`S80adbd`, a
+standard `18d1:D002` gadget) before the hand-off (`S95done`), so `adb devices`
+against a stuck board separates "base userspace up, stall in the hand-off or
+spruce" from "stall in the kernel or early init".
+
+**Leading candidate (2026-09-18, read back off a stuck card): something rewrites
+our partition table in place at LBA 2.** Who is not established. The SDK's
+boot-time `sunxi_update_gpt` would, but its one unique message ("update gpt
+fail") is absent from both stock U-Boots and from ours; "write primary GPT
+success" / "write Backup GPT success" also belong to the card-flashing paths
+(`download_standard_gpt`, `sunxi_sprite_download_mbr`) and prove nothing. The
+candidates are the XU20's stock U-Boot (some other routine) and the DiskGenius
+session that card went through; the rewrite follows Allwinner's convention
+(the first-usable rule below, as on MagicX's real Zero 40 card), which leans
+towards the device. The rewrite expects the layout of MagicX's own table (stock XU20 GPT item: 17 entries at LBA 2, first usable LBA
+32768). Our cards used the SDK card packer's layout (128 entries at LBA 2048),
+so the rewrite laid a 32-sector array over LBA 2-33 - erasing boot0 at sector 16
+on the very first boot - and left a primary header pointing its entries at LBA
+34848, with a valid backup moved to the card's physical end. Its header `reserved1` is 0 on the card. U-Boot then reads the
+backup ("Using Backup GPT") and the kernel copes because U-Boot passes `gpt=1`
+(force_gpt), so the table state alone does not explain the stall - but every
+boot after the first starts from the boot0 mirror at sector 256, a path never
+proven on this board, and that is the one card-side difference every stuck boot
+shares. The 09-16 "no-LED cards, sector 16 zeroed" blamed on Windows/DiskGenius
+fit the same mechanism before the mirror existed. `make-own-kernel-stock.sh`
+now writes the table in the stock shape: 16 entries at LBA 2 (a 4-sector array
+ending at LBA 5) and first usable LBA 6. The last value matters: the rewrite
+writes the array at LBA 2 but sets the header's entry pointer to
+first_usable - array sectors (the old cards: 34880 - 32 = the 34848 read back;
+MagicX's real Zero 40 card: 20 entries, first usable 7 = 2 + 5), so the primary
+table survives only when first_usable = 2 + array sectors. Partitions, order and
+PARTUUIDs are unchanged. The Zero 40 is "picky" (sometimes boots, sometimes sticks). Our Zero 28 U-Boot
+cannot rewrite at boot: `CONFIG_SUNXI_UPDATE_GPT` is off (Kconfig default n, not
+set in our build) and the routine's unique string is absent from the binary. Unverified on hardware until fresh
+cards boot repeatedly. Reading a card
+back: a DiskGenius `.pmfx` is a card-ordered index of 1 MiB zlib chunks at file
+offset 0x1000 (16-byte entries: u64 offset, u32 stored size, u32 compressed size;
+compressed size 0x100000 = stored raw), but DiskGenius regenerates the partition
+table in its image; read the card raw instead.
+
+**Resolved for the XU20 (2026-09-18): Windows re-detecting a flashed card breaks
+it.** Raspberry Pi Imager's own read-back verified a card, yet re-seating it in
+the PC and checking again showed the table rewrite (sectors 1-4, 16-17, 21-33).
+Windows rewrites our table whenever it detects the card, because the table's
+backup sits before the card's end. Win32DiskImager leaves the card attached, so
+every card flashed with it reached the XU20 already rewritten. A card flashed
+with Pi Imager and taken straight to the XU20, never re-detected by Windows,
+booted and survived repeated power cycles. Lab rule: flash with Raspberry Pi
+Imager, keep its verification on, and move the card to the device straight after
+it ejects. Never re-insert a card into Windows between flashing and booting, and
+treat any card that has been re-inserted as rewritten; reflash it before testing.
+How the rewritten state lets boot 1 succeed but stalls later boots is not
+explained; the new-layout (`GPT_LAYOUT=stock`) card, which Windows leaves
+structurally intact, was never tested unrewritten.
+
+**The table rewrite is done on the PC, not the XU20 (2026-09-18).** A card
+written with Win32DiskImager and checked straight away, never booted, came back
+with the rewrite: backup moved to the card's end, header entry pointer =
+first_usable - 32 (34848), 128 entries written at LBA 2-33 over boot0 at 16.
+Flashing alone does not do it (Zero 28 cards have the same layout and no boot0
+copy at 256, and survive flashing), and every rewrite seen followed DiskGenius or
+a `Get-Disk`/`Get-Partition` query, so the writer is almost certainly Windows
+storage management "repairing" a GPT whose backup is not at the end of the
+disk. Nothing in the XU20's boot path is shown to write the table; the "boots
+once, then sticks" stall happens with the table intact. Card tooling must find
+disks with `Get-CimInstance Win32_DiskDrive` only (`scripts/verify-card.ps1`
+compares a written card with its image that way, read-only), never Disk
+Management, DiskGenius or `Get-Disk`, and the 09-16 "sector 16 zeroed" cards
+were this too.
+
+**Result (2026-09-18 morning): the stock-shaped table is worse.** A card built with
+it (`xu20-gptfix`: 16 entries at LBA 2, first usable 6) never reached userspace,
+not even on its first boot: read back raw, its `rootfs_data` and UDISK had never
+been mounted (mount count 0, no last-mount time), no boot-log line, pstore empty,
+while the old layout (128 entries at LBA 2048) booted the first time on two
+cards. On that card the table had only its backup moved to the card's end
+(primary valid, boot0 intact at 16), so the stall is not the rewrite's damage.
+Two explanations were checked and ruled out: U-Boot's root rewrite ("set root
+to /dev/mmcblk0p<n>") needs a `root_partition` env variable we do not set, and a
+failed boot-image verification shows `red_warning.bmp` and powers off rather
+than holding the logo. `make-own-kernel-stock.sh` therefore defaults to the old
+layout again (`GPT_LAYOUT=sdk`); `GPT_LAYOUT=stock` stays as a diagnostic. The
+same read showed 8 sectors of `orange_warning.bmp` zeroed on the card although
+the flashed image (md5 checked) had data there: the flashing step can silently
+zero nearly-empty sectors. Next diagnostic: the fbcon kernel on the old layout
+(`xu20-fbcon`), to see whether a stuck boot ever starts the kernel.
+
+**What the afternoon's failures actually were (resolved 2026-09-17 evening).**
+The SD2 card. The base paints nothing until spruce starts: `rc.local` runs the
+hand-off, which waits 10 s for `/mnt/SDCARD` and then, with nothing to run, calls
+`poweroff`. The base mounts SD2 only from `/dev/mmcblk1` or `/dev/mmcblk1p1`
+(`/etc/config/fstab`, `anon_mount 0`) and only as FAT32 (the kernel has no
+exFAT). An SD2 that does not mount therefore looks, on every SD1 image alike,
+like a board stuck at the boot logo. Reformatting SD2 (FAT32) and recopying the payload ended it; the first
+card to boot afterwards was `fix-xu20-pol0` (`lcd_pwm_pol 0`, touch flag 1), confirmed live by its rootfs PARTUUID.
+
+Read this first next time, not the boot chain: every boot appends its decision
+to `/mnt/UDISK/oakmoss-boot.log` on the SD1 card (p8, ext4, readable on a PC
+with `mount -o ro /dev/sdX8`): `running /mnt/SDCARD/.tmp_update/updater` means
+the base booted and SD2 mounted; `no card or nothing to run after 20 x 0.5 s;
+powering off` means SD2 never mounted; no `=== boot` line means the kernel never
+got that far. The kernel command line also carries the stock U-Boot's own
+verdicts, worth reading on any live board: `bootreason=button|charger|usb`
+(the PMIC power-on source), `androidboot.vbmeta.device_state=locked`,
+`androidboot.secure_os_exist=0`, `androidboot.mode=normal|charger`, and
+`disp_reserve=<size>,<addr>` (U-Boot's framebuffer, inherited for the smooth
+boot).
+
+**The stock bootloader's own screens are invisible on this panel.** Its
+verified-boot warnings (`orange_warning.bmp`, `yellow_pause_warning.bmp`,
+`yellow_continue_warning.bmp`, `red_warning.bmp`) are 800x1280 and its
+low-battery screen (`bat/low_pwr.bmp`) is 480x800, sized for a reference board;
+the XU20 framebuffer is 1024x768 and the stock U-Boot refuses anything larger
+("no support big size bmp[%dx%d] on fb[%dx%d]", in its binary). So the ORANGE
+five-second window (a power-key press there = shutdown), the YELLOW pause
+(a press = wait for a second press; the second press = continue) and a
+low-battery shutdown all show the boot logo and nothing else. A tap that turns
+the board off is the orange window; a board that sits at the logo until tapped
+is the yellow pause. `scripts/make-boot-resource.py <stock> <out> <board>` writes
+board-sized replacements (each naming its state, pre-rotated like the stock
+logo) plus a tagged boot logo into a copy of the stock partition, and
+`make-own-kernel-stock.sh BOOTRES=<out>` ships it in p1. A logo with the tag
+proves that partition was read; a warning on screen names the U-Boot path.
+(Zero 40 fb 480x800 and Zero 28 480x640 refuse the same bitmaps.)
+
+Two diagnostic lanes came out of the hunt. `KDEBUG_FBCON=1` (above) put the kernel
+log on the panel but the disp framebuffer went blank under fbcon on the XU20, so it
+is unproven there. `PSTORE=1` in `make-own-kernel-stock.sh` adds a 2 MB pstore
+partition and points the built-in `pstore_blk` at it: a panic or a restart writes
+the kernel log to the card, where it survives the cold power-off (`max_reason=6`:
+panic, oops, emergency, restart, halt and power-off). Read it after
+the next good boot with `mount -t pstore pstore /sys/fs/pstore`.
 
 ## XU20 V32 (XU RETRO / MagicX), 2026-09-16
 
@@ -249,9 +521,70 @@ get OUR 4.9.191 kernel behind the stock boot0 and U-Boot:
   a second reset line (PB7) pulsed after the first.
 - **Board trees** `boards/xu20/board.dts`, `boards/zero40/board.dts`,
   generated by `scripts/make-board-dts.py` from the Zero 28 tree plus each
-  stock tree: lcd0 block, simplepad map, wlan node, battery model. Touch
-  nodes are not carried yet (drivers not ported: Hynitron 0x5a on the XU20,
-  axs15205 0x3b on the Zero 40).
+  stock tree: lcd0 block, simplepad map, wlan node, battery model, and
+  (2026-09-17) twi1 on the stock PB4/PB5 pins with the stock touch node.
+- **Touch** `sdk-patches/tree/080-touch-hynitron-axs15205.patch`. XU20:
+  Hynitron **CST340** at 0x5a (the stock kernel's `hyn_ts_data_init` says chip
+  3340, main address 0x5a, five points, no axis flips), served by Radxa's
+  Allwinner-flavoured `hyn_ts` driver with three changes: the I2C address is
+  the node's `reg` (the driver's default is 0x1a), the axis flags are the ctp
+  node's `ctp_revert_*`, and a `-EBUSY` on the reset/irq lines is accepted
+  because the ctp framework (`init-input.c`, node `ctp`) has already requested
+  `ctp_wakeup` = PB7 and `ctp_int_port` = PB6. Its 1.3 MB of embedded firmware
+  images are guarded out (auto-update is off). Zero 40: **AXS15205** at 0x3b,
+  `axs15205.c` written from the stock kernel's `axs_ts_probe` /
+  `axs_ts_interrupt` (disassembled): no command prefix, no checksum, one
+  32-byte `i2c_master_recv` per interrupt, frame = status, count nibble,
+  then six bytes per contact (event|x_hi, x_lo, id|y_hi, y_lo, weight, area);
+  five type-B slots on 480x800, INT PB6, 120 ms after probe for the panel
+  (whose reset line resets the chip; no reset gpio of its own). The axs_ts
+  sources circulating publicly are the newer command-prefixed protocol and do
+  not apply. Touch coordinates are raw panel coordinates on both boards:
+  PyUI's touch watcher undoes DISPLAY_ROTATION (180 on the XU20) itself. Both
+  drivers are modules loaded after boot since 2026-09-18 ("Touch drivers
+  stalled the boot").
+- **Touch orientation, measured 2026-09-17.** The controllers publish the right
+  ranges (the XU20's Hynitron reports 0..1024 by 0..768, matching its panel), so
+  scaling was never the issue; how the digitizer is mounted is. On the XU20 the
+  digitizer's X axis runs opposite the display: a touch at the top left landed at
+  the top right, and at the bottom left landed bottom right, so X is mirrored and
+  Y is already correct. `ctp_revert_x_flag = <1>` on that board puts the driver's
+  output back in the panel's own frame, which is the frame PyUI's rotation inverse
+  expects; Y must stay 0 or the 180 rotation is undone. The Zero 40 needs neither
+  flip and was correct as built. This supersedes the earlier note that both flags
+  stay 0 and PyUI does all the work: PyUI undoes the *display* rotation, and the
+  tree describes the *mounting*, which is a different fact.
+- **The touch rail (found on the first Zero 40 touch card, 2026-09-17).** The
+  AXS15205 probed and PyUI attached to `axs_ts`, but every frame read failed
+  with the sunxi TWI's "START can't sendout" for the first minutes, decaying to
+  none after ~15 min. Not CPU speed (rate unchanged under a 1.4 GHz load) and
+  not the driver (the stock kernel polls START the same 255 times): the boot
+  log had `6000000.disp supply cldo2 not found, using dummy regulator` at
+  1.58 s and `axp2202-cldo2: disabling` at 3.79 s, the first failure at 3.90 s.
+  The disp driver enables each `lcd_powerN` name with `regulator_get()` on the
+  disp device, which needs a `<name>-supply` phandle on the disp node; the
+  Zero 28 tree only carries `cldo4-supply`, the stock trees name **cldo2** as
+  `lcd_power`, so nothing held cldo2 and the kernel's unused-regulator sweep
+  switched it off. The panel kept working (its own rails are elsewhere) but the
+  touch controller's I2C side sits on cldo2, and the dead rail floated up
+  through leakage over a quarter of an hour, which is the decay. The generator
+  now adds a disp supply for every `lcd_powerN` rail the stock tree names
+  (`cldo2-supply = <&reg_cldo2>` on both boards). The XU20 shares the same
+  `lcd_power = "cldo2"`, so its Hynitron sat on the same dead rail.
+- **XU20 after a menu reboot (2026-09-17, card 2311).** Touch worked on the
+  first boot; a menu reboot (`save_poweroff.sh --reboot`) left the board at the
+  boot logo on every following start. The stock U-Boot passed `bootreason=button`
+  on the good boot; nothing in our chain writes the RTC boot flag or the misc
+  partition. That boot's log also shows the simplepad oops (fixed by `085-*`, not
+  a boot stopper).
+  The remaining suspect is the `sunxi_encrypt` object (the Zero 40's,
+  `ENCRYPT_OBJ=zero40`): a failed check restarts the kernel before the display is
+  taken over, which looks like a logo that never moves. Test card:
+  `ENCRYPT_OBJ=stub`.
+  Superseded (2026-09-18): the reboot powered off because the hand-off raced
+  spruce's own shutdown (fixed in `overlay/usr/magicx/bin/runmagicx.sh`), and the
+  stops at the logo were the built-in touch probes ("Touch drivers stalled the
+  boot"); the object authenticates on this board.
 - **Card** `scripts/make-own-kernel-stock.sh`: stock boot0 (at 16 and 256),
   stock package with its dtb item replaced by ours (`toc1-item.py`, checksum
   redone), our kernel in a header-v2 boot image that also carries our tree
@@ -259,10 +592,32 @@ get OUR 4.9.191 kernel behind the stock boot0 and U-Boot:
   rootfstype=squashfs, our rootfs squashfs in p6, rootfs_data/UDISK ext4.
   Whichever tree U-Boot hands the kernel, it is ours; U-Boot itself now reads
   our tree for its own panel init, which carries the stock timings.
-- The XU20 kernel object is the SDK's (no XU20 Linux object exists); it is an
-  identity misc device, not a boot gate.
+- The XU20 kernel object is the Zero 40's (`ENCRYPT_OBJ=zero40`); see "The
+  sunxi_encrypt object is a boot gate" below.
 
-## Cards on a PC: what zeroes boot0
+## The sunxi_encrypt object is a boot gate (2026-09-17)
+
+MagicX's prebuilt `drivers/char/sunxi_encrypt/encrypt` (one object per board) is
+an authentication driver, not a passive identity device: it checks the board it
+is running on and, when the answer does not match what was compiled into it,
+restarts the kernel. A kernel linked with another board's object therefore
+reboots forever at the boot logo and leaves no log anywhere; that was every
+own-kernel XU20 stop until the object was changed. Which object a board needs is
+the per-board `ENCRYPT_OBJ` setting: the XU20 takes the Zero 40's, and with it
+boots, runs spruce on the 1.19 GPU stack and brings WiFi up through the Realtek
+driver (verified on the unit, reachable over SSH). `ENCRYPT_OBJ=stub` builds
+`sdk-patches/sunxi_encrypt/encrypt_stub.c` instead, a misc device that touches no
+chip, for any board without a matching object.
+
+How the check works is deliberately not documented here.
+
+The XU20 panel scans upside down relative to the case: the vendor's Android
+sets `ro.surface_flinger.primary_display_orientation=ORIENTATION_180` (the
+Zero 40's says 0) and rotates in the compositor. Our display driver has no
+whole-output flip, so spruce rotates by 180 on this board the way it rotates
+the Zero 28 by 90.
+
+
 
 Three "no LED" cards in one evening, each with sector 16 zeroed and the boot
 package at 32800 intact, one of them freshly written by Raspberry Pi Imager.
@@ -278,11 +633,45 @@ place the sun50i boot ROM looks, which no table rewrite reaches.
 
 ## Known gaps
 
-- Zero 40 panel and touch drivers, and the "newer board revision" fixes in
-  main-zero40 v20260202-1, are not in the SDK drop.
+- The "newer board revision" fixes in main-zero40 v20260202-1 are not in the
+  SDK drop (the Zero 40 and XU20 panel and touch drivers are ours since
+  2026-09-17: `070-*`, `080-*`; touch works on both, loaded after boot as a module).
 - No exFAT in kernel 4.9 and no FUSE exfat package in the Tina tree: user cards
   over 32 GB must be FAT32.
 - busybox 1.27.2 has no `bc`.
 - XR829 26 MHz vs 40 MHz crystal unverified (26 assumed, as Knulli ships); moot
   on boards with the Realtek radio.
 - No `harbourmaster` (PortMaster) device profile for either board yet.
+
+## Backlight polarity (2026-09-17/18)
+
+All three MagicX boards ran their backlight curve inverted at once: a higher
+brightness setting made the screen darker. The cause is not in spruce and not in
+the display driver. Measured across four A133P boards, brightness reaches the
+panel identically everywhere: `set_backlight` maps 1..10 to 1..255 and
+`disp_lcd_set_bright` turns that into a duty that rises with it. Setting 2 and
+then 9 and reading the driver back through `/sys/class/disp/disp/attr/sys` gives
+29 and 226 on every board, the TrimUI Smart Pro included, whose backlight is
+correct. The direction of the curve is therefore decided entirely by
+`lcd_pwm_pol` against each panel's LED driver.
+
+| board | polarity | where it comes from |
+|---|---|---|
+| Zero 28 | 0 | the SDK's aw3 default is 1 and runs inverted, so this board has its own tree (`boards/zero28/board.dts`), identical to the SDK's but for this one property |
+| Zero 40 | 1 | the stock tree's value |
+| XU20 | 1 | the stock tree's value |
+| TrimUI Smart Pro | 0 | vendor firmware, correct as shipped; recorded as the control |
+
+This project briefly forced 0 on the Zero 40 and the XU20 (2026-09-16) after a dim
+backlight was read as inversion. That was wrong: MagicX's own firmware ships 1 on
+both panels, and 0 inverted them. `make-board-dts.py` no longer overrides the
+value.
+
+**Not settled (2026-09-18).** With the stock 1 in place, spruce's brightness still
+ran inverted on the XU20 and the Zero 40 (a higher setting was darker), while the
+Zero 28 at 0 is right. The trees keep the stock value and spruceOS mirrors the level
+on those two boards instead: its MagicX device class maps setting N to 256 minus the
+usual duty (`BACKLIGHT_REVERSED`), and the platform files' `MAGICX_BACKLIGHT_REVERSED`
+tells pseudo-sleep which end is dark. This reading and the 0-is-inverted one above
+cannot both describe the same hardware; which polarity is physically right is open.
+

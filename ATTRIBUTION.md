@@ -36,8 +36,9 @@ automates. Taken from it, with only the changes noted:
 
 Moss-zero28 carries no license file. Its README presents it as notes for the
 community to build from, and that is how it is used here: attributed, not
-relicensed. **His `bootlogo.bmp` is deliberately not included**; the image keeps
-the SDK's own logo unless you drop one into `overlay/`. If Shaun Inman objects to
+relicensed. **His `bootlogo.bmp` is deliberately not included**; the image carries
+oakMOSS's own logo (see spruceOS below) when `scripts/make-boot-resource.py` has
+drawn it into `overlay/`, and the SDK's otherwise. If Shaun Inman objects to
 any use here, it will be replaced.
 
 **[main-zero40](https://github.com/dedicated-os/main-zero40)** ("a bare-bones
@@ -111,6 +112,37 @@ build paths are theirs and already present in the upstream firmware, and
 rewriting them would make these files no longer the artifacts being attributed.
 Replacing them with an SDL2 built from source in this tree is a TODO.md item.
 
+## Hynitron, via Radxa
+
+The GPL-2.0 text this section refers to is in `LICENSES/GPL-2.0.txt`.
+
+`sdk-patches/tree/080-touch-hynitron-axs15205.patch` carries Hynitron's own
+capacitive touch driver for the XU20's CST340 (`hynitron_core.[ch]`,
+`hynitron_i2c.c`, `hynitron_common.h`, `hynitron_config.h`,
+`hynitron_update_firmware.[ch]`, `hynitron_gesture.c`, `hynitron_proximity.c`,
+`hynitron_esd_check.c`). It is Hynitron's work, carrying their author string
+(`zxzz`) and `MODULE_LICENSE("GPL v2")`, and it is redistributed here under
+GPL-2.0 with those notices intact. It was taken from Radxa's `allwinner-bsp`
+tree (`drivers/input/ctp/hynitron`), which is where it exists in the Allwinner
+`ctp`/`init-input` framework flavour this kernel needs.
+
+oakMOSS's changes to it are three, each marked in place: the I2C address is
+taken from the device tree node's `reg` rather than the driver's compile-time
+default, the axis flags come from the `ctp` node, and an `-EBUSY` on the reset
+and interrupt lines is accepted because the `ctp` framework requests them
+first. Hynitron's ~1.3 MB of built-in firmware images are **not** carried: the
+table that reads them is guarded behind the auto-update switches, which are
+off, so the panel keeps the firmware it shipped with. The vendor's
+`hynitron_tool_debug.c`, which nothing builds, is also left out.
+
+The same patch adds `axs15205/axs15205.c` for the Zero 40's AXS15205. That file
+is oakMOSS's own work under GPL-2.0, written from the behaviour of the board's
+stock kernel rather than from vendor source: the frame format, the read
+protocol and the probe timing were read out of that kernel's own driver by
+disassembly (`docs/hardware-notes.md`, "Touch"). The AiXieSheng `axs_ts`
+sources circulating publicly are a different, command-prefixed protocol and are
+not used here.
+
 ## Imagination Technologies
 
 PowerVR GE8300: the kernel module source (`rogue_km`, dual MIT/GPL-2.0) is built
@@ -174,7 +206,10 @@ those packages are offered under the license of the package they modify.
 ## spruceOS
 
 [spruceOS](https://github.com/spruceUI/spruceOS) (CC BY-NC 4.0) is the launcher
-these images exist to boot. Nothing from it is included; it lives on the user card.
+these images exist to boot; it lives on the user card. One file comes from it:
+`assets/spruce-tree.png` is spruceOS's tree mark (`spruce/imgs/tree_sm_close_crop.png`),
+which `scripts/make-boot-resource.py` turns into the oakMOSS boot logo. Both are
+spruceUI projects under the same license.
 The `docs/DEPENDENCIES.md` study was written against its tree to size the base
 image's userland.
 
