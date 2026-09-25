@@ -1,0 +1,13 @@
+--- a/package/utils/htop/Makefile
++++ b/package/utils/htop/Makefile
+@@ -46,6 +46,10 @@
+ 	ac_cv_file__proc_stat=yes \
+ 	ac_cv_file__proc_meminfo=yes
+ 
++# oakMOSS: ncurses 6.2 is built --with-termlib=tinfo, so napms() and the other
++# terminfo symbols live in libtinfo; htop 2.0.2 links -lncurses(w) only.
++TARGET_LDFLAGS += -ltinfo
++
+ define Package/htop/install
+ 	$(INSTALL_DIR) $(1)/usr/bin
+ 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/$(PKG_NAME) $(1)/usr/bin/

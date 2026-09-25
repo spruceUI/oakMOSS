@@ -1,0 +1,19 @@
+glibc >= 2.34 defines PTHREAD_STACK_MIN as sysconf(_SC_THREAD_STACK_MIN_VALUE), which a
+preprocessor #if cannot evaluate. The #else branch computes the same maximum at run time,
+which is what stress-ng itself does from 0.13 on.
+
+--- a/stress-pthread.c
++++ b/stress-pthread.c
+@@ -400,12 +400,8 @@
+ 	stress_pthread_args_t pargs = { args, NULL, 0 };
+ 	sigset_t set;
+ #if defined(HAVE_PTHREAD_ATTR_SETSTACK)
+-#if DEFAULT_STACK_MIN == PTHREAD_STACK_MIN
+-	const size_t stack_size = PTHREAD_STACK_MIN;
+-#else
+ 	const size_t stack_size = STRESS_MAXIMUM(DEFAULT_STACK_MIN, PTHREAD_STACK_MIN);
+ #endif
+-#endif
+ 
+ 	keep_running_flag = true;
+ 

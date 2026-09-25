@@ -1,0 +1,11 @@
+--- a/device/config/chips/a133/configs/aw3/linux/env-4.9.cfg
++++ b/device/config/chips/a133/configs/aw3/linux/env-4.9.cfg
+@@ -12,7 +12,7 @@
+ root_partition=rootfs
+ init=/sbin/init
+ rdinit=/rdinit
+-loglevel=8
++loglevel=4
+ cma=32M
+ mac=
+ wifi_mac=

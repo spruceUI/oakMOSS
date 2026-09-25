@@ -13,7 +13,8 @@
 #      PHASE2_CONFIG (phase2-gcc750.config), OPENIXCARD_BIN, ZERO40_ENCRYPT_OBJ,
 #      COMPRESS=1 (also write an .img.xz), OAKMOSS_WORK / BUILDS_DIR (see lib.sh),
 #      KDEBUG_FBCON=1 (kernel console on the panel; debug cards only, see apply_overlay),
-#      KDEBUG_MARK=1 (initcall progress marker for oakmoss_mark=; debug cards only).
+#      KDEBUG_MARK=1 (initcall progress marker for oakmoss_mark=; debug cards only),
+#      KDEBUG_FTRACE=1 (ftrace + event tracing for trace-cmd; debug cards only).
 # Everything runs inside the container except OpenixCard, which runs on the host.
 . "$(dirname "$0")/lib.sh"
 need_sdk; need_mods
@@ -132,6 +133,26 @@ apply_overlay() {
         sed -i '/^CONFIG_FRAMEBUFFER_CONSOLE_DETECT_PRIMARY=y$/d; /^CONFIG_FRAMEBUFFER_CONSOLE_ROTATION=y$/d; /^# CONFIG_FONTS is not set$/d; /^CONFIG_FONT_8x16=y$/d; s|^CONFIG_FRAMEBUFFER_CONSOLE=y|# CONFIG_FRAMEBUFFER_CONSOLE is not set|' "$kcfg"
         log "kernel config: CONFIG_FRAMEBUFFER_CONSOLE off again (no KDEBUG_FBCON)"
     fi
+    # Kernel tracing: KDEBUG_FTRACE=1 turns on ftrace (function, function-graph and event
+    # tracing) so trace-cmd and /sys/kernel/debug/tracing work, and so do the display
+    # driver's own DISP_TRACE markers, which compile to nothing without it. Every symbol it
+    # opens is answered in sdk-patches/debug/kdebug-ftrace.config (same silentoldconfig
+    # reason as KDEBUG_FBCON). Debug cards only, and removed again when not asked for.
+    # Two files: the kernel's config-4.9, and the top-level defconfig, because
+    # build/kernel-defaults.mk appends every CONFIG_KERNEL_* line of the top config to the
+    # kernel's and the later line wins - its '# CONFIG_KERNEL_FTRACE is not set' built the
+    # first KDEBUG_FTRACE kernel without tracing (2026-09-24, read back with ikconfig).
+    local kftrace=$OAKMOSS_ROOT/sdk-patches/debug/kdebug-ftrace.config
+    if kdebug_block "$kcfg" '# CONFIG_FTRACE is not set' 'CONFIG_FTRACE=y' \
+        "$(grep -E '^(CONFIG_|# CONFIG_)' "$kftrace")"; then
+        log "kernel config: CONFIG_FTRACE $([ "${KDEBUG_FTRACE:-0}" = 1 ] && echo '=y (KDEBUG_FTRACE)' || echo 'off again (no KDEBUG_FTRACE)')"
+    fi
+    if kdebug_block "$SDK_DIR/target/allwinner/a133-aw3/defconfig" \
+        '# CONFIG_KERNEL_FTRACE is not set' 'CONFIG_KERNEL_FTRACE=y' \
+        "$(printf '%s\n' CONFIG_KERNEL_FTRACE=y CONFIG_KERNEL_FUNCTION_TRACER=y \
+                          CONFIG_KERNEL_FUNCTION_GRAPH_TRACER=y CONFIG_KERNEL_DYNAMIC_FTRACE=y)"; then
+        log "top config: CONFIG_KERNEL_FTRACE $([ "${KDEBUG_FTRACE:-0}" = 1 ] && echo '=y (KDEBUG_FTRACE)' || echo 'off again')"
+    fi
     # Initcall marker: KDEBUG_MARK=1 applies sdk-patches/debug/kdebug-mark.patch,
     # which lets a card pass oakmoss_mark=<phys> (an RTC general-purpose register) so
     # each initcall and the init hand-off stages write where the boot has got to; the
@@ -164,6 +185,30 @@ apply_overlay() {
         printf '%s\n' "$want" > "$ENC/.linked-md5"
         log "kernel object changed ($board): the kernel will relink"
     fi
+}
+
+# kdebug_block FILE OFF ON BLOCK: with KDEBUG_FTRACE=1, BLOCK (which contains ON) takes the
+# place of the OFF line; without it, ON goes back to OFF and the rest of BLOCK goes. Anchored
+# on either form, so a half-applied block left by an aborted build is completed in place;
+# the file is written only when its state is wrong (a write to the kernel config invalidates
+# its configure stamp). Returns 0 when it changed the file.
+kdebug_block() {
+    local file=$1 off=$2 on=$3 block=$4 missing
+    missing=$(printf '%s\n' "$block" | grep -vxF -f "$file" || true)
+    if [ "${KDEBUG_FTRACE:-0}" = 1 ] && [ -n "$missing" ]; then
+        awk -v blk="$block" -v off="$off" -v on="$on" 'NR==FNR { drop[$0]=1; next }
+            $0 == off || $0 == on { if (!done++) print blk; next }
+            !($0 in drop)' <(printf '%s\n' "$block") "$file" > "$file.kdebug"
+        grep -qxF "$on" "$file.kdebug" || { rm -f "$file.kdebug"; die "KDEBUG_FTRACE: no '$off' line in $file"; }
+        mv "$file.kdebug" "$file"
+        return 0
+    elif [ "${KDEBUG_FTRACE:-0}" != 1 ] && grep -qxF "$on" "$file"; then
+        awk -v off="$off" -v on="$on" 'NR==FNR { drop[$0]=1; next }
+            $0 == on { print off; next }
+            !($0 in drop)' <(printf '%s\n' "$block") "$file" > "$file.kdebug" && mv "$file.kdebug" "$file"
+        return 0
+    fi
+    return 1
 }
 
 run_make() {  # run_make <label> <pre-commands>
