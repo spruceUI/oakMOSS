@@ -1254,9 +1254,19 @@ chn_cfg_mode     : Hardware DE channel allocation config. 0:single display with 
 			def_output_dev           = <0>;
 			hdmi_mode_check          = <1>;
 
+			/* G2D hardware rotation of the framebuffer (sdk-patches/tree/100..102):
+			 * degree0 1 = 90: the panel is mounted portrait, the UI is landscape.
+			 * fb0 is 640x480, the panel's 480x640 transposed (the SDK comment above: fbX_width = lcd_y).
+			 * The kernel rotates on every flip, so nothing rotates per app and spruce
+			 * leaves DISPLAY_ROTATION at 0 for this board. Needs
+			 * CONFIG_SUNXI_DISP2_FB_HW_ROTATION_SUPPORT=y; the fb is forced to double
+			 * buffering. */
+			disp_rotation_used       = <1>;
+			degree0                  = <1>;
+			fb0_buffer_num           = <2>;
 			fb0_format               = <0>;
-			fb0_width                = <480>;
-			fb0_height               = <640>;
+			fb0_width                = <640>;
+			fb0_height               = <480>;
 
 			fb1_format               = <0>;
 			fb1_width                = <0>;
@@ -1446,26 +1456,26 @@ pull up or pull down(default 0), driver level(default 1), data>
 			/*ABXY*/
 			BTNA {
 				gpios = <&pio PD 14 0 1 1 1>;
-				linux,code = <0x130>;
+				linux,code = <0x131>;
 				linux,code2 = <0x161>;         //BTNA USED: DPAD_CENTER
 				label = "BTNA";
 				debounce-interval = <10>;
 			};
 			BTNB {
 				gpios = <&pio PD 13 0 1 1 1>;
-				linux,code = <0x131>;
+				linux,code = <0x130>;
 				label = "BTNB";
 				debounce-interval = <10>;
 			};
 			BTNX {
 				gpios = <&pio PD 15 0 1 1 1>;
-				linux,code = <0x133>;
+				linux,code = <0x134>;
 				label = "BTNX";
 				debounce-interval = <10>;
 			};
 			BTNY {
 				gpios = <&pio PD 12 0 1 1 1>;
-				linux,code = <0x134>;
+				linux,code = <0x133>;
 				label = "BTNY";
 				debounce-interval = <10>;
 			};

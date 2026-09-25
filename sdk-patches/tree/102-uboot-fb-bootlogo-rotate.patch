@@ -1,0 +1,46 @@
+U-Boot: swap the boot framebuffer's width and height for a 90/270 rotation.
+
+Vendor patch from the same drop as 100. Only the Zero 28 boots our own U-Boot; the
+Zero 40 and the XU20 come up behind their stock one, where this cannot apply - their
+boot logo is pre-rotated by scripts/make-boot-resource.py instead.
+From d460f7caa09137f0c9fe2fc08caee795d4ae221c Mon Sep 17 00:00:00 2001
+From: deng <haijian@dechuangiot.com.cn>
+Date: Sat, 11 Oct 2025 10:27:03 +0800
+Subject: [PATCH] feat:support-fb-bootlogo-rotate
+
+Change-Id: Ic51083b8740d652b201ea7cc2d163ea1c76c7d6b
+---
+ drivers/video/sunxi/bootGUI/fb_con.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/drivers/video/sunxi/bootGUI/fb_con.c b/drivers/video/sunxi/bootGUI/fb_con.c
+index b260eba..19a2c45 100644
+--- a/lichee/brandy-2.0/u-boot-2018/drivers/video/sunxi/bootGUI/fb_con.c
++++ b/lichee/brandy-2.0/u-boot-2018/drivers/video/sunxi/bootGUI/fb_con.c
+@@ -321,6 +321,7 @@ static void get_fb_configs(fb_config_t *fb_cfgs, int fb_id)
+ {
+ 	int node = get_disp_fdt_node();
+ 	char prop[12];
++	int disp_rotation_used = 0, degree = 0, tmp;
+ 
+ 	/* memset((void *)fb_cfgs, 0, sizeof(*fb_cfgs)); */
+ 	sprintf(prop, "fb%d_format", fb_id);
+@@ -330,6 +331,15 @@ static void get_fb_configs(fb_config_t *fb_cfgs, int fb_id)
+ 	disp_getprop_by_name(node, prop, (uint32_t *)&(fb_cfgs->width), 0);
+ 	sprintf(prop, "fb%d_height", fb_id);
+ 	disp_getprop_by_name(node, prop, (uint32_t *)&(fb_cfgs->height), 0);
++	sprintf(prop, "%s", "disp_rotation_used");
++	disp_getprop_by_name(node, prop, (uint32_t *)&disp_rotation_used, 0);
++	sprintf(prop, "%s", "degree0");
++	disp_getprop_by_name(node, prop, (uint32_t *)&degree, 0);
++	if (disp_rotation_used == 1 && (degree == 1 || degree == 3)) {
++		tmp = fb_cfgs->width;
++		fb_cfgs->width = fb_cfgs->height;
++		fb_cfgs->height = tmp;
++	}
+ 	if (fb_cfgs->height == 0 || fb_cfgs->width == 0)
+ 		hal_get_screen_size(fb_id, (unsigned int *)&fb_cfgs->width, (unsigned int *)&fb_cfgs->height);
+ }
+-- 
+2.25.1
+

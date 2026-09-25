@@ -347,12 +347,12 @@
 				ctp_twi_addr = <90>;
 				ctp_screen_max_x = <1024>;
 				ctp_screen_max_y = <768>;
-				/* Measured on the unit 2026-09-17: the digitizer's X axis runs opposite
-				 * the display's, so top-left touches landed top-right. Flipping X here
-				 * puts the driver's output in the panel's own frame, which is what
-				 * PyUI's rotation inverse expects. Y is already correct: do not flip it.
-				 * The Zero 40's controller needs neither. */
-				ctp_revert_x_flag = <1>;
+				/* The flags are the whole transform (patch 080). The panel's own frame
+				 * needs X and Y flipped (X measured 2026-09-17; Y was the driver's old
+				 * built-in flip); the kernel shows this panel turned 180 (degree0 2),
+				 * which flips both back, so touch arrives in the frame every app draws
+				 * in with no flip at all. make-board-dts.py touch_flags() derives this. */
+				ctp_revert_x_flag = <0>;
 				ctp_revert_y_flag = <0>;
 				ctp_exchange_x_y_flag = <0>;
 				ctp_int_port = <&pio PB 6 6 0xffffffff 0xffffffff 0>;
@@ -1280,6 +1280,16 @@ chn_cfg_mode     : Hardware DE channel allocation config. 0:single display with 
 			def_output_dev           = <0>;
 			hdmi_mode_check          = <1>;
 
+			/* G2D hardware rotation of the framebuffer (sdk-patches/tree/100..102):
+			 * degree0 2 = 180: the panel scans upside down relative to the case.
+			 * fb0 stays 1024x768: a half turn does not transpose.
+			 * The kernel rotates on every flip, so nothing rotates per app and spruce
+			 * leaves DISPLAY_ROTATION at 0 for this board. Needs
+			 * CONFIG_SUNXI_DISP2_FB_HW_ROTATION_SUPPORT=y; the fb is forced to double
+			 * buffering. */
+			disp_rotation_used       = <1>;
+			degree0                  = <2>;
+			fb0_buffer_num           = <2>;
 			fb0_format               = <0>;
 			fb0_width = <1024>;
 			fb0_height = <768>;
@@ -1449,7 +1459,7 @@ pull up or pull down(default 0), driver level(default 1), data>
 
 			BTNA {
 				gpios = <&pio PD 14 0 1 1 1>;
-				linux,code = <304>;
+				linux,code = <305>;
 				linux,code2 = <353>;
 				label = "BTNA";
 				debounce-interval = <10>;
@@ -1458,7 +1468,7 @@ pull up or pull down(default 0), driver level(default 1), data>
 
 			BTNB {
 				gpios = <&pio PD 15 0 1 1 1>;
-				linux,code = <305>;
+				linux,code = <304>;
 				linux,code2 = <158>;
 				label = "BTNB";
 				debounce-interval = <10>;
@@ -1467,14 +1477,14 @@ pull up or pull down(default 0), driver level(default 1), data>
 
 			BTNX {
 				gpios = <&pio PD 12 0 1 1 1>;
-				linux,code = <307>;
+				linux,code = <308>;
 				label = "BTNX";
 				debounce-interval = <10>;
 			};
 
 			BTNY {
 				gpios = <&pio PD 13 0 1 1 1>;
-				linux,code = <308>;
+				linux,code = <307>;
 				label = "BTNY";
 				debounce-interval = <10>;
 			};

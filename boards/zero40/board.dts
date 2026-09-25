@@ -1438,7 +1438,7 @@ pull up or pull down(default 0), driver level(default 1), data>
 
 			BTNA {
 				gpios = <&pio PD 13 0 1 1 1>;
-				linux,code = <304>;
+				linux,code = <305>;
 				linux,code2 = <353>;
 				label = "BTNA";
 				debounce-interval = <10>;
@@ -1446,21 +1446,21 @@ pull up or pull down(default 0), driver level(default 1), data>
 
 			BTNB {
 				gpios = <&pio PD 15 0 1 1 1>;
-				linux,code = <305>;
+				linux,code = <304>;
 				label = "BTNB";
 				debounce-interval = <10>;
 			};
 
 			BTNX {
 				gpios = <&pio PD 14 0 1 1 1>;
-				linux,code = <307>;
+				linux,code = <308>;
 				label = "BTNX";
 				debounce-interval = <10>;
 			};
 
 			BTNY {
 				gpios = <&pio PD 12 0 1 1 1>;
-				linux,code = <308>;
+				linux,code = <307>;
 				label = "BTNY";
 				debounce-interval = <10>;
 			};

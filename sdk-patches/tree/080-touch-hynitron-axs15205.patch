@@ -2398,13 +2398,13 @@
 +	hyn_ts_data->config_chip_product_line = HYN_CHIP_PRODUCT_LINE_MUT_CAP;
 +
 +	/* oakMOSS: the panel's I2C address is the node's reg (the XU20's CST340
-+	 * answers at 0x5a, not the driver's 0x1a default) and the axis flags are
-+	 * the Allwinner ctp node's ctp_revert_x_flag / ctp_revert_y_flag /
-+	 * ctp_exchange_x_y_flag, read by init-input into config_info. */
++	 * answers at 0x5a, not the driver's 0x1a default), and the ctp node's
++	 * revert/exchange flags ARE the transform: the HYN_*_REVERT defaults could
++	 * only add a flip (HYN_Y_REVERT 1 forced a Y flip whatever the node said). */
 +	hyn_ts_data->chip_ic_main_addr = client->addr ? client->addr : HYN_MAIN_IIC_ADDR_CONFIG;
-+	hyn_ts_data->pdata->x_overturn = config_info.revert_x_flag ? 1 : HYN_X_REVERT;
-+	hyn_ts_data->pdata->y_overturn = config_info.revert_y_flag ? 1 : HYN_Y_REVERT;
-+	hyn_ts_data->pdata->xy_exchange = config_info.exchange_x_y_flag ? 1 : HYN_XY_EXCHANGE;
++	hyn_ts_data->pdata->x_overturn = config_info.revert_x_flag ? 1 : 0;
++	hyn_ts_data->pdata->y_overturn = config_info.revert_y_flag ? 1 : 0;
++	hyn_ts_data->pdata->xy_exchange = config_info.exchange_x_y_flag ? 1 : 0;
 +	hyn_ts_data->work_mode = HYN_WORK_MODE_NORMAL;
 +	hyn_ts_data->pdata->max_touch_num = HYN_MAX_POINTS;
 +

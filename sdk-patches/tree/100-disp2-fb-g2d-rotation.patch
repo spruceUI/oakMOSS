@@ -1,0 +1,389 @@
+G2D hardware framebuffer rotation for the A133 display driver.
+
+Vendor patch (Dechuang IoT, 2025-10-11 "a133-tina-bsp-update", supplied for the
+Zero 28 and the XU20) WITH the 90/270 fixes from acmeplus (gist
+b2f9143b6e6f70d4150ae8372018ec46) folded in - they correct lines the vendor patch
+itself adds, so they cannot be a separate patch here (one owner per line, or
+apply-sdk-mods reads this one as unapplied and re-applies it forcibly).
+
+It rotates the framebuffer with G2D on each flip, gated by
+CONFIG_SUNXI_DISP2_FB_HW_ROTATION_SUPPORT and driven from the device tree
+(disp_rotation_used, degree0); rotation forces the fb into double buffering. G2D
+moves to subsys_initcall on our SoC - the SDK already does that for sun8iw11p1 -
+so it is up before disp needs it, and Fb_copy_boot_fb rotates the framebuffer
+U-Boot hands over.
+
+The three folded fixes, all reachable only at 90/270 (the Zero 28's case):
+  * fb_g2d_set_degree crossed the destination clip rectangle's width and height.
+  * fb_g2d_rot_create validated the degree with && where || was meant.
+  * Fb_copy_boot_fb did not swap the destination's width and height.
+
+These boards present through fbdev (measured 2026-09-19 on the Zero 28: fb0's pan
+offset alternates 0,0 <-> 0,640 while the UI runs, and dc_sunxi sits at refcount 0),
+so this path carries everything on screen, not just the console.
+--- a/lichee/linux-4.9/drivers/char/sunxi_g2d/g2d_driver.c
++++ b/lichee/linux-4.9/drivers/char/sunxi_g2d/g2d_driver.c
+@@ -1794,7 +1794,8 @@
+ #ifdef CONFIG_ARCH_SUN8IW11P1
+ subsys_initcall(g2d_module_init);
+ #else
+-module_init(g2d_module_init);
++//module_init(g2d_module_init);
++subsys_initcall(g2d_module_init);
+ #endif
+ module_exit(g2d_module_exit);
+ 
+--- a/lichee/linux-4.9/drivers/video/fbdev/sunxi/disp2/disp/dev_fb.c
++++ b/lichee/linux-4.9/drivers/video/fbdev/sunxi/disp2/disp/dev_fb.c
+@@ -1536,13 +1536,10 @@
+ 	char *boot_fb_str = NULL;
+ 	char *src_phy_addr = NULL;
+ 	char *src_addr = NULL;
+-	char *src_addr_b = NULL;
+-	char *src_addr_e = NULL;
+ 	int src_width = 0;
+ 	int src_height = 0;
+ 	int src_bpp = 0;
+ 	int src_stride = 0;
+-	int src_cp_btyes = 0;
+ 	int src_crop_l = 0;
+ 	int src_crop_t = 0;
+ 	int src_crop_r = 0;
+@@ -1554,6 +1551,17 @@
+ 	int dst_bpp = 0;
+ 	int dst_stride = 0;
+ 	int ret;
++#if defined(CONFIG_SUNXI_DISP2_FB_HW_ROTATION_SUPPORT)
++	int degree_int;
++	int i, j;
++	char *tmp_src;
++	char *tmp_dst;
++	char *map_addr = NULL;
++#else
++	char *src_addr_b = NULL;
++	char *src_addr_e = NULL;
++	int src_cp_btyes = 0;
++#endif
+ 
+ 	unsigned long map_offset;
+ 
+@@ -1665,53 +1673,121 @@
+ 		__wrn("Fb_map_kernel_cache for src_addr failed\n");
+ 		return -1;
+ 	}
++#if defined(CONFIG_SUNXI_DISP2_FB_HW_ROTATION_SUPPORT)
++	map_addr = src_addr;
++	src_addr += map_offset;
++
++	degree_int = fb_get_rot_degree(0);
++/*
++	pr_warn("cpu_copy boot_fb para: src[phy_addr=%p,w=%d,h=%d,bpp=%d,stride=%d, src_crop=[%d, %d, %d, %d]\
++			dst[addr=%p,w=%d,h=%d,bpp=%d,stride=%d], degree_int=%d\n",
++		src_phy_addr, src_width, src_height, src_bpp, src_stride,
++		src_crop_l, src_crop_r, src_crop_t, src_crop_b,
++		dst_addr, dst_width, dst_height, dst_bpp, dst_stride, degree_int);
++*/
++	/* oakMOSS: no dst swap for 90/270. info->var already holds the rotated
++	 * frame (fb0_width/height are the panel's, swapped), so dst_height is
++	 * the row count the 270 copy below starts from; swapping it to the
++	 * source's height started that copy 160 rows low on the Zero 28,
+ 
++	 * partly in the second buffer, and the boot logo came up shifted down
++	 * once the kernel took the display over. The 90 and 180 copies never
++	 * read it. */
++
++	if (degree_int == 2) { /* copy with rotate 180 */
++		dst_addr += dst_stride * dst_height;
++		for (j = 0; j < src_height; j++) {
++			for (i = 0, tmp_dst = dst_addr, tmp_src = src_addr; i < src_width; i++) {
++				memcpy(dst_addr, src_addr, src_bpp / 8);
++				src_addr += src_bpp / 8;
++				dst_addr -= dst_bpp / 8;
++			}
++			dst_addr = tmp_dst - dst_stride;
++			src_addr = tmp_src + src_stride;
++		}
++	} else if (degree_int == 3) { /* copy with rotate 90 */
++		dst_addr += dst_stride - (dst_bpp / 8);
++		for (j = 0; j < src_height; j++) {
++			for (i = 0, tmp_dst = dst_addr, tmp_src = src_addr; i < src_width; i++) {
++				memcpy(dst_addr, src_addr, src_bpp / 8);
++				src_addr += src_bpp / 8;
++				dst_addr += dst_stride;
++			}
++			dst_addr = tmp_dst - src_bpp / 8;
++			src_addr = tmp_src + src_stride;
++		}
++	} else if (degree_int == 1) { /* copy with rotate 270 */
++		dst_addr += dst_stride * (dst_height - 1);
++		for (j = 0; j < src_height; j++) {
++			for (i = 0, tmp_dst = dst_addr, tmp_src = src_addr; i < src_width; i++) {
++				memcpy(dst_addr, src_addr, src_bpp / 8);
++				src_addr += src_bpp / 8;
++				dst_addr -= dst_stride;
++			}
++			dst_addr = tmp_dst + src_bpp / 8;
++			src_addr = tmp_src + src_stride;
++		}
++	} else {
++		for (j = 0; j < src_height; j++) {
++			for (i = 0, tmp_dst = dst_addr, tmp_src = src_addr; i < src_width; i++) {
++				memcpy(dst_addr, src_addr, src_bpp / 8);
++				src_addr += src_bpp / 8;
++				dst_addr += dst_bpp / 8;
++			}
++			dst_addr = tmp_dst + dst_stride;
++			src_addr = tmp_src + src_bpp / 8;
++		}
++	}
++
++	Fb_unmap_kernel(map_addr);
++#else
+ 	src_addr_b = src_addr + map_offset;
+ 	if ((src_crop_b > src_crop_t) &&
+-	    (src_height > src_crop_b - src_crop_t) &&
+-	    (src_crop_t >= 0) &&
+-	    (src_height >= src_crop_b)) {
+-		src_height = src_crop_b - src_crop_t;
+-		src_addr_b += (src_stride * src_crop_t);
++		(src_height > src_crop_b - src_crop_t) &&
++		(src_crop_t >= 0) &&
++		(src_height >= src_crop_b)) {
++			src_height = src_crop_b - src_crop_t;
++			src_addr_b += (src_stride * src_crop_t);
+ 	}
+ 	if ((src_crop_r > src_crop_l)
+-	    && (src_width > src_crop_r - src_crop_l)
+-	    && (src_crop_l >= 0)
+-	    && (src_width >= src_crop_r)) {
+-		src_width = src_crop_r - src_crop_l;
+-		src_addr_b += (src_crop_l * src_bpp >> 3);
++		&& (src_width > src_crop_r - src_crop_l)
++		&& (src_crop_l >= 0)
++		&& (src_width >= src_crop_r)) {
++			src_width = src_crop_r - src_crop_l;
++			src_addr_b += (src_crop_l * src_bpp >> 3);
+ 	}
+ 	if (src_height < dst_height) {
+-		int dst_crop_t = (dst_height - src_height) >> 1;
++			int dst_crop_t = (dst_height - src_height) >> 1;
+ 
+-		dst_addr += (dst_stride * dst_crop_t);
++			dst_addr += (dst_stride * dst_crop_t);
+ 	} else if (src_height > dst_height) {
+-		__wrn("src_height(%d) > dst_height(%d),please cut the height\n",
+-		      src_height,
+-		      dst_height);
+-		Fb_unmap_kernel(src_addr);
+-		return -1;
++			__wrn("src_height(%d) > dst_height(%d),please cut the height\n",
++					src_height,
++					dst_height);
++			Fb_unmap_kernel(src_addr);
++			return -1;
+ 	}
+ 	if (src_width < dst_width) {
+-		int dst_crop_l = (dst_width - src_width) >> 1;
++			int dst_crop_l = (dst_width - src_width) >> 1;
+ 
+-		dst_addr += (dst_crop_l * dst_bpp >> 3);
++			dst_addr += (dst_crop_l * dst_bpp >> 3);
+ 	} else if (src_width > dst_width) {
+-		__wrn("src_width(%d) > dst_width(%d),please cut the width!\n",
+-		      src_width,
+-		      dst_width);
+-		Fb_unmap_kernel(src_addr);
+-		return -1;
++			__wrn("src_width(%d) > dst_width(%d),please cut the width!\n",
++					src_width,
++					dst_width);
++			Fb_unmap_kernel(src_addr);
++			return -1;
+ 	}
+ 
+ 	src_cp_btyes = src_width * src_bpp >> 3;
+ 	src_addr_e = src_addr_b + src_stride * src_height;
+ 	for (; src_addr_b != src_addr_e; src_addr_b += src_stride) {
+-		memcpy((void *)dst_addr, (void *)src_addr_b, src_cp_btyes);
+-		dst_addr += dst_stride;
++			memcpy((void *)dst_addr, (void *)src_addr_b, src_cp_btyes);
++			dst_addr += dst_stride;
+ 	}
+ 
+ 	Fb_unmap_kernel(src_addr);
++#endif
+ 
+ #ifndef MODULE
+ 	disp_reserve_mem(false);
+--- a/lichee/linux-4.9/drivers/video/fbdev/sunxi/disp2/disp/fb_g2d_rot.c
++++ b/lichee/linux-4.9/drivers/video/fbdev/sunxi/disp2/disp/fb_g2d_rot.c
+@@ -127,6 +127,37 @@
+ 	return 0;
+ }
+ 
++int fb_get_rot_degree(unsigned int fb_id)
++{
++	int ret = -1;
++	struct device_node *node;
++	char primary_key[20];
++	char sub_name[32] = {0};
++	unsigned int value = 0;
++
++	sprintf(primary_key, "%s", "disp");
++	node = of_find_node_by_name(NULL, primary_key);
++	if (node == NULL) {
++		pr_err("%s find node failed\n", __func__);
++		return -1;
++	}
++	ret = of_property_read_u32(node, "disp_rotation_used", &value);
++
++	if (ret || !value) {
++		pr_warn("rotation hw function is configed as no used\n");
++		return -1;
++	}
++
++	sprintf(sub_name, "degree%d", fb_id);
++	ret = of_property_read_u32(node, sub_name, &value);
++	if (ret || value == FB_ROTATION_HW_0) {
++		pr_warn("rotation hw function is configed to zero degree\n");
++		return -1;
++	}
++
++	return value;
++}
++
+ int fb_g2d_rot_apply(struct fb_g2d_rot_t *inst, struct disp_layer_config *config)
+ {
+ 	int ret = -1;
+@@ -159,8 +190,16 @@
+ 	inst->info.src_image_h.laddr[0] =
+ 	    inst->fb->fix.smem_start +
+ 	    inst->fb->fix.line_length * inst->fb->var.yoffset;
+-
+-
++/*
++	pr_warn("fb_rot_src: [w,h] = [%d, %d], clip_x,clip_y,clip_w,clip_h = [%d, %d, %d, %d]\n",
++			inst->info.src_image_h.width, inst->info.src_image_h.height,
++			inst->info.src_image_h.clip_rect.x, inst->info.src_image_h.clip_rect.x,
++			inst->info.src_image_h.clip_rect.w, inst->info.src_image_h.clip_rect.h);
++	pr_warn("fb_rot_dst: [w,h] = [%d, %d], clip_x,clip_y,clip_w,clip_h = [%d, %d, %d, %d]\n",
++			inst->info.dst_image_h.width, inst->info.dst_image_h.height,
++			inst->info.dst_image_h.clip_rect.x, inst->info.dst_image_h.clip_rect.x,
++			inst->info.dst_image_h.clip_rect.w, inst->info.dst_image_h.clip_rect.h);
++*/
+ 	g2d_ioctl_mutex_lock();
+ 	ret = g2d_blit_h(&inst->info);
+ 	if (ret)
+@@ -194,30 +233,20 @@
+ 				       struct disp_layer_config *config)
+ {
+ 	int ret = -1;
+-	unsigned int value = 0;
+-	char sub_name[32] = {0};
+ 	struct fb_g2d_rot_t *fb_rot = NULL;
+ 	struct file g2d_file;
++	int degree;
+ 
+ 	if (!p_info || !config) {
+ 		pr_warn("%s:Null pointer\n", __func__);
+ 		return NULL;
+ 	}
+ 
+-	ret = disp_sys_script_get_item("disp", "disp_rotation_used", &value, 1);
+-	if (ret != 1)
+-		value = 0;
+-
+-	if (!value) {
+-		pr_warn("rotation hw function is configed as no used\n");
+-		return NULL;
+-	}
+-
+-	sprintf(sub_name, "degree%d", fb_id);
+-	ret = disp_sys_script_get_item("disp", sub_name, &value, 1);
+-	if (value == FB_ROTATION_HW_0 || ret != 1) {
+-		pr_warn("rotation hw function is configed to zero degree\n");
+-		return NULL;
++	degree = fb_get_rot_degree(fb_id);
++	if (degree < FB_ROTATION_HW_0 || degree > FB_ROTATION_HW_270) {
++		p_info->var.rotate = 0;
++		pr_warn("Not support degree:%d\n", degree);
++		goto ERROR;
+ 	}
+ 
+ 	fb_rot = kmalloc(sizeof(struct fb_g2d_rot_t), GFP_KERNEL | __GFP_ZERO);
+@@ -232,58 +261,6 @@
+ 	fb_rot->info.src_image_h.width = p_info->var.xres;
+ 	fb_rot->info.src_image_h.height = p_info->var.yres;
+ 
+-	switch (value) {
+-	case FB_ROTATION_HW_90:
+-		fb_rot->info.flag_h = G2D_ROT_90;
+-		p_info->var.rotate = G2D_ROT_90;
+-		fb_rot->info.dst_image_h.width = p_info->var.yres;
+-		fb_rot->info.dst_image_h.height = p_info->var.xres;
+-		fb_rot->info.dst_image_h.clip_rect.w = fb_rot->info.dst_image_h.height;
+-		fb_rot->info.dst_image_h.clip_rect.h = fb_rot->info.dst_image_h.width;
+-		config->info.screen_win.width = p_info->var.yres;
+-		config->info.screen_win.height = p_info->var.xres;
+-		config->info.fb.crop.width = ((long long)p_info->var.yres << 32);
+-		config->info.fb.crop.height = ((long long)p_info->var.xres << 32);
+-		config->info.fb.size[0].width = p_info->var.yres;
+-		config->info.fb.size[0].height = p_info->var.xres;
+-		config->info.fb.size[1].width = p_info->var.yres;
+-		config->info.fb.size[1].height = p_info->var.xres;
+-		config->info.fb.size[2].width = p_info->var.yres;
+-		config->info.fb.size[2].height = p_info->var.xres;
+-		break;
+-	case FB_ROTATION_HW_180:
+-		fb_rot->info.flag_h = G2D_ROT_180;
+-		p_info->var.rotate = G2D_ROT_180;
+-		fb_rot->info.dst_image_h.width = p_info->var.xres;
+-		fb_rot->info.dst_image_h.height = p_info->var.yres;
+-		fb_rot->info.dst_image_h.clip_rect.w = fb_rot->info.dst_image_h.width;
+-		fb_rot->info.dst_image_h.clip_rect.h = fb_rot->info.dst_image_h.height;
+-		break;
+-	case FB_ROTATION_HW_270:
+-		fb_rot->info.flag_h = G2D_ROT_270;
+-		p_info->var.rotate = G2D_ROT_270;
+-		fb_rot->info.dst_image_h.width = p_info->var.yres;
+-		fb_rot->info.dst_image_h.height = p_info->var.xres;
+-		fb_rot->info.dst_image_h.clip_rect.w = fb_rot->info.dst_image_h.height;
+-		fb_rot->info.dst_image_h.clip_rect.h = fb_rot->info.dst_image_h.width;
+-		config->info.screen_win.width = p_info->var.yres;
+-		config->info.screen_win.height = p_info->var.xres;
+-		config->info.fb.crop.width = ((long long)p_info->var.yres << 32);
+-		config->info.fb.crop.height = ((long long)p_info->var.xres << 32);
+-		config->info.fb.size[0].width = p_info->var.yres;
+-		config->info.fb.size[0].height = p_info->var.xres;
+-		config->info.fb.size[1].width = p_info->var.yres;
+-		config->info.fb.size[1].height = p_info->var.xres;
+-		config->info.fb.size[2].width = p_info->var.yres;
+-		config->info.fb.size[2].height = p_info->var.xres;
+-		break;
+-	default:
+-		p_info->var.rotate = 0;
+-		pr_warn("Not support degree:%d\n", value);
+-		goto G2D_RELEASE;
+-		break;
+-	}
+-
+ 	switch (config->info.fb.format) {
+ 	case DISP_FORMAT_ARGB_8888:
+ 		fb_rot->info.src_image_h.format = G2D_FORMAT_ARGB8888;
+@@ -361,7 +338,7 @@
+ 	fb_rot->free = fb_g2d_rot_free;
+ 	fb_rot->set_degree = fb_g2d_set_degree;
+ 
+-
++	fb_rot->set_degree(fb_rot, config, degree);
+ 	return fb_rot;
+ 
+ G2D_RELEASE:
+--- a/lichee/linux-4.9/drivers/video/fbdev/sunxi/disp2/disp/fb_g2d_rot.h
++++ b/lichee/linux-4.9/drivers/video/fbdev/sunxi/disp2/disp/fb_g2d_rot.h
+@@ -50,4 +50,5 @@
+ 				       unsigned int fb_id,
+ 				       struct disp_layer_config *config);
+ 
++int fb_get_rot_degree(unsigned int fb_id);
+ #endif /*End of file*/

@@ -12,7 +12,59 @@ import re
 import sys
 
 BANKS = "ABCDEFGHIJKL M"  # index -> bank letter; 11 = PL, 12 = PM on r_pio
-TOUCH_FLIP_X = {"xu20"}   # digitizer X axis mounted opposite the display (measured)
+# Touch: the flips that put each digitizer's output in its panel's own scan frame, (x, y),
+# measured on the unit. The XU20's (2026-09-17): X ran opposite the display, and Y was right
+# only because the driver then forced a Y flip of its own (HYN_Y_REVERT); patch 080 now takes
+# the node's flags as the whole transform, so that flip is written here. The Zero 40 needs
+# neither. touch_flags() then turns them with the board's FB_ROTATION, so touch arrives in the
+# frame the kernel shows - for every app, the way the picture does.
+TOUCH_PANEL_FRAME = {"xu20": (1, 1)}
+
+# The face buttons: MagicX's stock trees label the pad by its silkscreen (A=BTN_SOUTH),
+# but 304/305/307/308 are POSITIONS - south, east, north, west. On these pads A is the
+# right button and B the bottom one, so the stock codes have A/B and X/Y transposed, and
+# every consumer downstream (SDL's default mapping, RetroArch, PyUI) then needs its own
+# cross to undo it. TrimUI's A133P boards already emit the positional codes, so this swap
+# is what puts the whole A133P line on one convention and leaves per-app remapping to the
+# niche case it should be. Riders (linux,code2, e.g. 353 on A) stay with their button.
+FACE_CODE_SWAP = {"BTNA": (0x130, 0x131), "BTNB": (0x131, 0x130),
+                  "BTNX": (0x133, 0x134), "BTNY": (0x134, 0x133)}
+
+# G2D hardware rotation of the framebuffer, per board (sdk-patches/tree/100..102).
+# degree: 0, 1 = 90, 2 = 180, 3 = 270 (FB_ROTATION_HW_* in fb_g2d_rot.h). The kernel
+# then rotates every flip, so nothing rotates per app and spruce keeps
+# DISPLAY_ROTATION at 0. A quarter turn transposes the framebuffer, so fb0_width and
+# fb0_height are swapped for it - the SDK's own comment in the disp node says the same
+# ("you must set fbX_width to lcd_y"). A board that is not listed keeps rotation off.
+FB_ROTATION = {"zero28": (1, "the panel is mounted portrait, the UI is landscape"),
+               "xu20":   (2, "the panel scans upside down relative to the case")}
+
+
+def touch_flags(board):
+    """ctp_revert_x_flag, ctp_revert_y_flag for the board's touch node: its panel-frame flips,
+    turned with the framebuffer's hardware rotation."""
+    fx, fy = TOUCH_PANEL_FRAME.get(board, (0, 0))
+    degree = FB_ROTATION.get(board, (0, ""))[0]
+    if degree == 2:
+        fx, fy = fx ^ 1, fy ^ 1
+    elif degree in (1, 3):
+        sys.exit(f"{board}: touch under a quarter-turn needs ctp_exchange_x_y_flag too; not modelled")
+    return fx, fy
+
+
+def swap_face_code(key_node, line):
+    """Rewrite a face button's linux,code to its positional value (not code2)."""
+    want = FACE_CODE_SWAP.get(key_node)
+    if not want or not re.match(r"linux,code\s*=\s*<", line.strip()):
+        return line
+    stock, positional = want
+    m = re.search(r"linux,code\s*=\s*<([^>]+)>", line)
+    value = m.group(1).strip()
+    have = int(value, 16) if value.lower().startswith("0x") else int(value)
+    if have != stock:
+        raise SystemExit(f"{key_node}: expected stock code {stock:#x}, found {value}")
+    new = f"{positional:#x}" if value.lower().startswith("0x") else str(positional)
+    return line.replace(f"<{value}>", f"<{new}>")
 
 
 def load_nodes(text):
@@ -160,15 +212,19 @@ def main(stock_path, aw3_path, out_path, board):
         ind = "\t\t"
         out = [ind + ours, f"{ind}\t/* {board}: from the board's stock device tree */"]
         depth = 1
+        key_node = None
         for t in body:
             if t == "":
                 out.append("")
                 continue
             if t == "};":
                 depth -= 1
+                key_node = None
+            t = swap_face_code(key_node, t)
             out.append(ind + "\t" * depth + convert(t, pio, rpio))
             if t.endswith("{"):
                 depth += 1
+                key_node = t[:-1].strip().split("@")[0].strip()
         out.append(ind + "};")
         aw3[i:j + 1] = out
 
@@ -178,6 +234,30 @@ def main(stock_path, aw3_path, out_path, board):
         val = convert(val.strip(), pio, rpio)
         i = next(k for k, l in enumerate(aw3) if re.search(rf"\b{key}\s*=", l))
         aw3[i] = "\t\t\t" + val
+    # 3b. framebuffer rotation, if this board turns it on.
+    if board in FB_ROTATION:
+        degree, why = FB_ROTATION[board]
+        if degree in (1, 3):   # a quarter turn transposes the framebuffer
+            wi = next(k for k, l in enumerate(aw3) if re.search(r"\bfb0_width\s*=", l))
+            hi = next(k for k, l in enumerate(aw3) if re.search(r"\bfb0_height\s*=", l))
+            w = re.search(r"<(\d+)>", aw3[wi]).group(1)
+            h = re.search(r"<(\d+)>", aw3[hi]).group(1)
+            aw3[wi] = re.sub(r"<\d+>", f"<{h}>", aw3[wi])
+            aw3[hi] = re.sub(r"<\d+>", f"<{w}>", aw3[hi])
+            note = f"fb0 is {h}x{w}, the panel's {w}x{h} transposed"
+        else:
+            note = "a half turn does not transpose the framebuffer"
+        i = next(k for k, l in enumerate(aw3) if re.search(r"\bfb0_format\s*=", l))
+        ind = re.match(r"[ \t]*", aw3[i]).group(0)
+        aw3[i:i] = [f"{ind}/* G2D hardware rotation (sdk-patches/tree/100..102): degree0 {degree} = {why}.",
+                    f"{ind} * {note}. The kernel rotates on every flip, so nothing rotates per app",
+                    f"{ind} * and spruce leaves DISPLAY_ROTATION at 0. Needs",
+                    f"{ind} * CONFIG_SUNXI_DISP2_FB_HW_ROTATION_SUPPORT=y; the fb is forced to",
+                    f"{ind} * double buffering. */",
+                    f"{ind}disp_rotation_used       = <1>;",
+                    f"{ind}degree0                  = <{degree}>;",
+                    f"{ind}fb0_buffer_num           = <2>;"]
+
     # 4. battery model.
     for key in ("pmu_battery_rdc", "pmu_battery_cap"):
         val = next(l for l in slines if re.search(rf"\b{key} = <", l))
@@ -212,14 +292,11 @@ def main(stock_path, aw3_path, out_path, board):
         if t == "};":
             depth -= 1
         c = t if t.startswith("reg = ") else convert(t, pio, rpio)   # reg stays hex
-        # The touch flags describe how the digitizer is mounted relative to the
-        # panel, so they are a per-board hardware fact rather than a stock value to
-        # copy. Measured 2026-09-17: the XU20's X axis runs opposite its display
-        # (a top-left touch landed top-right) while its Y is already correct, and
-        # the Zero 40 needs neither flip. Flipping X here puts the driver's output
-        # in the panel's own frame, which is what PyUI's rotation inverse expects.
-        if board in TOUCH_FLIP_X and re.match(r"ctp_revert_x_flag = <", c):
-            c = re.sub(r"<\d+>", "<1>", c)
+        # The touch flags are a per-board hardware fact plus the kernel's rotation,
+        # not a stock value to copy: touch_flags() (TOUCH_PANEL_FRAME, FB_ROTATION).
+        m = re.match(r"ctp_revert_([xy])_flag = <", c)
+        if m:
+            c = re.sub(r"<\d+>", f"<{touch_flags(board)['xy'.index(m.group(1))]}>", c)
         out.append("\t\t" + "\t" * depth + c)
         if t.endswith("{"):
             depth += 1

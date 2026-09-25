@@ -1,0 +1,21 @@
+--- a/lichee/linux-4.9/drivers/input/keyboard/simplepad.c
++++ b/lichee/linux-4.9/drivers/input/keyboard/simplepad.c
+@@ -887,6 +887,18 @@
+ 			wakeup = 1;
+ 	}
+ 
++    // oakMOSS: a board without sticks (XU20) still advertises ABS_X/ABS_Y, held at 0 -
++    // the centre of MIN_ABS_VAL..MAX_ABS_VAL - and never reported. Without any EV_ABS
++    // axis SDL does not count the device as a joystick at all (SDL 2.26 and 2.32 both
++    // report 0 joysticks), so nothing that reads the pad through SDL - PortMaster's
++    // GUI, gptokeyb, SDL ports - sees a single button. TrimUI's inputd does the same on
++    // the stickless Brick. Only the capability changes: the key codes, the order SDL
++    // numbers them in, and so every existing mapping, stay as they are.
++    if (!pdata->joysticks) {
++        input_set_abs_params(input, ABS_X, MIN_ABS_VAL, MAX_ABS_VAL, 0, 0);
++        input_set_abs_params(input, ABS_Y, MIN_ABS_VAL, MAX_ABS_VAL, 0, 0);
++    }
++
+     ret = input_register_device(input);
+     if (ret) {
+         simplepad_err("input_register_device FAILED!\n");

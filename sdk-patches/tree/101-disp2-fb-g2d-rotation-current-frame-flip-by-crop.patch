@@ -1,0 +1,99 @@
+--- a/lichee/linux-4.9/drivers/video/fbdev/sunxi/disp2/disp/fb_g2d_rot.c
++++ b/lichee/linux-4.9/drivers/video/fbdev/sunxi/disp2/disp/fb_g2d_rot.c
+@@ -79,15 +79,15 @@
+ 				config->info.fb.size[0].width =
+ 				    inst->fb->var.yres;
+ 				config->info.fb.size[0].height =
+-				    inst->fb->var.xres;
++				    inst->fb->var.xres * 2;
+ 				config->info.fb.size[1].width =
+ 				    inst->fb->var.yres;
+ 				config->info.fb.size[1].height =
+-				    inst->fb->var.xres;
++				    inst->fb->var.xres * 2;
+ 				config->info.fb.size[2].width =
+ 				    inst->fb->var.yres;
+ 				config->info.fb.size[2].height =
+-				    inst->fb->var.xres;
++				    inst->fb->var.xres * 2;
+ 				break;
+ 			case G2D_ROT_0:
+ 			case G2D_ROT_180:
+@@ -108,15 +108,15 @@
+ 				config->info.fb.size[0].width =
+ 				    inst->fb->var.xres;
+ 				config->info.fb.size[0].height =
+-				    inst->fb->var.yres;
++				    inst->fb->var.yres * 2;
+ 				config->info.fb.size[1].width =
+ 				    inst->fb->var.xres;
+ 				config->info.fb.size[1].height =
+-				    inst->fb->var.yres;
++				    inst->fb->var.yres * 2;
+ 				config->info.fb.size[2].width =
+ 				    inst->fb->var.xres;
+ 				config->info.fb.size[2].height =
+-				    inst->fb->var.yres;
++				    inst->fb->var.yres * 2;
+ 				break;
+ 			default:
+ 				pr_warn("Not support degreee:%d\n", degree);
+@@ -187,9 +187,15 @@
+ 		pr_warn("Not support degree:%d\n", inst->info.flag_h);
+ 		break;
+ 	}
++	/* oakMOSS: rotate the frame being flipped TO. fb->var.yoffset is the offset of
++	 * the frame currently shown - the fb core updates it only after this pan returns
++	 * (fbmem.c fb_pan_display) - so the vendor code rotated the PREVIOUS frame on
++	 * every flip and the screen ran one frame behind: a press showed its result only
++	 * at the next flip (XU20, 2026-09-22). dev_fb.c puts the requested yoffset into
++	 * crop.y (32.32) before calling here; read it back before crop.y is rewritten. */
+ 	inst->info.src_image_h.laddr[0] =
+ 	    inst->fb->fix.smem_start +
+-	    inst->fb->fix.line_length * inst->fb->var.yoffset;
++	    inst->fb->fix.line_length * (u32)(config->info.fb.crop.y >> 32);
+ /*
+ 	pr_warn("fb_rot_src: [w,h] = [%d, %d], clip_x,clip_y,clip_w,clip_h = [%d, %d, %d, %d]\n",
+ 			inst->info.src_image_h.width, inst->info.src_image_h.height,
+@@ -206,21 +212,24 @@
+ 		pr_warn("g2d_blit_h fail!ret:%d\n", ret);
+ 	g2d_ioctl_mutex_unlock();
+ 
++	/* oakMOSS: one layer address and two stacked frames, the visible one chosen
++	 * by crop.y - the scheme the un-rotated path uses (yoffset). Switching the
++	 * layer's ADDRESS on every flip made the DE miss every other vsync interrupt,
++	 * and a flip issued 1-11 ms after a vsync then took two frames: measured on
++	 * the XU20, 2026-09-22 (the G2D blit itself is 1.7 ms). */
++	config->info.fb.addr[0] = (unsigned long long)inst->dst_phy_addr;
+ 	if (inst->switch_buffer_flag == 0) {
++		/* the first half was just written: show it, write the second half next */
+ 		inst->info.dst_image_h.laddr[0] = (u32)inst->dst_phy_addr + inst->dst_mem_len/2;
+-		config->info.fb.addr[0] =
+-			(unsigned long long)inst->dst_phy_addr;
++		config->info.fb.crop.y =
++			((unsigned long long)(0)) << 32;
+ 		++inst->switch_buffer_flag;
+ 	} else {
+ 		inst->info.dst_image_h.laddr[0] = (u32)inst->dst_phy_addr;
+-		config->info.fb.addr[0] =
+-			(unsigned long long)inst->dst_phy_addr + inst->dst_mem_len/2;
++		config->info.fb.crop.y =
++			((unsigned long long)inst->info.dst_image_h.height) << 32;
+ 		inst->switch_buffer_flag = 0;
+ 	}
+-
+-
+-	config->info.fb.crop.y =
+-		((unsigned long long)(0)) << 32;
+ 	config->info.fb.crop.x =
+ 		((unsigned long long)(0)) << 32;
+ 
+@@ -320,7 +329,7 @@
+ 	if (!fb_rot->dst_vir_addr || !fb_rot->dst_phy_addr)
+ 		goto G2D_RELEASE;
+ 	config->info.fb.addr[0] =
+-	    (unsigned long long)fb_rot->dst_phy_addr + fb_rot->dst_mem_len / 2;
++	    (unsigned long long)fb_rot->dst_phy_addr;
+ 
+ 	fb_rot->info.dst_image_h.laddr[0] = (u32)fb_rot->dst_phy_addr;
+ 	fb_rot->info.dst_image_h.align[0] = 0;
