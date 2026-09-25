@@ -5,6 +5,11 @@
 /inputs/*
 !/inputs/README.md
 !/inputs/xu20-pvr-1.11.sha256
+# The userland lanes' provenance lists are tracked; the tarballs they name are fetched and verified from them.
+!/inputs/userland/
+/inputs/userland/*
+!/inputs/userland/urls.txt
+!/inputs/userland/SHA256SUMS
 
 # Work trees: unpacked SDK, toolchains, host tools, build outputs.
 /sdk/
