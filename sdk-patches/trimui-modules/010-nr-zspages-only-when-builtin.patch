@@ -1,0 +1,48 @@
+--- a/include/linux/mmzone.h
++++ b/include/linux/mmzone.h
+@@ -127,7 +127,13 @@
+ 	NR_KAISERTABLE,
+ 	NR_BOUNCE,
+ 	/* Second 128 byte cacheline */
+-#if IS_ENABLED(CONFIG_ZSMALLOC)
++/*
++ * trimui-modules: the stock TrimUI kernel is built without zsmalloc, so its
++ * zone_stat_item has no NR_ZSPAGES slot. A zsmalloc module built with the slot
++ * would count its pages into the NEXT item, NR_FREE_CMA_PAGES. Only a built-in
++ * zsmalloc gets the slot here.
++ */
++#if IS_BUILTIN(CONFIG_ZSMALLOC)
+ 	NR_ZSPAGES,		/* allocated in zsmalloc */
+ #endif
+ #ifdef CONFIG_NUMA
+--- a/mm/zsmalloc.c
++++ b/mm/zsmalloc.c
+@@ -1008,7 +1008,9 @@
+ 		next = get_next_page(page);
+ 		reset_page(page);
+ 		unlock_page(page);
++#if IS_BUILTIN(CONFIG_ZSMALLOC)
+ 		dec_zone_page_state(page, NR_ZSPAGES);
++#endif
+ 		put_page(page);
+ 		page = next;
+ 	} while (page != NULL);
+@@ -1139,14 +1141,18 @@
+ 		page = alloc_page(gfp);
+ 		if (!page) {
+ 			while (--i >= 0) {
++#if IS_BUILTIN(CONFIG_ZSMALLOC)
+ 				dec_zone_page_state(pages[i], NR_ZSPAGES);
++#endif
+ 				__free_page(pages[i]);
+ 			}
+ 			cache_free_zspage(pool, zspage);
+ 			return NULL;
+ 		}
+ 
++#if IS_BUILTIN(CONFIG_ZSMALLOC)
+ 		inc_zone_page_state(page, NR_ZSPAGES);
++#endif
+ 		pages[i] = page;
+ 	}
+ 
