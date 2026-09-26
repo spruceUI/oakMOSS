@@ -264,6 +264,22 @@ def main(stock_path, aw3_path, out_path, board):
         val = convert(val.strip(), pio, rpio)
         i = next(k for k, l in enumerate(aw3) if re.search(rf"\b{key} ?=", l))
         aw3[i] = "\t\t\t" + val
+    # 4b. the fuel gauge's battery profile (axp2202-parameter/battery-model, 128 bytes):
+    #     each MagicX board ships its own calibration, and the gauge's percentage comes
+    #     from it. The pmu_* values alone left every board on the Zero 28's profile.
+    sp = node(slines, "axp2202-parameter {")
+    cells = re.search(r"parameter = <([^>]*)>;", "\n".join(sp)).group(1).split()
+    blob = b"".join(int(c, 16).to_bytes(4, "big") for c in cells)
+    a = next(k for k, l in enumerate(aw3) if l.strip() == "battery-model {")
+    s = next(k for k in range(a, len(aw3)) if "parameter = /bits/ 8 <" in aw3[k])
+    e = next(k for k in range(s, len(aw3)) if aw3[k].rstrip().endswith(">;"))
+    old = re.findall(r"0x[0-9a-fA-F]{2}", " ".join(aw3[s:e + 1]))
+    if len(old) != len(blob):
+        raise SystemExit(f"battery-model: {len(old)} bytes in the aw3 tree, {len(blob)} in the stock one")
+    ind = aw3[s][:len(aw3[s]) - len(aw3[s].lstrip())]
+    rows = [" ".join(f"{b:#04x}" for b in blob[r:r + 16]) for r in range(0, len(blob), 16)]
+    aw3[s:e + 1] = ([f"{ind}parameter = /bits/ 8 <{rows[0]}"]
+                    + [f"{ind}\t{r}" for r in rows[1:-1]] + [f"{ind}\t{rows[-1]}>;"])
     # 5. twi1 + the panel's touch controller. The stock trees wire twi1 to PB4/PB5
     #    (the Zero 28 tree: PH2/PH3) and hang the touch controller off it: the
     #    XU20's Hynitron CST340 at 0x5a (node "ctp": Allwinner ctp_* props read

@@ -1,0 +1,81 @@
+oakMOSS: reload the AXP2202 gauge's battery model when it differs from the device tree.
+
+The driver loaded the model only when the gauge's update mark was clear, which happens
+only after the PMIC lost power; it never compared what was loaded. A board whose gauge
+took another firmware's model kept it, and the reported percentage followed that model.
+Read the model back (the driver's own verify sequence) and reload on any difference.
+
+--- a/lichee/linux-4.9/drivers/power/supply/axp2202_battery.c
++++ b/lichee/linux-4.9/drivers/power/supply/axp2202_battery.c
+@@ -783,8 +783,52 @@
+ 
+ }
+ 
+-static bool axp2202_model_update_check(struct regmap *regmap)
++/*
++ * oakMOSS: does the model in the gauge equal the device tree's? The update mark alone
++ * only says that SOME model was loaded, and it survives power-off: a board whose gauge
++ * took another firmware's (or an older image's) model kept it for good, and the
++ * reported percentage followed that model. Read the model back the way
++ * axp2202_model_update verifies its own write (open, read, close the BROM window).
++ * No model in the tree -> nothing to compare, keep what is loaded.
++ */
++static bool axp2202_model_matches_dt(struct axp2202_bat_power *bat_power)
+ {
++	struct regmap *regmap = bat_power->regmap;
++	unsigned int len = AXP2202_MAX_PARAM, data, i;
++	bool same = true;
++	uint8_t *param;
++
++	param = kzalloc(AXP2202_MAX_PARAM, GFP_KERNEL);
++	if (!param)
++		return true;
++	if (axp2202_get_param(bat_power, param, &len) < 0)
++		goto out;
++
++	if (regmap_update_bits(regmap, AXP2202_GAUGE_CONFIG, AXP2202_BROMUP_EN, 0) < 0 ||
++	    regmap_update_bits(regmap, AXP2202_GAUGE_CONFIG, AXP2202_BROMUP_EN,
++			       AXP2202_BROMUP_EN) < 0)
++		goto close;
++	for (i = 0; i < len; i++) {
++		if (regmap_read(regmap, AXP2202_GAUGE_BROM, &data) < 0)
++			break;
++		if (data != param[i]) {
++			dev_info(bat_power->dev,
++				 "gauge model differs from the device tree at byte %u (%02x, tree %02x): reloading\n",
++				 i, data, param[i]);
++			same = false;
++			break;
++		}
++	}
++close:
++	regmap_update_bits(regmap, AXP2202_GAUGE_CONFIG, AXP2202_BROMUP_EN, 0);
++out:
++	kfree(param);
++	return same;
++}
++
++static bool axp2202_model_update_check(struct axp2202_bat_power *bat_power)
++{
++	struct regmap *regmap = bat_power->regmap;
+ 	int ret = 0;
+ 	unsigned int data;
+ 
+@@ -795,6 +839,8 @@
+ 	if ((data & AXP2202_CFG_UPDATE_MARK) == 0)
+ 		goto CHECK_ERR;
+ 
++	if (!axp2202_model_matches_dt(bat_power))
++		return false;
+ 
+ 	return true;
+ 
+@@ -1021,7 +1067,7 @@
+ 	}
+ 
+ 	/* update battery model*/
+-	if (!axp2202_model_update_check(bat_power->regmap)) {
++	if (!axp2202_model_update_check(bat_power)) {
+ 		ret = axp2202_model_update(bat_power);
+ 		if (ret < 0) {
+ 			dev_err(bat_power->dev, "axp2202 model update fail!\n");
