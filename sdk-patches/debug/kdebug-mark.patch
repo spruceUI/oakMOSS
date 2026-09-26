@@ -384,3 +384,181 @@
  	/* return code,if(msg_idx == num) succeed */
  	ret = i2c->msg_idx;
  	if (timeout == 0) {
+--- a/lichee/linux-4.9/drivers/base/power/main.c
++++ b/lichee/linux-4.9/drivers/base/power/main.c
+@@ -38,6 +38,42 @@
+ #include "../base.h"
+ #include "power.h"
+ 
++/*
++ * oakMOSS KDEBUG_MARK, suspend path (debug kernels only, sdk-patches/debug): with
++ * oakmoss_mark= set, every device PM callback writes 0xDSxhhhhh to the mark register
++ * before it runs and again (x bit 23 set) after it returns: D = device, S = the
++ * suspend stage (kernel/power/suspend.c, 0x5A00000S), hhhhhh = FNV-1a of dev_name()
++ * masked to 23 bits (scripts/kmark-pm-decode.py maps it back to a device). A hang
++ * or reset leaves the last device that started, or finished, in the register.
++ */
++#include <linux/moduleparam.h>
++extern void oakmoss_mark(u32 v);
++static u32 oakmoss_pm_stage_cur;
++/* Which marks are written: bit 0 the stage marks, bit 1 the per-device marks. Writable at
++ * run time (/sys/module/kernel/parameters/oakmoss_pm_marks) so one kernel can tell which
++ * part changes the timing under test. */
++static unsigned int oakmoss_pm_marks = 3;
++core_param(oakmoss_pm_marks, oakmoss_pm_marks, uint, 0644);
++
++void oakmoss_pm_stage(u32 s)
++{
++	oakmoss_pm_stage_cur = s & 0xf;
++	if (oakmoss_pm_marks & 1)
++		oakmoss_mark(0x5A000000 | (s & 0xf));
++}
++
++static void oakmoss_pm_dev(struct device *dev, u32 after)
++{
++	const char *n = dev_name(dev);
++	u32 h = 0x811c9dc5;
++
++	if (!(oakmoss_pm_marks & 2))
++		return;
++	while (n && *n)
++		h = (h ^ (u8)*n++) * 0x01000193;
++	oakmoss_mark(0xD0000000 | (oakmoss_pm_stage_cur << 24) | (after << 23) | (h & 0x7fffff));
++}
++
+ typedef int (*pm_callback_t)(struct device *);
+ 
+ /*
+@@ -390,7 +426,9 @@
+ 
+ 	pm_dev_dbg(dev, state, info);
+ 	trace_device_pm_callback_start(dev, info, state.event);
++	oakmoss_pm_dev(dev, 0);
+ 	error = cb(dev);
++	oakmoss_pm_dev(dev, 1);
+ 	trace_device_pm_callback_end(dev, error);
+ 	suspend_report_result(cb, error);
+ 
+@@ -1338,7 +1376,9 @@
+ 	calltime = initcall_debug_start(dev);
+ 
+ 	trace_device_pm_callback_start(dev, info, state.event);
++	oakmoss_pm_dev(dev, 0);
+ 	error = cb(dev, state);
++	oakmoss_pm_dev(dev, 1);
+ 	trace_device_pm_callback_end(dev, error);
+ 	suspend_report_result(cb, error);
+ 
+--- a/lichee/linux-4.9/kernel/power/suspend.c
++++ b/lichee/linux-4.9/kernel/power/suspend.c
+@@ -34,6 +34,8 @@
+ 
+ #include "power.h"
+ 
++extern void oakmoss_pm_stage(u32 s); /* oakMOSS KDEBUG_MARK: 0x5A00000S */
++
+ const char *pm_labels[] = { "mem", "standby", "freeze", NULL };
+ const char *pm_states[PM_SUSPEND_MAX];
+ 
+@@ -331,6 +333,7 @@
+ 	if (error)
+ 		goto Platform_finish;
+ 
++	oakmoss_pm_stage(2);
+ 	error = dpm_suspend_late(PMSG_SUSPEND);
+ 	if (error) {
+ 		last_dev = suspend_stats.last_failed_dev + REC_FAILED_NUM - 1;
+@@ -344,6 +347,7 @@
+ 	if (error)
+ 		goto Devices_early_resume;
+ 
++	oakmoss_pm_stage(3);
+ 	error = dpm_suspend_noirq(PMSG_SUSPEND);
+ 	if (error) {
+ 		last_dev = suspend_stats.last_failed_dev + REC_FAILED_NUM - 1;
+@@ -353,6 +357,7 @@
+ 			suspend_stats.failed_devs[last_dev]);
+ 		goto Platform_early_resume;
+ 	}
++	oakmoss_pm_stage(4);
+ 	error = platform_suspend_prepare_noirq(state);
+ 	if (error)
+ 		goto Platform_wake;
+@@ -368,11 +373,14 @@
+ 	 */
+ 	if (state == PM_SUSPEND_FREEZE) {
+ 		trace_suspend_resume(TPS("machine_suspend"), state, true);
++		oakmoss_pm_stage(5);
+ 		freeze_enter();
++		oakmoss_pm_stage(9);
+ 		trace_suspend_resume(TPS("machine_suspend"), state, false);
+ 		goto Platform_wake;
+ 	}
+ 
++	oakmoss_pm_stage(6);
+ 	error = disable_nonboot_cpus();
+ 	if (error || suspend_test(TEST_CPUS)) {
+ 		log_suspend_abort_reason("Disabling non-boot cpus failed");
+@@ -382,13 +390,16 @@
+ 	arch_suspend_disable_irqs();
+ 	BUG_ON(!irqs_disabled());
+ 
++	oakmoss_pm_stage(7);
+ 	error = syscore_suspend();
+ 	if (!error) {
+ 		*wakeup = pm_wakeup_pending();
+ 		if (!(suspend_test(TEST_CORE) || *wakeup)) {
+ 			trace_suspend_resume(TPS("machine_suspend"),
+ 				state, true);
++			oakmoss_pm_stage(8);
+ 			error = suspend_ops->enter(state);
++			oakmoss_pm_stage(9);
+ 			trace_suspend_resume(TPS("machine_suspend"),
+ 				state, false);
+ 			events_check_enabled = false;
+@@ -399,6 +410,7 @@
+ 			error = -EBUSY;
+ 		}
+ 		syscore_resume();
++		oakmoss_pm_stage(0xa);
+ 	}
+ 
+ 	arch_suspend_enable_irqs();
+@@ -408,6 +420,7 @@
+ 	enable_nonboot_cpus();
+ 
+  Platform_wake:
++	oakmoss_pm_stage(0xb);
+ 	platform_resume_noirq(state);
+ 	dpm_resume_noirq(PMSG_RESUME);
+ 
+@@ -415,6 +428,7 @@
+ 	platform_resume_early(state);
+ 
+  Devices_early_resume:
++	oakmoss_pm_stage(0xc);
+ 	dpm_resume_early(PMSG_RESUME);
+ 
+  Platform_finish:
+@@ -440,6 +454,7 @@
+ 
+ 	suspend_console();
+ 	suspend_test_start();
++	oakmoss_pm_stage(1);
+ 	error = dpm_suspend_start(PMSG_SUSPEND);
+ 	if (error) {
+ 		pr_err("PM: Some devices failed to suspend, or early wake event detected\n");
+@@ -456,10 +471,13 @@
+ 
+  Resume_devices:
+ 	suspend_test_start();
++	oakmoss_pm_stage(0xd);
+ 	dpm_resume_end(PMSG_RESUME);
++	oakmoss_pm_stage(0xe);
+ 	suspend_test_finish("resume devices");
+ 	trace_suspend_resume(TPS("resume_console"), state, true);
+ 	resume_console();
++	oakmoss_pm_stage(0xf);
+ 	trace_suspend_resume(TPS("resume_console"), state, false);
+ 
+  Close:
