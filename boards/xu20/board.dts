@@ -1460,7 +1460,6 @@ pull up or pull down(default 0), driver level(default 1), data>
 			BTNA {
 				gpios = <&pio PD 14 0 1 1 1>;
 				linux,code = <305>;
-				linux,code2 = <353>;
 				label = "BTNA";
 				debounce-interval = <10>;
 				v_mosue_key_left;
@@ -1469,7 +1468,6 @@ pull up or pull down(default 0), driver level(default 1), data>
 			BTNB {
 				gpios = <&pio PD 15 0 1 1 1>;
 				linux,code = <304>;
-				linux,code2 = <158>;
 				label = "BTNB";
 				debounce-interval = <10>;
 				v_mosue_key_right;
@@ -1506,7 +1504,6 @@ pull up or pull down(default 0), driver level(default 1), data>
 			BTN_G {
 				gpios = <&pio PH 14 0 1 1 1>;
 				linux,code = <158>;
-				linux,code2 = <256>;
 				label = "BTN_G";
 				debounce-interval = <10>;
 			};
@@ -1557,7 +1554,7 @@ pull up or pull down(default 0), driver level(default 1), data>
 				dpad_to_joystick;
 				gpios = <&pio PH 11 0 1 1 1>;
 				led_joy = <&pio PE 2 1 0 3 1>;
-				linux,code = <0>;
+				linux,code = <172>;	/* oakMOSS: KEY_HOMEPAGE, the TrimUI Smart Pro S's Home key; stock's 0 never reaches userspace */
 				label = "switch-key";
 				debounce-interval = <10>;
 			};

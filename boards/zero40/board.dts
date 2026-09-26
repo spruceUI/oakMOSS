@@ -1439,7 +1439,6 @@ pull up or pull down(default 0), driver level(default 1), data>
 			BTNA {
 				gpios = <&pio PD 13 0 1 1 1>;
 				linux,code = <305>;
-				linux,code2 = <353>;
 				label = "BTNA";
 				debounce-interval = <10>;
 			};

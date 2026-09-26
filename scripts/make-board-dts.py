@@ -26,7 +26,9 @@ TOUCH_PANEL_FRAME = {"xu20": (1, 1)}
 # every consumer downstream (SDL's default mapping, RetroArch, PyUI) then needs its own
 # cross to undo it. TrimUI's A133P boards already emit the positional codes, so this swap
 # is what puts the whole A133P line on one convention and leaves per-app remapping to the
-# niche case it should be. Riders (linux,code2, e.g. 353 on A) stay with their button.
+# niche case it should be. Riders (linux,code2: 353 on A, and on the XU20 158 on B and 256 on
+# MENU) are dropped: the driver sends them with the same press, for MagicX's Android launcher's
+# own confirm/back handling, and in Linux they only made one press read as two keys.
 FACE_CODE_SWAP = {"BTNA": (0x130, 0x131), "BTNB": (0x131, 0x130),
                   "BTNX": (0x133, 0x134), "BTNY": (0x134, 0x133)}
 
@@ -220,6 +222,14 @@ def main(stock_path, aw3_path, out_path, board):
             if t == "};":
                 depth -= 1
                 key_node = None
+            if t.startswith("linux,code2"):
+                continue
+            # The XU20's extra face button (switch-key) is code 0 in the stock tree: the kernel
+            # drops KEY_RESERVED, so it never reached userspace. Give it KEY_HOMEPAGE (172), the
+            # TrimUI Smart Pro S's Home key, so spruce's Home action works on it; 172 sorts after
+            # MENU (158), so SDL appends it as the last button and nothing is renumbered.
+            if key_node == "switch-key" and re.fullmatch(r"linux,code = <(0|0x0)>;", t):
+                t = "linux,code = <172>;"
             t = swap_face_code(key_node, t)
             out.append(ind + "\t" * depth + convert(t, pio, rpio))
             if t.endswith("{"):
