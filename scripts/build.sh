@@ -69,6 +69,17 @@ apply_overlay() {
     local logo=$SDK_DIR/target/allwinner/generic/boot-resource/boot-resource/bootlogo.bmp
     if [ -f "$ov/bootlogo.bmp" ]; then cp -a "$ov/bootlogo.bmp" "$logo"
     elif [ -f "$logo.orig" ]; then cp -a "$logo.orig" "$logo"; fi      # no logo in the overlay: the SDK's own
+    # The board's other bootloader pictures (boards/<board>/boot-resource, e.g. bat/battery_charge.bmp
+    # from scripts/make-charge-screens.py), for a board that packs its own boot chain - the one with
+    # its own sys_partition.fex (the Zero 28). The Zero 40 and XU20 boot the stock chain, whose
+    # boot-resource is builds/bootres-<board>.fex (make-boot-resource.py adds the same pictures
+    # there); copying them here too overflowed the SDK pack's 256 KiB partition. The SDK's
+    # boot-resource has no bat/ of its own, so it is cleared first.
+    local bres=${logo%/*}
+    rm -rf "${bres:?}/bat"
+    if [ -f "$OAKMOSS_ROOT/boards/$board/sys_partition.fex" ] && [ -d "$OAKMOSS_ROOT/boards/$board/boot-resource" ]; then
+        cp -a "$OAKMOSS_ROOT/boards/$board/boot-resource/." "$bres/"
+    fi
     cp -a "$ov/etc/rc.local" "$SDK_DIR/target/allwinner/a133-aw3/base-files/etc/rc.local"
     cp -a "$ov/etc/banner"   "$SDK_DIR/package/base-files/files/etc/banner"
     rm -rf "$SDK_DIR/package/add-rootfs-demo/usr" "$SDK_DIR/package/add-rootfs-demo/etc"
@@ -98,6 +109,17 @@ apply_overlay() {
         cp -a "$OAKMOSS_ROOT/boards/$board/sys_config.fex" "$sysc"; log "sys_config.fex: boards/$board/sys_config.fex"
     else
         cp -a "$sysc.orig" "$sysc"
+    fi
+    # Board partition table: boards/<board>/sys_partition.fex, same dance. The Zero 28's gives
+    # its boot-resource ("bootloader") partition 1 MiB instead of 256 KiB, room for the
+    # charge-mode picture beside the 32-bit logo; the Zero 40's and XU20's final layout comes
+    # from make-own-kernel-stock.sh, so theirs never needs one.
+    local sysp=$SDK_DIR/device/config/chips/a133/configs/aw3/linux/sys_partition.fex
+    [ -f "$sysp.orig" ] || cp -a "$sysp" "$sysp.orig"
+    if [ -f "$OAKMOSS_ROOT/boards/$board/sys_partition.fex" ]; then
+        cp -a "$OAKMOSS_ROOT/boards/$board/sys_partition.fex" "$sysp"; log "sys_partition.fex: boards/$board/sys_partition.fex"
+    else
+        cp -a "$sysp.orig" "$sysp"
     fi
     # Kernel console on the panel: KDEBUG_FBCON=1 builds a kernel whose console is
     # the display, so a panic or oops before userland is readable on the device

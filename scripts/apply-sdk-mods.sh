@@ -64,6 +64,7 @@ for patch in "$P"/tree/*.patch; do
     if patch_effect_present "$patch"; then note "in-tree" "$name"; continue; fi
     if [ "$CHECK" = 1 ]; then note MISSING "$name"; missing=1; continue; fi
     while IFS= read -r f; do
+        [ -e "$f" ] || continue   # a file the patch creates: nothing to keep
         [ -f "$f.orig" ] || cp -a "$f" "$f.orig"; chmod u+w "$f"
     done < <(patch_targets "$patch")
     # --no-backup-if-mismatch: GNU patch otherwise saves the file it could not match as

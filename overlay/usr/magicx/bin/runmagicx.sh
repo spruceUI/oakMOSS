@@ -16,6 +16,13 @@ LOG=/mnt/UDISK/oakmoss-boot.log
 log() { echo "$(cut -d' ' -f1 /proc/uptime) $*" >> "$LOG" 2>/dev/null; }
 echo "=== boot $(date '+%Y-%m-%d %H:%M:%S') device=$(cat /usr/magicx/device 2>/dev/null)" >> "$LOG" 2>/dev/null
 
+# Plugged in while off (androidboot.mode=charger from U-Boot, charge_mode = 1): a charging
+# screen with the battery level until the power key, then the launcher (charge-screen.sh
+# returns 0); it powers off only if the charger goes away first.
+case " $(cat /proc/cmdline 2>/dev/null) " in
+    *" androidboot.mode=charger "*) /usr/magicx/bin/charge-screen.sh || exit 0 ;;
+esac
+
 # A stable WiFi MAC for the XR829 (Zero 40). Its driver keeps the address in
 # /data/misc/wifi/xr_wifi.conf - an Android path this base did not have - and drew a
 # random one on every load when it could not save it there: a new MAC, DHCP lease and

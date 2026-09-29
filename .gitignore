@@ -47,6 +47,8 @@ core.[0-9]*
 *.fex
 # ...except a board's own sys_config, which build.sh installs when a board has one.
 !/boards/*/sys_config.fex
+# ...and its own partition table (a bigger boot-resource partition for the board's pictures).
+!/boards/*/sys_partition.fex
 # Card read-backs in any tool's format (a DiskGenius .pmfx is a whole card):
 # they carry the reader's data and vendor partitions, never this repository's.
 *.pmfx

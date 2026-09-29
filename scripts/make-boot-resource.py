@@ -143,6 +143,13 @@ def main(stock, out, board):
     # replaces (the fastlogo path is the one place a different bpp might matter), while
     # the warnings stay 24-bit like the vendor's.
     p = os.path.join(work, "bootlogo.bmp"); logo(board).save(p, format="BMP"); files.append((p, "::bootlogo.bmp"))
+    # The board's own pictures (boards/<board>/boot-resource, e.g. bat/battery_charge.bmp from
+    # scripts/make-charge-screens.py), at the same paths in the partition.
+    extra = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "boards", board, "boot-resource")
+    for root, _, names in os.walk(extra):
+        for n in names:
+            src = os.path.join(root, n)
+            files.append((src, "::" + os.path.relpath(src, extra).replace(os.sep, "/")))
     for src, dst in files:
         subprocess.run([MCOPY, "-o", "-i", out, src, dst], check=True)
     print(f"{out}: {len(files)} screens for {board} ({w}x{h}, panel rotation {rot})")

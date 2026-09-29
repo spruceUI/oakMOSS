@@ -132,8 +132,21 @@ without this repository having put it there; the `in-tree` check exists for that
 | `100-disp2-fb-g2d-rotation.patch` | `drivers/char/sunxi_g2d/g2d_driver.c`, `drivers/video/fbdev/sunxi/disp2/disp/{dev_fb.c,fb_g2d_rot.c,fb_g2d_rot.h}` | Hardware framebuffer rotation through G2D on every flip (vendor Dechuang patch, a133-tina-bsp-update 2025-10-11, with the acmeplus gist fixes folded in), enabled per board by `disp_rotation_used`/`degree0` in board.dts: Zero 28 a quarter turn, XU20 a half turn. G2D init moved to subsys_initcall so it exists before disp. |
 | `101-disp2-fb-g2d-rotation-current-frame-flip-by-crop.patch` | `drivers/video/fbdev/sunxi/disp2/disp/fb_g2d_rot.c` | Two defects of the vendor rotation, both measured on the XU20 2026-09-22. (1) It rotated `fb->var.yoffset`, the frame currently SHOWN - the fb core updates that field only after the pan returns - so every flip showed the previous frame and a press appeared one flip late (felt as lag in PortMaster). It now rotates the requested offset, read from crop.y. (2) It switched the layer buffer address every frame; the DE then raised vsync interrupts at ~34 Hz and a flip issued 1-11 ms after a vsync took two frames. The flip now keeps one address and selects the frame by crop.y over the two stacked rotation frames, as the un-rotated path does. |
 | `102-uboot-fb-bootlogo-rotate.patch` | U-Boot boot logo (Zero 28 only) | Rotates the boot logo the same way the kernel rotates the framebuffer, so the logo is not sideways on the Zero 28's portrait panel. |
+| `103-uboot-lcd-panels-rtp32hd016a-rtp40wv101b.patch` | `lichee/brandy-2.0/u-boot-2018/drivers/video/sunxi/disp2/disp/lcd/` (`rtp32hd016a.[ch]`, `rtp40wv101b.[ch]`, `panels.[ch]`, `Kconfig`, `../Makefile`) | 070's two panel drivers in U-Boot, so our own U-Boot lights the Zero 40 and XU20 panels (boot logo, charge-mode picture) on the SDK chain. U-Boot's panel API is the kernel's with three typedef spellings (`panel_extend_para`, `disp_panel_para`, `__lcd_panel_t`); sequences unchanged. Their stock U-Boots carry the same two drivers, and main-zero40's SDK U-Boot differs from the SDK's only by RTP40WV101B (2026-09-26 string diff). The stock XU20 U-Boot also has an RTP36HD029A, a panel variant neither our kernel nor this patch has. |
 | `apply-sdk-mods.sh` | `patch --no-backup-if-mismatch` | GNU patch otherwise saves a file it could not match as `<file>.orig`, the name this script keeps the pristine SDK copy under, so one failed attempt overwrote the pristine `config-4.9.orig`. Every line now has one owning tree patch: a later patch that edits a line an earlier one adds makes the earlier one read as missing. |
 | `sdk-patches/debug/kdebug-mark.patch` | `init/main.c`, the two touch drivers, `i2c-sunxi.c` | **Not applied by this script.** `build.sh KDEBUG_MARK=1` applies it and every other build reverts it. With `oakmoss_mark=<phys>` on the command line the kernel writes its progress (initcall addresses, init stages, driver steps) to an RTC general-purpose register that survives a power-off; `make-own-kernel-stock.sh KMARK=1` has U-Boot save it into the env on the next boot, and `scripts/analyze-card-readback.py` names it from `System.map`. Purely additive over the tree patches' lines. |
+
+U-Boot is not rebuilt by `build.sh`: the pack takes the binary at
+`device/config/chips/a133/bin/u-boot-sun50iw10p1.bin`. After a U-Boot patch (102, 103) rebuild it
+from the **Tina** defconfig and copy it there (brandy's `build.sh -o uboot` builds all five
+`sun50iw10p1*` defconfigs and leaves whichever came last; `sun50iw10p1_defconfig` is the Android
+one, with AVB and A/B slots):
+
+    TOOLCHAIN=vendor scripts/run-in-sdk.sh 'cd lichee/brandy-2.0/u-boot-2018 && make distclean && make sun50iw10p1_tina_defconfig && make -j16'
+    cp -p $SDK_DIR/lichee/brandy-2.0/u-boot-2018/u-boot-sun50iw10p1.bin $SDK_DIR/device/config/chips/a133/bin/
+
+The 2026-09-26 build (102 + 103) differs from the 2026-09-19 one (102) only by the two panel
+drivers; the previous binary is kept beside it as `.pre-103`.
 
 `mods_version` 5 -> 6.
 

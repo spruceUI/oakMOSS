@@ -1,0 +1,12 @@
+#!/bin/sh /etc/rc.common
+# oakMOSS: in a charger boot (androidboot.mode=charger), put the charge screen's level frame
+# up as soon as init runs, right after the GPU driver's fbdev setup has cleared the screen;
+# the full charge screen starts later from rc.local (runmagicx.sh). Nothing in a normal boot.
+
+START=02
+
+start() {
+    case " $(cat /proc/cmdline 2>/dev/null) " in
+        *" androidboot.mode=charger "*) /usr/magicx/bin/charge-screen.sh frame ;;
+    esac
+}
