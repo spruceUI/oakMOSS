@@ -35,7 +35,7 @@ size = 512
 
 [partition]
     name         = bootloader
-    size         = 2048
+    size         = 8192
     downloadfile = "boot-resource.fex"
     user_type    = 0x8000
 

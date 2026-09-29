@@ -32,6 +32,11 @@ mbr = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(mbr)
 FB = {"zero28": (640, 480), "zero40": (480, 800), "xu20": (1024, 768)}   # the size apps draw in
 
 CHARGE_TEXT = "Charging, press Power to turn on"
+# U-Boot's other battery pictures (board/sunxi/power_manage.c): bat0 in a charger boot below
+# the safe level (it charges until the voltage is safe, then goes on), low_pwr on a power-on
+# without a charger below it (shut down 3 s later). Drawn with an empty battery, no percentage.
+LOW_BATTERY = {"bat0": ["Battery too low to start", "Charging, please wait"],
+               "low_pwr": ["Battery too low", "Connect the charger"]}
 LEVELS = range(0, 101, 5)
 
 
@@ -44,7 +49,7 @@ def _tree(height):
     return t.resize((round(t.width * height / t.height), round(height)), Image.LANCZOS)
 
 
-def card(w, h, lines, battery=None, draw_battery=True):
+def card(w, h, lines, battery=None, draw_battery=True, show_pct=True):
     """The oakMOSS screen: tree, "oakMOSS", then smaller lines, then (optionally) the battery.
     draw_battery=False keeps the battery's room in the layout but leaves it black."""
     s = min(w / 640.0, h / 480.0)
@@ -62,8 +67,8 @@ def card(w, h, lines, battery=None, draw_battery=True):
         d.text(((w - d.textlength(line, font=small)) / 2, y), line, font=small, fill=(170, 170, 170)); y += sasc + sdesc
     if battery is not None and draw_battery:
         y += 26 * s
-        bw, bh = 96 * s, 44 * s; pct = f"{battery}%"; pf = _font(True, 30 * s)
-        total = bw + 8 * s + 18 * s + d.textlength(pct, font=pf)
+        bw, bh = 96 * s, 44 * s; pct = f"{battery}%" if show_pct else ""; pf = _font(True, 30 * s)
+        total = bw + 8 * s + (18 * s + d.textlength(pct, font=pf) if pct else 0)
         x = (w - total) / 2
         d.rectangle([x, y, x + bw, y + bh], outline=(235, 235, 235), width=max(2, round(3 * s)))
         d.rectangle([x + bw, y + bh * 0.3, x + bw + 8 * s, y + bh * 0.7], fill=(235, 235, 235))
@@ -72,7 +77,8 @@ def card(w, h, lines, battery=None, draw_battery=True):
         if battery > 0:
             d.rectangle([x + inner, y + inner, x + inner + (bw - 2 * inner) * battery / 100, y + bh - inner], fill=fill)
         pasc, pdesc = pf.getmetrics()
-        d.text((x + bw + 8 * s + 18 * s, y + (bh - pasc - pdesc) / 2), pct, font=pf, fill=(235, 235, 235))
+        if pct:
+            d.text((x + bw + 8 * s + 18 * s, y + (bh - pasc - pdesc) / 2), pct, font=pf, fill=(235, 235, 235))
     return im
 
 
@@ -87,19 +93,23 @@ def main(board):
     for level in LEVELS:
         save(f"level-{level:03d}", card(w, h, [CHARGE_TEXT], battery=level))
     save("loading", card(w, h, ["Loading frontend"]))
-    # U-Boot centres its picture, so the level screen with the battery left black, cut to
-    # its content symmetrically about the centre: Linux's first frame then draws the same
-    # tree and text at the same place and only the battery appears. It fits because each
-    # board's sys_partition.fex gives its boot-resource partition room (1-2 MiB).
-    full = card(w, h, [CHARGE_TEXT], battery=100, draw_battery=False).convert("RGB")
-    x0, y0, x1, y1 = full.getbbox()
-    m = 4; dx = max(w / 2 - x0, x1 - w / 2) + m; dy = max(h / 2 - y0, y1 - h / 2) + m
-    bmp = full.crop((round(w / 2 - dx), round(h / 2 - dy), round(w / 2 + dx), round(h / 2 + dy)))
+    # U-Boot centres its pictures, so each is cut to its content symmetrically about the centre;
+    # the charge picture is the level screen with the battery left black, so Linux's first frame
+    # draws the same tree and text at the same place and only the battery appears. They fit
+    # because each board's sys_partition.fex gives its boot-resource partition 4 MiB.
     rot = mbr.LOGO_ROT[board]
-    bmp = bmp.rotate(rot, expand=True) if rot else bmp
+    def centred(im):
+        x0, y0, x1, y1 = im.getbbox()
+        m = 4; dx = max(w / 2 - x0, x1 - w / 2) + m; dy = max(h / 2 - y0, y1 - h / 2) + m
+        im = im.crop((round(w / 2 - dx), round(h / 2 - dy), round(w / 2 + dx), round(h / 2 + dy)))
+        return im.rotate(rot, expand=True) if rot else im
     out = os.path.join(ROOT, "boards", board, "boot-resource", "bat")
     os.makedirs(out, exist_ok=True)
+    bmp = centred(card(w, h, [CHARGE_TEXT], battery=100, draw_battery=False).convert("RGB"))
     bmp.save(os.path.join(out, "battery_charge.bmp"), format="BMP")
+    for name, lines in LOW_BATTERY.items():
+        centred(card(w, h, lines, battery=0, show_pct=False).convert("RGB")).save(
+            os.path.join(out, name + ".bmp"), format="BMP")
     if board != "zero28":
         mbr.logo(board).save(os.path.join(ROOT, "boards", board, "boot-resource", "bootlogo.bmp"), format="BMP")
     print(f"{board}: {len(LEVELS)} level frames + loading ({w}x{h}), battery_charge.bmp {bmp.size[0]}x{bmp.size[1]}")

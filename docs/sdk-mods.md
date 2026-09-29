@@ -136,17 +136,13 @@ without this repository having put it there; the `in-tree` check exists for that
 | `apply-sdk-mods.sh` | `patch --no-backup-if-mismatch` | GNU patch otherwise saves a file it could not match as `<file>.orig`, the name this script keeps the pristine SDK copy under, so one failed attempt overwrote the pristine `config-4.9.orig`. Every line now has one owning tree patch: a later patch that edits a line an earlier one adds makes the earlier one read as missing. |
 | `sdk-patches/debug/kdebug-mark.patch` | `init/main.c`, the two touch drivers, `i2c-sunxi.c` | **Not applied by this script.** `build.sh KDEBUG_MARK=1` applies it and every other build reverts it. With `oakmoss_mark=<phys>` on the command line the kernel writes its progress (initcall addresses, init stages, driver steps) to an RTC general-purpose register that survives a power-off; `make-own-kernel-stock.sh KMARK=1` has U-Boot save it into the env on the next boot, and `scripts/analyze-card-readback.py` names it from `System.map`. Purely additive over the tree patches' lines. |
 
-U-Boot is not rebuilt by `build.sh`: the pack takes the binary at
-`device/config/chips/a133/bin/u-boot-sun50iw10p1.bin`. After a U-Boot patch (102, 103) rebuild it
-from the **Tina** defconfig and copy it there (brandy's `build.sh -o uboot` builds all five
-`sun50iw10p1*` defconfigs and leaves whichever came last; `sun50iw10p1_defconfig` is the Android
-one, with AVB and A/B slots):
-
-    TOOLCHAIN=vendor scripts/run-in-sdk.sh 'cd lichee/brandy-2.0/u-boot-2018 && make distclean && make sun50iw10p1_tina_defconfig && make -j16'
-    cp -p $SDK_DIR/lichee/brandy-2.0/u-boot-2018/u-boot-sun50iw10p1.bin $SDK_DIR/device/config/chips/a133/bin/
-
-The 2026-09-26 build (102 + 103) differs from the 2026-09-19 one (102) only by the two panel
-drivers; the previous binary is kept beside it as `.pre-103`.
+U-Boot is not rebuilt by `make`: the pack takes the binary at
+`device/config/chips/a133/bin/u-boot-sun50iw10p1.bin`. After an SDK unpack or a U-Boot patch
+(102, 103), run `scripts/build.sh uboot`: it builds the **Tina** defconfig
+(`sun50iw10p1_tina_defconfig`; brandy's own `build.sh -o uboot` builds all five `sun50iw10p1*`
+defconfigs and leaves whichever came last, and `sun50iw10p1_defconfig` is the Android one, with
+AVB and A/B slots) and installs it. `build.sh image` refuses a binary without the panels and the
+logo rotation, or an Android build, and records its md5 in `BUILD-INFO.txt` (`uboot_md5`).
 
 `mods_version` 5 -> 6.
 

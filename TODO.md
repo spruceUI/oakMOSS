@@ -200,6 +200,19 @@ because the base does not.
 - The PowerVR 1.11 userland is TrimUI's; whether it renders through the Android
   `pvrsrvkm`'s display class is the largest remaining unknown.
 
+- [ ] **The RTP36HD029A panel variant** (analysis 2026-09-28, nothing built). The stock XU20
+      U-Boot and its Android kernel (`boot.fex`) both carry an `RTP36HD029A` driver beside
+      `RTP32HD016A`; the stock tree names only `RTP32HD016A` in `lcd0` and has no `lcd0_0..9`
+      alternates, although that U-Boot reads `/soc/lcd0_0..9`. So another XU20 revision (by the
+      name a 3.6" panel) ships a firmware whose tree selects it; an XU20 with that panel would be
+      dark on our image (U-Boot and kernel). Needed: (1) that revision's stock firmware - its
+      `lcd0` timings (x/y, dclk, porches, lanes) and touch node exist only there; (2) the
+      driver's open/close flow and DSI init table, recovered from the stock kernel's
+      `RTP36HD029A` code the way `070-*` was (disassembly, call for call), and the same in
+      U-Boot (`103-*`); (3) selection: a separate board (`boards/xu20-v36`) if the revisions are
+      told apart by model, or the SDK's `lcd0_N` compatible-panel probe (panel ID read over DSI)
+      if one image must serve both - which the stock U-Boot supports but its tree does not use.
+
 ## Verify before building more
 
 - Sleep/wake on both boards (`/sys/power/state` mem, rtc0 wake alarm, panel

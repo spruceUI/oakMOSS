@@ -4,6 +4,8 @@
 #   scripts/build.sh ext                 full userland build on Arm GNU 13.3 (default toolchain)
 #   scripts/build.sh cont                resume the current build without wiping anything
 #   scripts/build.sh image <board>       overlay -> add-rootfs-demo -> pack -> OpenixCard -> builds/
+#   scripts/build.sh uboot               rebuild U-Boot (sun50iw10p1_tina_defconfig) with the tree patches
+#                                        (102, 103) and install it where pack takes it
 #   scripts/build.sh all [board ...]     ext, then image for zero28 and zero40 (or the boards given)
 #   scripts/build.sh phase1 | phase2     Moss-faithful fallback on the vendor/from-source toolchain
 #                                        (TOOLCHAIN=vendor; see docs/toolchain.md)
@@ -232,6 +234,26 @@ kdebug_block() {
     return 1
 }
 
+# The U-Boot binary pack takes is a prebuilt file, not rebuilt by make: a fresh SDK unpack
+# carries the vendor's, which has neither the boot-logo rotation (102) nor the Zero 40 and XU20
+# panels (103) - those boards' SDK-chain cards would boot with a dark panel until Linux. So
+# the image step refuses a binary without them, and `build.sh uboot` makes the right one.
+UBOOT_BIN=$SDK_DIR/device/config/chips/a133/bin/u-boot-sun50iw10p1.bin
+check_uboot() {
+    [ -f "$UBOOT_BIN" ] || die "no U-Boot binary at $UBOOT_BIN"
+    # Here-strings, not pipes: under pipefail `printf | grep -q` fails when grep stops at the
+    # first match and printf takes SIGPIPE, which refused a good binary at random.
+    local s; s=$(strings "$UBOOT_BIN")
+    local want
+    for want in RTP40WV101B RTP32HD016A disp_rotation_used; do
+        grep -qx "$want" <<<"$s" ||
+            die "U-Boot at $UBOOT_BIN lacks '$want' (patches 102/103): run scripts/build.sh uboot"
+    done
+    grep -q '^ANDROID: Booting slot' <<<"$s" &&
+        die "U-Boot at $UBOOT_BIN is the Android build (sun50iw10p1_defconfig): run scripts/build.sh uboot"
+    return 0
+}
+
 run_make() {  # run_make <label> <pre-commands>
     local label=$1 pre=$2 LOG
     LOG=$BUILDS_DIR/logs/$label-$(stamp).log
@@ -257,9 +279,16 @@ case $STEP in
   phase2)
     TOOLCHAIN=vendor; export TOOLCHAIN; apply_overlay zero28
     run_make phase2 "$(install_config "${PHASE2_CONFIG:-phase2-gcc750.config}")" ;;
+  uboot)
+    # brandy's own build.sh -o uboot builds every sun50iw10p1* defconfig and leaves the last
+    # one's binary in the tree; the board's is the Tina one (the Android one carries AVB/A-B).
+    TOOLCHAIN=vendor "$RUN" "cd lichee/brandy-2.0/u-boot-2018 && make distclean >/dev/null && make sun50iw10p1_tina_defconfig >/dev/null && make -j$JOBS >/dev/null 2>&1 && cp -p u-boot-sun50iw10p1.bin ../../../device/config/chips/a133/bin/" ||
+        die "U-Boot build failed"
+    check_uboot; log "U-Boot installed: $UBOOT_BIN ($(md5_of "$UBOOT_BIN"))" ;;
   image)
     BOARD=${1:?board: zero28|zero40|xu20}
     [ -x "$OPENIXCARD_BIN" ] || die "OpenixCard not found at $OPENIXCARD_BIN (scripts/build-openixcard.sh)"
+    check_uboot
     apply_overlay "$BOARD"
     ST=$(stamp); OUT=$BUILDS_DIR/$ST-$BOARD; mkdir -p "$OUT"; LOG=$BUILDS_DIR/logs/image-$BOARD-$ST.log
     # pack's output is checked: it reports a partition overflow ("dl file
@@ -287,6 +316,7 @@ case $STEP in
       case $TOOLCHAIN in armgnu13) echo "toolchain=userland Arm GNU Toolchain 13.3.Rel1 aarch64-none-linux-gnu (glibc 2.38, libstdc++ GLIBCXX_3.4.32); kernel + GE8300 km: vendor GCC 6.4 Linaro" ;;
                          *) echo "toolchain=$(grep '^CONFIG_GCC_VERSION=' "$SDK_DIR/.config") $(grep '^CONFIG_GLIBC_VERSION=' "$SDK_DIR/.config")" ;; esac
       echo "kernel_encrypt_obj_md5=$(md5_of "$ENC/encrypt") ($ENCRYPT_OBJ)"
+      echo "uboot_md5=$(md5_of "$UBOOT_BIN") ($(strings "$UBOOT_BIN" | grep -m1 '^U-Boot 2018'))"
       echo "overlay_md5=$(cd "$OAKMOSS_ROOT/overlay" && find . -type f | sort | xargs md5sum | md5sum | cut -c1-32)"
       echo "board_dts=$([ -f "$OAKMOSS_ROOT/boards/$BOARD/board.dts" ] && echo "boards/$BOARD/board.dts $(md5_of "$OAKMOSS_ROOT/boards/$BOARD/board.dts")" || echo "the SDK a133-aw3 (Zero 28) tree")"
       echo "libc=$(strings "$ROOTFS/lib/libc.so.6" 2>/dev/null | grep -m1 'GNU C Library')"
