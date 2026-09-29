@@ -148,6 +148,17 @@ because the base does not.
 
 ## Rootfs overlay: services and files
 
+- [ ] **A version stamp spruce can read** (next bundle, with spruce's side). Write the image's
+      version at build time where the launcher can read it - `OS_NAME=oakMOSS` and
+      `OS_VERSION=<git describe>` in `/etc/os-release`, and/or `/usr/magicx/version` - so
+      spruce can show it on About and offer an update when the base is older than its
+      target (dArkMoss's `OS_VERSION` + `TARGET_DARKMOSS_VERSION`, fail-closed: no stamp
+      or an unparseable one counts as older). `BUILD-INFO.txt` already carries the string;
+      the image does not.
+- [ ] **Optionally stamp the platform too** (`SPRUCE_PLATFORM=Zero40` etc., as dArkMoss
+      does), so a new board needs no spruce detection change; spruce keeps the
+      `/usr/magicx/device` mapping as the fallback.
+
 - [x] `etc/init.d/wpa_supplicant` no-op: wifimanager's S96 service started a second
       supplicant on wlan0 and disconnected every association the launcher's made
       (Zero 28, 2026-09-16). Better: drop the `wifimanager` package and keep only
