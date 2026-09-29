@@ -70,11 +70,11 @@ apply_overlay() {
     if [ -f "$ov/bootlogo.bmp" ]; then cp -a "$ov/bootlogo.bmp" "$logo"
     elif [ -f "$logo.orig" ]; then cp -a "$logo.orig" "$logo"; fi      # no logo in the overlay: the SDK's own
     # The board's other bootloader pictures (boards/<board>/boot-resource, e.g. bat/battery_charge.bmp
-    # from scripts/make-charge-screens.py), for a board that packs its own boot chain - the one with
-    # its own sys_partition.fex (the Zero 28). The Zero 40 and XU20 boot the stock chain, whose
-    # boot-resource is builds/bootres-<board>.fex (make-boot-resource.py adds the same pictures
-    # there); copying them here too overflowed the SDK pack's 256 KiB partition. The SDK's
-    # boot-resource has no bat/ of its own, so it is cleared first.
+    # from scripts/make-charge-screens.py, and the Zero 40's and XU20's own boot logo), for a board
+    # with its own sys_partition.fex, whose bigger boot-resource partition they need: the SDK
+    # pack's 256 KiB overflowed. A stock-chain card (make-own-kernel-stock.sh) takes its
+    # boot-resource from builds/bootres-<board>.fex instead (make-boot-resource.py adds the same
+    # pictures there). The SDK's boot-resource has no bat/ of its own, so it is cleared first.
     local bres=${logo%/*}
     rm -rf "${bres:?}/bat"
     if [ -f "$OAKMOSS_ROOT/boards/$board/sys_partition.fex" ] && [ -d "$OAKMOSS_ROOT/boards/$board/boot-resource" ]; then
@@ -110,10 +110,9 @@ apply_overlay() {
     else
         cp -a "$sysc.orig" "$sysc"
     fi
-    # Board partition table: boards/<board>/sys_partition.fex, same dance. The Zero 28's gives
-    # its boot-resource ("bootloader") partition 1 MiB instead of 256 KiB, room for the
-    # charge-mode picture beside the 32-bit logo; the Zero 40's and XU20's final layout comes
-    # from make-own-kernel-stock.sh, so theirs never needs one.
+    # Board partition table: boards/<board>/sys_partition.fex, same dance. It gives the
+    # boot-resource ("bootloader") partition room for the charge-mode picture beside the logo:
+    # 1 MiB on the Zero 28, 2 MiB on the Zero 40 and XU20 (their 32-bit 400 px logos).
     local sysp=$SDK_DIR/device/config/chips/a133/configs/aw3/linux/sys_partition.fex
     [ -f "$sysp.orig" ] || cp -a "$sysp" "$sysp.orig"
     if [ -f "$OAKMOSS_ROOT/boards/$board/sys_partition.fex" ]; then

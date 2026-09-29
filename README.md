@@ -13,10 +13,9 @@ written to the internal microSD (see "Using the image"):
 
 | image | board | what it is |
 |---|---|---|
-| `oakmoss-zero28-<stamp>-sd1.img` | Zero 28 | our full chain: boot0, U-Boot, DTB, kernel, rootfs |
-| `oakmoss-zero40-<stamp>-sd1.img` | Zero 40 | same chain with the Zero 40 kernel object; **white screen on the real board** (the SDK drop lacks its panel and touch drivers) |
+| `oakmoss-<board>-<stamp>-sd1.img` | Zero 28, Zero 40, XU20 V32 | **the one to flash, on all three** (since 2026-09-28): our full chain - SDK boot0, our U-Boot (with the Zero 40 and XU20 panels, `sdk-patches/tree/103`), SDK ATF and SCP, our DTB, kernel and rootfs; charge mode when plugged in while off. The panels come from `sdk-patches/tree/070-*`, the touch drivers from `080-*`, the trees from `boards/<board>/board.dts` |
 | `oakmoss-zero40-hybrid-<stamp>-sd1.img` | Zero 40 | the earlier way in: main-zero40's boot chain (panel, touch, kernel) with our rootfs in its rootfs partition, carrying MagicX's own kernel modules (`scripts/adapt-zero40-rootfs.sh`) |
-| `oakmoss-<board>-own-<stamp>-sd1.img` | XU20 V32, Zero 40 | **the one to flash on these two**: the board's stock boot0 and U-Boot with OUR kernel, device tree and rootfs (`scripts/make-own-kernel-stock.sh`); the panels come from `sdk-patches/tree/070-*`, the touch drivers from `080-*`, the trees from `boards/<board>/board.dts` |
+| `oakmoss-<board>-own-<stamp>-sd1.img` | XU20 V32, Zero 40 | the previous way in (until 2026-09-28): the board's stock boot0 and U-Boot with OUR kernel, device tree and rootfs (`scripts/make-own-kernel-stock.sh`). Works, but a board plugged in while off stays off: the stock chain never reaches charge mode |
 | `oakmoss-zero40-stock-<stamp>-sd1.img` | Zero 40 | **new lane (2026-09-16)**: the Zero 40's own stock firmware chain (MagicX release Zero40_V1 `adb.img`: boot0, U-Boot, DTB, Android kernel 4.9.170) with the Zero 40 rootfs as ext4 and the vendor's modules, the same recipe as the XU20 image; built because no round-8 rootfs ever came up on the main-zero40 chain |
 | `oakmoss-xu20-hybrid-<stamp>-sd1.img` | XU20 V32 | the stock firmware's own boot chain and Android kernel (its panel and touch driver are in neither our SDK nor main-zero40) with the Zero 40 rootfs as ext4; both extra SD controllers enabled so the second card is visible. **Not yet booted on a unit.** |
 
@@ -61,7 +60,9 @@ scripts/unpack-xu20-stock.sh       # XU20 only: image items + vendor modules out
 scripts/make-hybrid-xu20.sh builds/<stamp>-zero40       # the XU20 image (from the Zero 40 rootfs)
 scripts/unpack-zero40-stock.sh     # Zero 40 stock lane: items + vendor modules out of MagicX's adb.img
 scripts/make-hybrid-zero40-stock.sh builds/<stamp>-zero40   # the Zero 40 image on its own stock chain (Android kernel; no GL)
-scripts/build.sh image xu20                                  # our kernel + rootfs for the XU20 (boards/xu20/board.dts, panel in 070-*)
+scripts/build.sh image zero40       # THE card for a Zero 40 (SDK chain, our U-Boot; builds/<stamp>-zero40/oakmoss-zero40-*-sd1.img)
+scripts/build.sh image xu20         # THE card for an XU20 (the same; boards/xu20/board.dts, panel in 070-* and 103)
+# The stock-chain alternative (until 2026-09-28; no charge mode), from the build above:
 scripts/make-boot-resource.py inputs/xu20-stock/user.img.dump/RFSFAT16_BOOT-RESOURCE_FE \
     builds/bootres-xu20.fex xu20                               # bootloader screens + boot logo sized for the panel
 DIAG=0 EARLY_PROBE=0 CONSOLE=tty0 BOOTRES=builds/bootres-xu20.fex \
@@ -135,17 +136,18 @@ processes blocked behind it, and a build hung with nothing left to write).
 ## Status
 
 Bench-tested on a Zero 28, a Zero 40 and an XU20 V32 with spruceOS on the user
-card (September 2026); not a release. The Zero 28 runs the SDK chain. The Zero 40
-and the XU20 run **our kernel behind their stock boot0 and U-Boot**
-(`scripts/make-own-kernel-stock.sh`): launcher, pad, touch, audio and WiFi
-exercised on both. Their panels (`sdk-patches/tree/070-*`) and touch controllers
+card (September 2026); not a release. All three run **the SDK chain** since
+2026-09-28 (boot0 and ATF/SCP from the SDK, our U-Boot with their panels in
+`sdk-patches/tree/103`); until then the Zero 40 and the XU20 ran our kernel
+behind their stock boot0 and U-Boot (`scripts/make-own-kernel-stock.sh`), where
+launcher, pad, touch, audio and WiFi were exercised on both. Their panels (`sdk-patches/tree/070-*`) and touch controllers
 (`080-*`) are in our kernel, so the hybrid images that borrowed MagicX's Android
 kernel are no longer the way in. Touch is a module that spruce loads once the
 board has settled: built in, its probe stalled boots at the logo
 (`docs/hardware-notes.md`, "Touch drivers stalled the boot").
 Known gaps: the newer-board-revision fixes in main-zero40 v20260202-1 are not in
-our inputs, suspend-to-RAM never resumes (seen on the XU20; spruce uses a
-pseudo-sleep on these boards), kernel 4.9 has no exFAT (large SD2 cards need FAT32), busybox 1.27
+our inputs, the Zero 40 blanks its boot picture for 1-2 s when the GPU driver loads
+(TODO.md), kernel 4.9 has no exFAT (large SD2 cards need FAT32), busybox 1.27
 has no `bc`, and the XR829 crystal variant is assumed 26 MHz. The Zero 28's and
 XU20's radio is a Realtek 8189es, the Zero 40's an XR829, both driven by
 in-kernel drivers.
