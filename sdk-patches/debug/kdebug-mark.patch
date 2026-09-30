@@ -1,6 +1,6 @@
 --- a/lichee/linux-4.9/init/main.c
 +++ b/lichee/linux-4.9/init/main.c
-@@ -773,6 +773,67 @@
+@@ -773,6 +773,128 @@
  	return ret;
  }
  
@@ -34,6 +34,40 @@
 +}
 +__setup("oakmoss_mark=", oakmoss_mark_setup);
 +
++/* The mark ring (debug kernels only): with oakmoss_mark= set, every mark is also appended to
++ * a 1 MB ring in reserved, unmapped RAM at 0x7f000000 (sun50iw10p1.dtsi reserved-memory), so a
++ * whole sequence survives a watchdog or panic reset if the DRAM keeps its contents. Header (16
++ * bytes used of 64): magic 'OAKR', last sequence number, boot count, entry count; then 16-byte
++ * entries: mark, meta (cpu << 28 | in_interrupt << 27 | sequence & 0x7ffffff), CNTVCT low, high.
++ * The ring is never cleared: each boot continues the sequence, so the previous boot's tail is
++ * still there after the reset (read it with an mmap of /dev/mem; oakMOSS scripts/kmark-ring.py). */
++#include <asm/arch_timer.h>
++#define OAKMOSS_RING_PHYS	0x7f000000
++#define OAKMOSS_RING_SIZE	0x100000
++#define OAKMOSS_RING_MAGIC	0x4f414b52
++#define OAKMOSS_RING_ENTRIES	((OAKMOSS_RING_SIZE - 64) / 16)
++static void __iomem *oakmoss_ring;
++static atomic_t oakmoss_ring_seq;
++
++static void oakmoss_ring_put(u32 v)
++{
++	void __iomem *e;
++	u32 seq;
++	u64 cnt;
++
++	if (!oakmoss_ring)
++		return;
++	seq = (u32)atomic_inc_return(&oakmoss_ring_seq);
++	e = oakmoss_ring + 64 + (seq % OAKMOSS_RING_ENTRIES) * 16;
++	cnt = arch_counter_get_cntvct();
++	writel_relaxed(v, e);
++	writel_relaxed(((u32)raw_smp_processor_id() << 28) | ((in_interrupt() ? 1U : 0U) << 27) |
++		       (seq & 0x7ffffff), e + 4);
++	writel_relaxed((u32)cnt, e + 8);
++	writel_relaxed((u32)(cnt >> 32), e + 12);
++	writel(seq, oakmoss_ring + 4);
++}
++
 +static void oakmoss_mark_write(u32 v)
 +{
 +	if (!oakmoss_mark_phys)
@@ -43,7 +77,34 @@
 +	if (oakmoss_mark_reg)
 +		writel(v, oakmoss_mark_reg);
 +	oakmoss_last = v;
++	oakmoss_ring_put(v);
 +}
++
++static int __init oakmoss_ring_init(void)
++{
++	u32 boots;
++
++	if (!oakmoss_mark_phys)
++		return 0;
++	oakmoss_ring = ioremap(OAKMOSS_RING_PHYS, OAKMOSS_RING_SIZE);
++	if (!oakmoss_ring)
++		return 0;
++	if (readl(oakmoss_ring) == OAKMOSS_RING_MAGIC &&
++	    readl(oakmoss_ring + 12) == OAKMOSS_RING_ENTRIES) {
++		atomic_set(&oakmoss_ring_seq, readl(oakmoss_ring + 4));
++		boots = readl(oakmoss_ring + 8) + 1;
++	} else {
++		atomic_set(&oakmoss_ring_seq, 0);
++		boots = 1;
++		writel(OAKMOSS_RING_MAGIC, oakmoss_ring);
++		writel(0, oakmoss_ring + 4);
++		writel(OAKMOSS_RING_ENTRIES, oakmoss_ring + 12);
++	}
++	writel(boots, oakmoss_ring + 8);
++	oakmoss_ring_put(0xb0070000 | (boots & 0xffff));	/* boot boundary */
++	return 0;
++}
++early_initcall(oakmoss_ring_init);
 +
 +void oakmoss_mark(u32 v)
 +{
@@ -68,7 +129,7 @@
  int __init_or_module do_one_initcall(initcall_t fn)
  {
  	int count = preempt_count();
-@@ -782,6 +843,8 @@
+@@ -782,6 +904,8 @@
  	if (initcall_blacklisted(fn))
  		return -EPERM;
  
@@ -77,7 +138,7 @@
  	if (initcall_debug)
  		ret = do_one_initcall_debug(fn);
  	else
-@@ -1041,8 +1104,10 @@
+@@ -1041,8 +1165,10 @@
  	kernel_init_freeable();
  	/* need to finish all async __init code before freeing the memory */
  	async_synchronize_full();
@@ -88,7 +149,7 @@
  	system_state = SYSTEM_RUNNING;
  	numa_default_policy();
  
-@@ -1063,6 +1128,8 @@
+@@ -1063,6 +1189,8 @@
  	 * trying to recover a really broken machine.
  	 */
  	if (execute_command) {
@@ -97,7 +158,7 @@
  		ret = run_init_process(execute_command);
  		if (!ret)
  			return 0;
-@@ -1113,10 +1180,12 @@
+@@ -1113,10 +1241,12 @@
  	page_alloc_init_late();
  
  	do_basic_setup();
@@ -110,7 +171,7 @@
  
  	(void) sys_dup(0);
  	(void) sys_dup(0);
-@@ -1132,6 +1201,7 @@
+@@ -1132,6 +1262,7 @@
  		ramdisk_execute_command = NULL;
  		prepare_namespace();
  	}
@@ -148,7 +209,31 @@
  	return 0;
  }
  /*****************************************************************************
-@@ -1861,6 +1866,7 @@
+@@ -538,6 +543,7 @@
+  *  Return:
+  *****************************************************************************/
+ static irqreturn_t hyn_eint_interrupt_handler(int irq, void *dev_id) {
++	oakmoss_mark(0x4859013c);	/* oakMOSS KDEBUG_MARK: touch interrupt taken */
+ #if ANDROID_TOOL_SURPORT
+ 	if (hyn_ts_data->work_mode > 0) {
+ 		hynitron_wake_up_wait();
+@@ -669,6 +675,7 @@
+ 	int len_1, len_2;
+ #endif
+ 
++	oakmoss_mark(0x4859013a);	/* oakMOSS KDEBUG_MARK: touch report work started (0x483A + bus-1 i2c phase) */
+ #if HYN_ESDCHECK_EN
+ 	if (hyn_ts_data->hyn_esd_i2c_lock_flag > 0) {
+ 		HYN_ERROR("  hyn_esd_i2c_lock_flag is running .\n");
+@@ -1049,6 +1056,7 @@
+ 	}
+ 
+ END:
++	oakmoss_mark(0x4859013b);	/* oakMOSS KDEBUG_MARK: touch report work finished */
+ 	cnt_up = 0;
+ 	cnt_down = 0;
+ 	return;
+@@ -1861,6 +1869,7 @@
  	int ret = -1;
  	struct hynitron_ts_data *ts_data = NULL;
  	HYN_FUNC_ENTER();
@@ -156,7 +241,7 @@
  	if (config_info.dev == NULL)
  		config_info.dev = &client->dev;
  
-@@ -1881,6 +1887,7 @@
+@@ -1881,6 +1890,7 @@
  	// ts_data->device_id = id->driver_data; //if null,may cause dump
  
  	ret = hyn_platform_data_init(ts_data);
@@ -164,7 +249,7 @@
  	if (ret < 0) {
  		HYN_ERROR("hyn_platform_data_init fail,please check DTS.");
  		kfree(ts_data);
-@@ -1888,18 +1895,24 @@
+@@ -1888,18 +1898,24 @@
  	}
  
  	ret = hyn_gpio_configure(ts_data);
@@ -189,7 +274,7 @@
  		if (ret < 0) {
  			HYN_ERROR("Touch Probe : detect hynitron ic type "
  				  "fail...");
-@@ -1909,19 +1922,24 @@
+@@ -1909,19 +1925,24 @@
  	} else {
  		HYN_INFO("hyn_firmware_info success.\n");
  	}
@@ -214,7 +299,7 @@
  	if (ret < 0) {
  		HYN_ERROR("Touch Probe : hyn_update_firmware_init  fail...");
  		goto err_end;
-@@ -1975,13 +1993,17 @@
+@@ -1975,13 +1996,17 @@
  	 * is 0); the reset hyn_gpio_configure pulsed is the one it needs. On the XU20 this
  	 * one, pulsed after the touch IRQ is requested, froze the whole board on 10 of 11
  	 * late loads (RTC step marker, 2026-09-18). */
@@ -232,7 +317,7 @@
  	if (gpio_is_valid(ts_data->pdata->reset_gpio))
  		gpio_free(ts_data->pdata->reset_gpio);
  	if (gpio_is_valid(ts_data->pdata->irq_gpio))
-@@ -2136,13 +2158,16 @@
+@@ -2136,13 +2161,16 @@
  static int __init hynitron_driver_init(void) {
  	int ret = -1;
  	HYN_FUNC_ENTER();
@@ -249,7 +334,7 @@
  		if (0 != ret) {
  			HYN_ERROR("%s:ctp_ops.init_platform_resource err. \n",
  				  __func__);
-@@ -2153,15 +2178,20 @@
+@@ -2153,15 +2181,20 @@
  			  "to 1.\n");
  		return 0;
  	}
@@ -338,17 +423,92 @@
  /* After the display driver: the panel's reset line is what resets the chip. */
 --- a/lichee/linux-4.9/drivers/i2c/busses/i2c-sunxi.c
 +++ b/lichee/linux-4.9/drivers/i2c/busses/i2c-sunxi.c
-@@ -1856,6 +1856,9 @@
+@@ -1735,10 +1735,63 @@
+ 	return ret;
+ }
+ 
++/* oakMOSS KDEBUG_MARK storm breaker (debug kernels only). A storm is either 50 interrupts in a
++ * row while no transfer is in flight (never legitimate), or 100 within 1 ms of the arch counter
++ * (200 kHz byte-level traffic stays under ~23 per ms). Then record the controller and transfer
++ * state (kernel log + mark 0x70bssTmm: bus, TWI status byte, xfer status, bit 7 msg != NULL,
++ * msg_idx) and switch that bus's interrupt off, so the storm ends, suspend goes on and the log
++ * can be read after the resume. */
++#include <asm/arch_timer.h>
++extern void oakmoss_mark(u32 v);
++#define OAKMOSS_STORM_BUSES 8
++static u64 oakmoss_storm_t0[OAKMOSS_STORM_BUSES];
++static unsigned int oakmoss_storm_cnt[OAKMOSS_STORM_BUSES];
++static unsigned int oakmoss_storm_idle[OAKMOSS_STORM_BUSES];
++
++static bool oakmoss_storm_check(struct sunxi_i2c *i2c, int this_irq)
++{
++	unsigned int b = i2c->bus_num;
++	u64 now = arch_counter_get_cntvct();
++	u32 stat, ctl;
++	const char *why;
++
++	if (b >= OAKMOSS_STORM_BUSES)
++		return false;
++	if (now - oakmoss_storm_t0[b] > 24000) {	/* 1 ms at 24 MHz */
++		oakmoss_storm_t0[b] = now;
++		oakmoss_storm_cnt[b] = 0;
++	}
++	oakmoss_storm_cnt[b]++;
++	if (i2c->status == I2C_XFER_IDLE)
++		oakmoss_storm_idle[b]++;
++	else
++		oakmoss_storm_idle[b] = 0;
++	if (oakmoss_storm_idle[b] >= 50)
++		why = "50 in a row with no transfer in flight";
++	else if (oakmoss_storm_cnt[b] >= 100)
++		why = "100 within 1 ms";
++	else
++		return false;
++	stat = readl(i2c->base_addr + TWI_STAT_REG);
++	ctl = readl(i2c->base_addr + TWI_CTL_REG);
++	oakmoss_mark(0x70000000 | ((b & 0xf) << 20) | ((stat & 0xff) << 12) |
++		     ((i2c->status & 0xf) << 8) | ((i2c->msg ? 1 : 0) << 7) | (i2c->msg_idx & 0x7f));
++	pr_err("oakmoss: [i2c%u] IRQ STORM (%s): stat=%#x ctl=%#x xfer_status=%d msg=%p msg_idx=%d msg_num=%d msg_ptr=%d addr=%#x -> irq %d disabled\n",
++	       b, why, stat, ctl, i2c->status, i2c->msg, i2c->msg_idx, i2c->msg_num, i2c->msg_ptr,
++	       i2c->msg ? i2c->msg[0].addr : 0, this_irq);
++	twi_disable_irq(i2c->base_addr);
++	disable_irq_nosync(this_irq);
++	oakmoss_storm_idle[b] = 0;
++	oakmoss_storm_cnt[b] = 0;
++	return true;
++}
++
+ static irqreturn_t sunxi_i2c_handler(int this_irq, void *dev_id)
+ {
+ 	struct sunxi_i2c *i2c = (struct sunxi_i2c *)dev_id;
+ 
++	if (oakmoss_storm_check(i2c, this_irq))
++		return IRQ_HANDLED;
+ 	if (i2c->twi_drv_used)
+ 		sunxi_i2c_drv_core_process(i2c);
+ 	else {
+@@ -1871,6 +1924,20 @@
  	return ret;
  }
  
 +extern void oakmoss_mark2(u32 v); /* oakMOSS KDEBUG_MARK */
-+#define OAK_I2C_MARK(i2c, msgs, p) do { if ((i2c)->bus_num == 1) oakmoss_mark2(0x49310000 | (((msgs)->addr & 0xff) << 8) | (p)); } while (0)
++extern void oakmoss_mark(u32 v);
++/* Bus 1 (touch): phases in the low half of the current driver step (oakmoss_mark2). Bus 6
++ * (s_twi, the PMIC; always address 0x34): the whole register, 0x4936TTPP (TT = low byte of
++ * the calling task's pid, so the resume thread and the PMIC IRQ thread differ; PP = phase: 1 start,
++ * 2 running, 3 done, 4 TIMED OUT, 5 START failed, 6 bus busy), so a PMIC transfer that
++ * never completes after a resume shows how it failed. */
++#define OAK_I2C_MARK(i2c, msgs, p) do { \
++	if ((i2c)->bus_num == 1) \
++		oakmoss_mark2(0x49310000 | (((msgs)->addr & 0xff) << 8) | (p)); \
++	else if ((i2c)->bus_num == 6) \
++		oakmoss_mark(0x49360000 | ((current->pid & 0xff) << 8) | (p)); \
++} while (0)
 +
  static int
  sunxi_i2c_do_xfer(struct sunxi_i2c *i2c, struct i2c_msg *msgs, int num)
  {
-@@ -1863,6 +1866,7 @@
+@@ -1878,6 +1945,7 @@
  	int ret = SUNXI_I2C_FAIL;
  	unsigned long flags = 0;
  
@@ -356,7 +516,7 @@
  	twi_soft_reset(i2c->base_addr, TWI_SRST_REG, TWI_SRST_SRST);
  	udelay(100);
  
-@@ -1873,6 +1877,7 @@
+@@ -1888,6 +1956,7 @@
  		dprintk(DEBUG_INFO, "[i2c%d] bus is busy, status = %x\n",
  			i2c->bus_num, twi_query_irq_status(i2c->base_addr));
  		if (twi_send_clk_9pulse(i2c->base_addr, i2c->bus_num) != SUNXI_I2C_OK) {
@@ -364,7 +524,7 @@
  			ret = SUNXI_I2C_RETRY;
  			goto out;
  		} else
-@@ -1895,6 +1900,7 @@
+@@ -1910,6 +1979,7 @@
  	/* START signal, needn't clear int flag */
  	ret = twi_start(i2c->base_addr, i2c->bus_num);
  	if (ret == SUNXI_I2C_FAIL) {
@@ -372,7 +532,7 @@
  		I2C_ERR("[i2c%d] twi_regulator: %s\n",
  			i2c->bus_num,
  			((struct sunxi_i2c_platform_data *)(i2c->adap.dev.parent->platform_data))->regulator_id);
-@@ -1906,9 +1912,11 @@
+@@ -1921,9 +1991,11 @@
  	}
  
  	i2c->status  = I2C_XFER_RUNNING;
@@ -384,9 +544,70 @@
  	/* return code,if(msg_idx == num) succeed */
  	ret = i2c->msg_idx;
  	if (timeout == 0) {
+@@ -2584,6 +2656,35 @@
+ 	return 0;
+ }
+ 
++/* oakMOSS KDEBUG_MARK: a no_suspend bus keeps its controller untouched across system
++ * sleep, but the SCP drives s_twi while the board sleeps. Snapshot the TWI registers
++ * (0x00..0x24) going down and coming back, print both at resume, and with
++ * oakmoss_twi_reinit=1 re-gate, reset and reprogram the controller at resume_noirq. */
++static unsigned int oakmoss_twi_reinit;
++module_param(oakmoss_twi_reinit, uint, 0644);
++static u32 oakmoss_twi_snap[2][10];
++
++static void oakmoss_twi_snapshot(struct sunxi_i2c *i2c, int which)
++{
++	int r;
++
++	for (r = 0; r < 10; r++)
++		oakmoss_twi_snap[which][r] = readl(i2c->base_addr + r * 4);
++}
++
++static void oakmoss_twi_report(struct sunxi_i2c *i2c)
++{
++	int w;
++
++	for (w = 0; w < 2; w++)
++		pr_info("oakmoss: [i2c%d] twi %s: addr %08x xaddr %08x data %08x ctl %08x stat %08x clk %08x srst %08x efr %08x lcr %08x dvfs %08x\n",
++			i2c->bus_num, w ? "at resume " : "at suspend",
++			oakmoss_twi_snap[w][0], oakmoss_twi_snap[w][1], oakmoss_twi_snap[w][2],
++			oakmoss_twi_snap[w][3], oakmoss_twi_snap[w][4], oakmoss_twi_snap[w][5],
++			oakmoss_twi_snap[w][6], oakmoss_twi_snap[w][7], oakmoss_twi_snap[w][8],
++			oakmoss_twi_snap[w][9]);
++}
++
+ static int sunxi_i2c_suspend_noirq(struct device *dev)
+ {
+ 	struct platform_device *pdev = to_platform_device(dev);
+@@ -2591,6 +2692,8 @@
+ 
+ 	if (i2c->twi_drv_used)
+ 		twi_disable(i2c->base_addr, TWI_DRIVER_CTRL, TWI_DRV_EN);
++	if (i2c->no_suspend)
++		oakmoss_twi_snapshot(i2c, 0);
+ 	if (i2c->no_suspend) {
+ 		dprintk(DEBUG_SUSPEND, "[i2c%d] doesn't need to  suspend\n",
+ 				i2c->bus_num);
+@@ -2613,6 +2716,15 @@
+ 		twi_enable(i2c->base_addr, TWI_DRIVER_CTRL, TWI_DRV_EN);
+ 	}
+ 	if (i2c->no_suspend) {
++		oakmoss_twi_snapshot(i2c, 1);
++		oakmoss_twi_report(i2c);
++		if (oakmoss_twi_reinit && !i2c->twi_drv_used) {
++			clk_disable_unprepare(i2c->mclk);
++			if (sunxi_i2c_clk_init(i2c))
++				pr_err("oakmoss: [i2c%d] twi re-init failed\n", i2c->bus_num);
++			twi_soft_reset(i2c->base_addr, TWI_SRST_REG, TWI_SRST_SRST);
++			pr_info("oakmoss: [i2c%d] twi re-initialised at resume\n", i2c->bus_num);
++		}
+ 		dprintk(DEBUG_SUSPEND, "[i2c%d] doesn't need to resume\n",
+ 				i2c->bus_num);
+ 		return 0;
 --- a/lichee/linux-4.9/drivers/base/power/main.c
 +++ b/lichee/linux-4.9/drivers/base/power/main.c
-@@ -38,6 +38,42 @@
+@@ -38,6 +38,78 @@
  #include "../base.h"
  #include "power.h"
  
@@ -414,6 +635,42 @@
 +		oakmoss_mark(0x5A000000 | (s & 0xf));
 +}
 +
++/* 0xESxhhhhhh: entry into the stage-S per-device step (x = 8 once pm_runtime is disabled),
++ * whether or not the device has a callback - a hang in __pm_runtime_disable() or in the
++ * wait for its children leaves this, not a 0xD mark. */
++static void oakmoss_pm_step(struct device *dev, u32 after)
++{
++	const char *n = dev_name(dev);
++	u32 h = 0x811c9dc5;
++
++	if (!(oakmoss_pm_marks & 2))
++		return;
++	while (n && *n)
++		h = (h ^ (u8)*n++) * 0x01000193;
++	oakmoss_mark(0xE0000000 | (oakmoss_pm_stage_cur << 24) | (after << 23) | (h & 0x7fffff));
++}
++
++/* 0x5B0000nn: a point inside a stage that no device or stage mark covers (the step
++ * aborted on a pending wakeup, the late loop finished, the abort/resume path). */
++void oakmoss_pm_sub(u32 n)
++{
++	if (oakmoss_pm_marks & 1)
++		oakmoss_mark(0x5B000000 | (n & 0xff));
++}
++
++/* 0xFSxhhhhhh: the stage-S per-device step finished (x = 8: with an error or aborted). */
++static void oakmoss_pm_done(struct device *dev, u32 failed)
++{
++	const char *n = dev_name(dev);
++	u32 h = 0x811c9dc5;
++
++	if (!(oakmoss_pm_marks & 2))
++		return;
++	while (n && *n)
++		h = (h ^ (u8)*n++) * 0x01000193;
++	oakmoss_mark(0xF0000000 | (oakmoss_pm_stage_cur << 24) | ((failed ? 1 : 0) << 23) | (h & 0x7fffff));
++}
++
 +static void oakmoss_pm_dev(struct device *dev, u32 after)
 +{
 +	const char *n = dev_name(dev);
@@ -429,7 +686,7 @@
  typedef int (*pm_callback_t)(struct device *);
  
  /*
-@@ -390,7 +426,9 @@
+@@ -390,7 +462,9 @@
  
  	pm_dev_dbg(dev, state, info);
  	trace_device_pm_callback_start(dev, info, state.event);
@@ -439,7 +696,60 @@
  	trace_device_pm_callback_end(dev, error);
  	suspend_report_result(cb, error);
  
-@@ -1338,7 +1376,9 @@
+@@ -614,6 +688,7 @@
+ 	TRACE_DEVICE(dev);
+ 	TRACE_RESUME(0);
+ 
++	oakmoss_pm_step(dev, 0);
+ 	if (dev->power.syscore || dev->power.direct_complete)
+ 		goto Out;
+ 
+@@ -1177,7 +1252,9 @@
+ 	TRACE_DEVICE(dev);
+ 	TRACE_SUSPEND(0);
+ 
++	oakmoss_pm_step(dev, 0);
+ 	__pm_runtime_disable(dev, false);
++	oakmoss_pm_step(dev, 1);
+ 
+ 	dpm_wait_for_children(dev, async);
+ 
+@@ -1185,6 +1262,7 @@
+ 		goto Complete;
+ 
+ 	if (pm_wakeup_pending()) {
++		oakmoss_pm_sub(0x10);
+ 		async_error = -EBUSY;
+ 		goto Complete;
+ 	}
+@@ -1218,6 +1296,7 @@
+ 		async_error = error;
+ 
+ Complete:
++	oakmoss_pm_done(dev, error || async_error);
+ 	TRACE_SUSPEND(error);
+ 	complete_all(&dev->power.completion);
+ 	return error;
+@@ -1287,13 +1366,18 @@
+ 			break;
+ 	}
+ 	mutex_unlock(&dpm_list_mtx);
++	oakmoss_pm_sub(0x21);
+ 	async_synchronize_full();
++	oakmoss_pm_sub(0x22);
+ 	if (!error)
+ 		error = async_error;
+ 	if (error) {
+ 		suspend_stats.failed_suspend_late++;
+ 		dpm_save_failed_step(SUSPEND_SUSPEND_LATE);
++		oakmoss_pm_sub(0x23);
++		oakmoss_pm_stage_cur = 0xc;	/* per-device marks below are resume_early's */
+ 		dpm_resume_early(resume_event(state));
++		oakmoss_pm_sub(0x24);
+ 	} else {
+ 		dpm_show_time(starttime, state, "late");
+ 	}
+@@ -1338,7 +1422,9 @@
  	calltime = initcall_debug_start(dev);
  
  	trace_device_pm_callback_start(dev, info, state.event);
@@ -451,16 +761,21 @@
  
 --- a/lichee/linux-4.9/kernel/power/suspend.c
 +++ b/lichee/linux-4.9/kernel/power/suspend.c
-@@ -34,6 +34,8 @@
+@@ -34,6 +34,13 @@
  
  #include "power.h"
  
 +extern void oakmoss_pm_stage(u32 s); /* oakMOSS KDEBUG_MARK: 0x5A00000S */
++extern void oakmoss_pm_sub(u32 n);   /* 0x5B0000nn */
++extern unsigned int oakmoss_resume_probe; /* drivers/regulator/core.c: 0x5Fxxxxxx */
++extern unsigned int oakmoss_irq_trace;    /* drivers/irqchip/irq-gic.c: 0x62xxxxxx */
++extern void oakmoss_irq_trace_start(void);
++extern unsigned int oakmoss_irq_trace_min;
 +
  const char *pm_labels[] = { "mem", "standby", "freeze", NULL };
  const char *pm_states[PM_SUSPEND_MAX];
  
-@@ -331,6 +333,7 @@
+@@ -331,6 +338,7 @@
  	if (error)
  		goto Platform_finish;
  
@@ -468,7 +783,14 @@
  	error = dpm_suspend_late(PMSG_SUSPEND);
  	if (error) {
  		last_dev = suspend_stats.last_failed_dev + REC_FAILED_NUM - 1;
-@@ -344,6 +347,7 @@
+@@ -338,12 +346,14 @@
+ 		pr_err("PM: late suspend of devices failed\n");
+ 		log_suspend_abort_reason("%s device failed to power down",
+ 			suspend_stats.failed_devs[last_dev]);
++		oakmoss_pm_sub(0x25);
+ 		goto Platform_finish;
+ 	}
+ 	error = platform_suspend_prepare_late(state);
  	if (error)
  		goto Devices_early_resume;
  
@@ -476,7 +798,7 @@
  	error = dpm_suspend_noirq(PMSG_SUSPEND);
  	if (error) {
  		last_dev = suspend_stats.last_failed_dev + REC_FAILED_NUM - 1;
-@@ -353,6 +357,7 @@
+@@ -353,6 +363,7 @@
  			suspend_stats.failed_devs[last_dev]);
  		goto Platform_early_resume;
  	}
@@ -484,7 +806,7 @@
  	error = platform_suspend_prepare_noirq(state);
  	if (error)
  		goto Platform_wake;
-@@ -368,11 +373,14 @@
+@@ -368,11 +379,14 @@
  	 */
  	if (state == PM_SUSPEND_FREEZE) {
  		trace_suspend_resume(TPS("machine_suspend"), state, true);
@@ -499,7 +821,7 @@
  	error = disable_nonboot_cpus();
  	if (error || suspend_test(TEST_CPUS)) {
  		log_suspend_abort_reason("Disabling non-boot cpus failed");
-@@ -382,13 +390,16 @@
+@@ -382,13 +396,19 @@
  	arch_suspend_disable_irqs();
  	BUG_ON(!irqs_disabled());
  
@@ -513,10 +835,13 @@
 +			oakmoss_pm_stage(8);
  			error = suspend_ops->enter(state);
 +			oakmoss_pm_stage(9);
++			oakmoss_resume_probe = 1;
++			oakmoss_irq_trace_min = 0;
++			oakmoss_irq_trace_start();
  			trace_suspend_resume(TPS("machine_suspend"),
  				state, false);
  			events_check_enabled = false;
-@@ -399,6 +410,7 @@
+@@ -399,6 +419,7 @@
  			error = -EBUSY;
  		}
  		syscore_resume();
@@ -524,7 +849,7 @@
  	}
  
  	arch_suspend_enable_irqs();
-@@ -408,6 +420,7 @@
+@@ -408,6 +429,7 @@
  	enable_nonboot_cpus();
  
   Platform_wake:
@@ -532,7 +857,7 @@
  	platform_resume_noirq(state);
  	dpm_resume_noirq(PMSG_RESUME);
  
-@@ -415,6 +428,7 @@
+@@ -415,10 +437,13 @@
  	platform_resume_early(state);
  
   Devices_early_resume:
@@ -540,15 +865,23 @@
  	dpm_resume_early(PMSG_RESUME);
  
   Platform_finish:
-@@ -440,6 +454,7 @@
++	oakmoss_pm_sub(0x30);
+ 	platform_resume_finish(state);
++	oakmoss_pm_sub(0x31);
+ 	return error;
+ }
+ 
+@@ -440,6 +465,9 @@
  
  	suspend_console();
  	suspend_test_start();
 +	oakmoss_pm_stage(1);
++	oakmoss_irq_trace_min = 32;	/* on the way down: device interrupts only */
++	oakmoss_irq_trace_start();
  	error = dpm_suspend_start(PMSG_SUSPEND);
  	if (error) {
  		pr_err("PM: Some devices failed to suspend, or early wake event detected\n");
-@@ -456,10 +471,13 @@
+@@ -456,10 +484,15 @@
  
   Resume_devices:
  	suspend_test_start();
@@ -559,6 +892,625 @@
  	trace_suspend_resume(TPS("resume_console"), state, true);
  	resume_console();
 +	oakmoss_pm_stage(0xf);
++	oakmoss_resume_probe = 0;
++	oakmoss_irq_trace = 0;
  	trace_suspend_resume(TPS("resume_console"), state, false);
  
   Close:
+--- a/lichee/linux-4.9/drivers/video/fbdev/sunxi/disp2/disp/dev_disp.c
++++ b/lichee/linux-4.9/drivers/video/fbdev/sunxi/disp2/disp/dev_disp.c
+@@ -3076,6 +3076,12 @@
+ 	return 0;
+ }
+ 
++/* oakMOSS KDEBUG_MARK (debug kernels only): 0x5C0000sx marks the display resume steps -
++ * s = 1 device resume (x = 0 before, 1 after), 2 static config, 3 enable (x = 0/1),
++ * 4 disp_resume_cb (x = 0/1). Open-flow steps inside enable are 0x5C000i1x from
++ * disp_lcd.c, the panel's DSI init rows 0x5C10iicc / 0x5C20iicc from the panel driver. */
++extern void oakmoss_mark(u32 v);
++
+ int disp_resume(struct device *dev)
+ {
+ 	u32 screen_id = 0;
+@@ -3144,8 +3150,10 @@
+ 	memset(&config, 0, sizeof(struct disp_device_config));
+ 	disp_list = disp_device_get_list_head();
+ 	list_for_each_entry(dispdev, disp_list, list) {
++		oakmoss_mark(0x5C000100);
+ 		if (dispdev->resume)
+ 			dispdev->resume(dispdev);
++		oakmoss_mark(0x5C000101);
+ 	}
+ 
+ 	for (screen_id = 0; screen_id < num_screens; screen_id++) {
+@@ -3154,6 +3162,7 @@
+ 			continue;
+ 
+ 		if (suspend_output_type[screen_id] != DISP_OUTPUT_TYPE_NONE) {
++			oakmoss_mark(0x5C000200);
+ 			if (mgr->device->set_static_config &&
+ 					mgr->device->get_static_config) {
+ 				mgr->device->get_static_config(mgr->device,
+@@ -3162,10 +3171,14 @@
+ 				mgr->device->set_static_config(mgr->device,
+ 								&config);
+ 			}
++			oakmoss_mark(0x5C000300);
+ 			mgr->device->enable(mgr->device);
++			oakmoss_mark(0x5C000301);
+ 		}
+ 	}
++	oakmoss_mark(0x5C000400);
+ 	disp_resume_cb();
++	oakmoss_mark(0x5C000401);
+ #endif
+ 
+ 	suspend_status &= (~DISPLAY_DEEP_SLEEP);
+--- a/lichee/linux-4.9/drivers/video/fbdev/sunxi/disp2/disp/disp_sys_intf.c
++++ b/lichee/linux-4.9/drivers/video/fbdev/sunxi/disp2/disp/disp_sys_intf.c
+@@ -470,12 +470,18 @@
+ }
+ EXPORT_SYMBOL(disp_sys_pin_set_state);
+ 
++extern void oakmoss_mark(u32 v);	/* oakMOSS KDEBUG_MARK */
++
++/* 0x5C0Dscc: rail enable, s = 1 regulator_get started, 2 regulator_enable started,
++ * 3 enable returned; cc = the rail name's last character ('1' cldo1 ...). */
+ int disp_sys_power_enable(char *name)
+ {
+ 	int ret = 0;
++	u32 tag = (name && *name) ? (u8)name[strlen(name) - 1] : 0;
+ #if  defined(CONFIG_AW_AXP) || defined(CONFIG_REGULATOR)
+ 	struct regulator *regu = NULL;
+ 
++	oakmoss_mark(0x5C0D0100 | tag);
+ #ifdef CONFIG_SUNXI_REGULATOR_DT
+ 	regu = regulator_get(g_disp_drv.dev, name);
+ #else
+@@ -486,7 +492,9 @@
+ 		goto exit;
+ 	}
+ 	/* enalbe regulator */
++	oakmoss_mark(0x5C0D0200 | tag);
+ 	ret = regulator_enable(regu);
++	oakmoss_mark(0x5C0D0300 | tag);
+ 	if (ret != 0) {
+ 		__wrn("some error happen, fail to enable regulator %s!\n",
+ 		      name);
+--- a/lichee/linux-4.9/drivers/video/fbdev/sunxi/disp2/disp/de/disp_lcd.c
++++ b/lichee/linux-4.9/drivers/video/fbdev/sunxi/disp2/disp/de/disp_lcd.c
+@@ -1933,6 +1933,8 @@
+ }
+ 
+ #else
++extern void oakmoss_mark(u32 v);	/* oakMOSS KDEBUG_MARK: 0x5C0000ix, see dev_disp.c */
++
+ static s32 disp_lcd_enable(struct disp_device *lcd)
+ {
+ 	unsigned long flags;
+@@ -2028,15 +2030,19 @@
+ 	if (lcdp->panel_info.lcd_gsensor_detect == 0)
+ 		skip_open_backlight = 0;
+ 
++	oakmoss_mark(0x5C000302);	/* enable: clocks, pwm and tcon config done */
+ 	for (i = 0; i < lcdp->open_flow.func_num - skip_open_backlight; i++) {
+ 		if (lcdp->open_flow.func[i].func) {
++			oakmoss_mark(0x5C000010 | (i << 8));	/* 0x5C000i10: open-flow step i started */
+ 			lcdp->open_flow.func[i].func(lcd->disp);
++			oakmoss_mark(0x5C000011 | (i << 8));	/* 0x5C000i11: step i returned */
+ 			DE_INF("open flow:step %d finish, to delay %d\n", i,
+ 			       lcdp->open_flow.func[i].delay);
+ 			if (lcdp->open_flow.func[i].delay != 0)
+ 				disp_delay_ms(lcdp->open_flow.func[i].delay);
+ 		}
+ 	}
++	oakmoss_mark(0x5C000303);	/* enable: open flow finished */
+ 	skip_open_backlight = 0; /*only skip one time*/
+ 
+ 	spin_lock_irqsave(&lcd_data_lock, flags);
+--- a/lichee/linux-4.9/drivers/video/fbdev/sunxi/disp2/disp/lcd/rtp32hd016a.c
++++ b/lichee/linux-4.9/drivers/video/fbdev/sunxi/disp2/disp/lcd/rtp32hd016a.c
+@@ -105,21 +105,54 @@
+ 	return 0;
+ }
+ 
++extern void oakmoss_mark(u32 v);	/* oakMOSS KDEBUG_MARK */
++
++/* 0x5Ecjjmmm, written right before the first jiffies sleep of the panel power-on: a 50 ms
++ * busy-wait on the (proven) system counter, then c = tick_do_timer_cpu (0xf = none, 0xe =
++ * boot), jj = how far jiffies moved (HZ 250: ~12), mmm = how far ktime moved in ms (~50).
++ * jj = 0 with mmm = 50 means the tick is not running after resume, so every
++ * schedule_timeout()/msleep() sleeps for ever. */
++#include <linux/jiffies.h>
++#include <linux/ktime.h>
++extern int tick_do_timer_cpu;
++static void oakmoss_tick_probe(void)
++{
++	unsigned long j0 = jiffies;
++	ktime_t t0 = ktime_get();
++	u32 c = (u32)tick_do_timer_cpu & 0xf, jj, ms;
++
++	mdelay(50);
++	jj = (u32)(jiffies - j0) & 0xff;
++	ms = (u32)ktime_to_ms(ktime_sub(ktime_get(), t0)) & 0xfff;
++	oakmoss_mark(0x5E000000 | (c << 20) | (jj << 12) | ms);
++}
++
++/* 0x5C0E0s00: lcd_power_on step s started (1 LED gpio, 2 lcd_power, 3 lcd_power1,
++ * 4 pin cfg, 5..7 reset pulses, 8 done). The rail enables below it write 0x5C0Dsxxx. */
+ static void lcd_power_on(u32 sel)
+ {
++	oakmoss_mark(0x5C0E0100);
+ 	LED_SET(sel, 1);
++	oakmoss_mark(0x5C0E0200);
+ 	sunxi_lcd_power_enable(sel, 0);
++	oakmoss_tick_probe();
+ 	sunxi_lcd_delay_ms(10);
++	oakmoss_mark(0x5C0E0300);
+ 	sunxi_lcd_power_enable(sel, 1);
+ 	sunxi_lcd_delay_ms(10);
++	oakmoss_mark(0x5C0E0400);
+ 	sunxi_lcd_pin_cfg(sel, 1);
+ 	sunxi_lcd_delay_ms(20);
++	oakmoss_mark(0x5C0E0500);
+ 	panel_reset(sel, 1);
+ 	sunxi_lcd_delay_ms(20);
++	oakmoss_mark(0x5C0E0600);
+ 	panel_reset(sel, 0);
+ 	sunxi_lcd_delay_ms(20);
++	oakmoss_mark(0x5C0E0700);
+ 	panel_reset(sel, 1);
+ 	sunxi_lcd_delay_ms(20);
++	oakmoss_mark(0x5C0E0800);
+ }
+ 
+ static void lcd_power_off(u32 sel)
+@@ -188,16 +221,20 @@
+ {
+ 	u32 i = 0;
+ 
++	oakmoss_mark(0x5C0FFF00);	/* before sunxi_lcd_dsi_clk_enable */
+ 	sunxi_lcd_dsi_clk_enable(sel);
+ 	for (i = 0;; i++) {
+ 		if (LCM_rtp32hd016a_setting[i].count == REGFLAG_END_OF_TABLE)
+ 			break;
+-		else if (LCM_rtp32hd016a_setting[i].count == REGFLAG_DELAY)
++		/* 0x5C10iicc: DSI init row ii (command cc) started; 0x5C20iicc: it returned */
++		oakmoss_mark(0x5C100000 | (i << 8) | LCM_rtp32hd016a_setting[i].cmd);
++		if (LCM_rtp32hd016a_setting[i].count == REGFLAG_DELAY)
+ 			sunxi_lcd_delay_ms(LCM_rtp32hd016a_setting[i].para_list[0]);
+ 		else
+ 			sunxi_lcd_dsi_dcs_write(sel, LCM_rtp32hd016a_setting[i].cmd,
+ 						LCM_rtp32hd016a_setting[i].para_list,
+ 						LCM_rtp32hd016a_setting[i].count);
++		oakmoss_mark(0x5C200000 | (i << 8) | LCM_rtp32hd016a_setting[i].cmd);
+ 	}
+ }
+ 
+--- a/lichee/linux-4.9/drivers/regulator/core.c
++++ b/lichee/linux-4.9/drivers/regulator/core.c
+@@ -2595,6 +2595,82 @@
+ 		udelay(us);
+ }
+ 
++/* oakMOSS KDEBUG_MARK (debug kernels only): 0x5C0Bsscc, the regulator enable path,
++ * cc = last character of the regulator's name, ss = step: 01 regulator_enable entered,
++ * 02 axp_add_enabler done, 03 supply enabled, 04 rdev mutex taken, 05 _regulator_enable
++ * returned, 06 ops->enable started, 07 ops->enable returned, 08 enable delay done. */
++extern void oakmoss_mark(u32 v);
++static void oakmoss_reg_mark(struct regulator_dev *rdev, u32 step)
++{
++	const char *n = rdev_get_name(rdev);
++	u32 cc = (n && *n) ? (u8)n[strlen(n) - 1] : 0;
++
++	oakmoss_mark(0x5C0B0000 | (step << 8) | cc);
++}
++
++/* Resume probe, run before every regulator enable delay while a resume is in progress
++ * (oakmoss_resume_probe: set by kernel/power/suspend.c when the sleep call returns, cleared
++ * once the console is back). It starts the interrupt trace (drivers/irqchip/irq-gic.c, 0x62
++ * marks), then:
++ * phase 1, interrupts MASKED for 20 ms, then 0x5Fxxxxxx:
++ *   bits 0-9   GICC_HPPIR: the highest-priority pending interrupt ID (1023 = none)
++ *   bit 10     GICD_ISENABLER0[27] (virtual-timer PPI enabled)
++ *   bits 11-13 CNTV_CTL: ENABLE, IMASK, ISTATUS      bit 14 CNTV_CVAL <= CNTVCT
++ *   bit 15     GICC_CTLR bit 0 (CPU interface on)   bits 16-19 pending SPIs (saturates at 15)
++ * phase 2, interrupts ON for 20 ms, then 0x60ttiiii: tt = virtual-timer interrupts (HZ 250
++ * tick: ~5), iiii = all interrupts on this CPU. A storm that never lets the CPU back leaves
++ * the phase-1 mark followed only by 0x62 trace marks.
++ * GIC-400: distributor 0x03021000, CPU interface 0x03022000 (live device tree). */
++#include <asm/arch_timer.h>
++#include <linux/kernel_stat.h>
++#include <linux/percpu.h>
++DECLARE_PER_CPU(unsigned int, oakmoss_vtimer_irqs);
++extern unsigned int oakmoss_irq_trace_flags;
++extern void oakmoss_irq_trace_start(void);
++unsigned int oakmoss_resume_probe;
++
++static void oakmoss_timer_probe(void)
++{
++	static void __iomem *gicd, *gicc;
++	unsigned long flags;
++	u32 ctl, en = 0, spis = 0, hppir = 0x3ff, cctl = 0, t0, i0, t, i, v, r;
++	u64 cval, cnt;
++	int cpu;
++
++	if (!gicd)
++		gicd = ioremap(0x03021000, 0x1000);
++	if (!gicc)
++		gicc = ioremap(0x03022000, 0x2000);
++	oakmoss_irq_trace_start();
++	cpu = get_cpu();
++	local_irq_save(flags);
++	mdelay(20);
++	ctl = read_sysreg(cntv_ctl_el0);
++	cval = read_sysreg(cntv_cval_el0);
++	cnt = arch_counter_get_cntvct();
++	if (gicd) {
++		en = readl(gicd + 0x100);
++		for (r = 1; r < 8; r++)
++			spis += hweight32(readl(gicd + 0x200 + 4 * r));
++	}
++	if (gicc) {
++		cctl = readl(gicc + 0x000);
++		hppir = readl(gicc + 0x018) & 0x3ff;
++	}
++	v = hppir | (((en >> 27) & 1) << 10) | ((ctl & 7) << 11) | ((cval <= cnt) << 14) |
++	    ((cctl & 1) << 15) | (min_t(u32, spis, 15) << 16);
++	oakmoss_mark(0x5F000000 | v);
++	local_irq_restore(flags);
++	t0 = per_cpu(oakmoss_vtimer_irqs, cpu);
++	i0 = kstat_cpu_irqs_sum(cpu);
++	mdelay(20);
++	t = min_t(u32, per_cpu(oakmoss_vtimer_irqs, cpu) - t0, 255);
++	i = min_t(u32, kstat_cpu_irqs_sum(cpu) - i0, 0xffff);
++	put_cpu();
++	oakmoss_irq_trace_flags |= 1;
++	oakmoss_mark(0x60000000 | (t << 16) | i);
++}
++
+ static int _regulator_do_enable(struct regulator_dev *rdev)
+ {
+ 	int ret, delay;
+@@ -2643,7 +2719,9 @@
+ 			rdev->ena_gpio_state = 1;
+ 		}
+ 	} else if (rdev->desc->ops->enable) {
++		oakmoss_reg_mark(rdev, 6);
+ 		ret = rdev->desc->ops->enable(rdev);
++		oakmoss_reg_mark(rdev, 7);
+ 		if (ret < 0)
+ 			return ret;
+ 	} else {
+@@ -2655,7 +2733,10 @@
+ 	 * together.  */
+ 	trace_regulator_enable_delay(rdev_get_name(rdev));
+ 
++	if (delay && oakmoss_resume_probe)
++		oakmoss_timer_probe();
+ 	_regulator_enable_delay(delay);
++	oakmoss_reg_mark(rdev, 8);
+ 
+ 	trace_regulator_enable_complete(rdev_get_name(rdev));
+ 
+@@ -2716,6 +2797,7 @@
+ 	if (regulator->always_on)
+ 		return 0;
+ 
++	oakmoss_reg_mark(rdev, 1);
+ #if defined(CONFIG_AW_AXP)
+ 	if (axp_regulator_debug & 0x01) {
+ 		pr_info("%s:%s\n", __func__, regulator->supply_name);
+@@ -2724,15 +2806,19 @@
+ 
+ 	axp_add_enabler(rdev, regulator->supply_name);
+ #endif
++	oakmoss_reg_mark(rdev, 2);
+ 
+ 	if (rdev->supply) {
+ 		ret = regulator_enable(rdev->supply);
+ 		if (ret != 0)
+ 			return ret;
+ 	}
++	oakmoss_reg_mark(rdev, 3);
+ 
+ 	mutex_lock(&rdev->mutex);
++	oakmoss_reg_mark(rdev, 4);
+ 	ret = _regulator_enable(rdev);
++	oakmoss_reg_mark(rdev, 5);
+ 	mutex_unlock(&rdev->mutex);
+ 
+ 	if (ret != 0 && rdev->supply)
+--- a/lichee/linux-4.9/drivers/clocksource/arm_arch_timer.c
++++ b/lichee/linux-4.9/drivers/clocksource/arm_arch_timer.c
+@@ -210,10 +210,16 @@
+ 	return IRQ_NONE;
+ }
+ 
++/* oakMOSS KDEBUG_MARK: virtual-timer interrupts taken per CPU (drivers/regulator/core.c
++ * counts them across a busy-wait after a resume). */
++DEFINE_PER_CPU(unsigned int, oakmoss_vtimer_irqs);
++
+ static irqreturn_t arch_timer_handler_virt(int irq, void *dev_id)
+ {
+ 	struct clock_event_device *evt = dev_id;
+ 
++	this_cpu_inc(oakmoss_vtimer_irqs);
++
+ 	return timer_handler(ARCH_TIMER_VIRT_ACCESS, evt);
+ }
+ 
+--- a/lichee/linux-4.9/drivers/firmware/psci.c
++++ b/lichee/linux-4.9/drivers/firmware/psci.c
+@@ -453,9 +453,32 @@
+ 			      reentry, 0, 0);
+ }
+ 
++/* oakMOSS (debug kernels): oakmoss_cpu_pm=1 runs the CPU and cluster PM notifiers around
++ * SYSTEM_SUSPEND, so Linux saves and restores the GIC itself - this CPU's banked state (PPI
++ * enables, the timer interrupt among them, priorities, CPU interface) and the distributor -
++ * plus the arch timer's CNTKCTL, as the cpuidle path does around cpu-sleep-0. Without it the
++ * firmware alone has to bring that state back after the sleep. Writable at run time:
++ * /sys/module/psci/parameters/oakmoss_cpu_pm. */
++#include <linux/cpu_pm.h>
++#include <linux/moduleparam.h>
++static unsigned int oakmoss_cpu_pm;
++module_param(oakmoss_cpu_pm, uint, 0644);
++
+ static int psci_system_suspend_enter(suspend_state_t state)
+ {
+-	return cpu_suspend(0, psci_system_suspend);
++	int ret, pm_ok = 0, cluster_ok = 0;
++
++	if (oakmoss_cpu_pm) {
++		pm_ok = !cpu_pm_enter();
++		if (pm_ok)
++			cluster_ok = !cpu_cluster_pm_enter();
++	}
++	ret = cpu_suspend(0, psci_system_suspend);
++	if (cluster_ok)
++		cpu_cluster_pm_exit();
++	if (pm_ok)
++		cpu_pm_exit();
++	return ret;
+ }
+ 
+ static const struct platform_suspend_ops psci_suspend_ops = {
+--- a/lichee/linux-4.9/drivers/irqchip/irq-gic.c
++++ b/lichee/linux-4.9/drivers/irqchip/irq-gic.c
+@@ -348,6 +348,33 @@
+ }
+ #endif
+ 
++/* oakMOSS KDEBUG_MARK (debug kernels only): while oakmoss_irq_trace is set (by the resume
++ * probe in drivers/regulator/core.c, cleared when the resume finishes) every interrupt taken
++ * writes 0x62fcccnn: bits 0-9 the GIC interrupt ID (27 = arch timer, 32 + wakeupgen hwirq for
++ * SPIs), bits 10-21 how many interrupts since the trace started (saturates at 4095), bit 22
++ * set once the probe's interrupts-on window has finished. An interrupt storm leaves its own
++ * ID with a saturated count as the last mark. */
++extern void oakmoss_mark(u32 v);
++unsigned int oakmoss_irq_trace;
++unsigned int oakmoss_irq_trace_flags;
++unsigned int oakmoss_irq_trace_min;	/* lowest interrupt ID traced: 32 = device interrupts only */
++static unsigned int oakmoss_irq_trace_count;
++
++void oakmoss_irq_trace_start(void)
++{
++	oakmoss_irq_trace_count = 0;
++	oakmoss_irq_trace_flags = 0;
++	oakmoss_irq_trace = 1;
++}
++
++static void oakmoss_irq_mark(u32 irqnr)
++{
++	if (oakmoss_irq_trace_count < 4095)
++		oakmoss_irq_trace_count++;
++	oakmoss_mark(0x62000000 | ((oakmoss_irq_trace_flags & 1) << 22) |
++		     (oakmoss_irq_trace_count << 10) | (irqnr & 0x3ff));
++}
++
+ static void __exception_irq_entry gic_handle_irq(struct pt_regs *regs)
+ {
+ 	u32 irqstat, irqnr;
+@@ -357,11 +384,15 @@
+ 	do {
+ 		irqstat = readl_relaxed(cpu_base + GIC_CPU_INTACK);
+ 		irqnr = irqstat & GICC_IAR_INT_ID_MASK;
++		if (unlikely(oakmoss_irq_trace) && irqnr < 1020 && irqnr >= oakmoss_irq_trace_min)
++			oakmoss_irq_mark(irqnr);
+ 
+ 		if (likely(irqnr > 15 && irqnr < 1020)) {
+ 			if (static_key_true(&supports_deactivate))
+ 				writel_relaxed(irqstat, cpu_base + GIC_CPU_EOI);
+ 			handle_domain_irq(gic->domain, irqnr, regs);
++			if (unlikely(oakmoss_irq_trace))
++				oakmoss_mark(0x6c000000 | irqnr);	/* its handler returned */
+ 			continue;
+ 		}
+ 		if (irqnr < 16) {
+--- a/lichee/linux-4.9/kernel/panic.c
++++ b/lichee/linux-4.9/kernel/panic.c
+@@ -140,6 +140,27 @@
+  *
+  *	This function never returns.
+  */
++/* oakMOSS KDEBUG_MARK (debug kernels only): the first fatal event writes one mark and stops
++ * the interrupt trace (drivers/irqchip/irq-gic.c) so the stop IPIs that follow cannot
++ * overwrite it: 0x63 panic() (address = its caller), 0x64 die() (address = the faulting PC),
++ * 0x65 die() from bad_mode() (SError or another bad exception: the PC it was taken at),
++ * 0x66 / 0x67 / 0x68 machine_restart / _power_off / _halt (the caller). Low 24 bits:
++ * address - _text (no KASLR here); look it up in the build's System.map. */
++#include <asm/sections.h>
++extern void oakmoss_mark(u32 v);
++extern unsigned int oakmoss_irq_trace;
++static int oakmoss_fatal_marked;
++unsigned int oakmoss_in_bad_mode;
++
++void oakmoss_fatal_mark(u32 type, unsigned long addr)
++{
++	oakmoss_irq_trace = 0;
++	if (oakmoss_fatal_marked)
++		return;
++	oakmoss_fatal_marked = 1;
++	oakmoss_mark((type << 24) | ((addr - (unsigned long)_text) & 0xffffff));
++}
++
+ void panic(const char *fmt, ...)
+ {
+ 	static char buf[1024];
+@@ -156,6 +177,7 @@
+ 	 * after setting panic_cpu) from invoking panic() again.
+ 	 */
+ 	local_irq_disable();
++	oakmoss_fatal_mark(0x63, (unsigned long)__builtin_return_address(0));
+ 
+ 	/*
+ 	 * It's possible to come here directly from a panic-assertion and
+--- a/lichee/linux-4.9/arch/arm64/kernel/traps.c
++++ b/lichee/linux-4.9/arch/arm64/kernel/traps.c
+@@ -269,11 +269,17 @@
+ /*
+  * This function is protected against re-entrancy.
+  */
++extern void oakmoss_fatal_mark(u32 type, unsigned long addr);	/* kernel/panic.c */
++extern unsigned int oakmoss_in_bad_mode;
++
+ void die(const char *str, struct pt_regs *regs, int err)
+ {
+ 	int ret;
+ 	unsigned long flags;
+ 
++	oakmoss_fatal_mark(oakmoss_in_bad_mode ? 0x65 : 0x64,
++			   regs ? regs->pc : (unsigned long)__builtin_return_address(0));
++
+ 	raw_spin_lock_irqsave(&die_lock, flags);
+ 
+ 	oops_enter();
+@@ -645,6 +651,7 @@
+  */
+ asmlinkage void bad_mode(struct pt_regs *regs, int reason, unsigned int esr)
+ {
++	oakmoss_in_bad_mode = 1;
+ 	console_verbose();
+ 
+ 	pr_crit("Bad mode in %s handler detected on CPU%d, code 0x%08x -- %s\n",
+--- a/lichee/linux-4.9/arch/arm64/kernel/process.c
++++ b/lichee/linux-4.9/arch/arm64/kernel/process.c
+@@ -111,8 +111,11 @@
+  * activity (executing tasks, handling interrupts). smp_send_stop()
+  * achieves this.
+  */
++extern void oakmoss_fatal_mark(u32 type, unsigned long addr);	/* kernel/panic.c */
++
+ void machine_halt(void)
+ {
++	oakmoss_fatal_mark(0x68, (unsigned long)__builtin_return_address(0));
+ 	local_irq_disable();
+ 	smp_send_stop();
+ 	while (1);
+@@ -126,6 +129,7 @@
+  */
+ void machine_power_off(void)
+ {
++	oakmoss_fatal_mark(0x67, (unsigned long)__builtin_return_address(0));
+ 	local_irq_disable();
+ 	smp_send_stop();
+ 	if (pm_power_off)
+@@ -143,6 +147,7 @@
+  */
+ void machine_restart(char *cmd)
+ {
++	oakmoss_fatal_mark(0x66, (unsigned long)__builtin_return_address(0));
+ 	/* Disable interrupts first */
+ 	local_irq_disable();
+ 	smp_send_stop();
+--- a/lichee/linux-4.9/drivers/pinctrl/sunxi/pinctrl-sunxi.c
++++ b/lichee/linux-4.9/drivers/pinctrl/sunxi/pinctrl-sunxi.c
+@@ -1429,6 +1429,13 @@
+ 	.xlate		= sunxi_pinctrl_irq_of_xlate,
+ };
+ 
++/* oakMOSS KDEBUG_MARK (debug kernels only), while the resume interrupt trace runs
++ * (drivers/irqchip/irq-gic.c): 0x69bvvvvv entry (irq bank b, status v), 0x6Abboopp before
++ * a pin's handler (bank, offset, low byte of its Linux irq), 0x6Bbboopp after it, 0x6Dbvvvvv
++ * exit (status left behind). */
++extern void oakmoss_mark(u32 v);
++extern unsigned int oakmoss_irq_trace;
++
+ static void sunxi_pinctrl_irq_handler(struct irq_desc *desc)
+ {
+ 	unsigned int irq = irq_desc_get_irq(desc);
+@@ -1448,6 +1455,8 @@
+ 	base_bank = pctl->desc->irq_bank_base[bank];
+ 	reg = sunxi_irq_status_reg_from_bank(bank, base_bank);
+ 	val = readl(pctl->membase + reg);
++	if (unlikely(oakmoss_irq_trace))
++		oakmoss_mark(0x69000000 | ((bank & 0xf) << 20) | (val & 0xfffff));
+ 
+ 	if (val) {
+ 		int irqoffset;
+@@ -1455,9 +1464,15 @@
+ 		for_each_set_bit(irqoffset, &val, IRQ_PER_BANK) {
+ 			int pin_irq = irq_find_mapping(pctl->domain,
+ 						       bank * IRQ_PER_BANK + irqoffset);
++			if (unlikely(oakmoss_irq_trace))
++				oakmoss_mark(0x6a000000 | ((bank & 0xff) << 16) | (irqoffset << 8) | (pin_irq & 0xff));
+ 			generic_handle_irq(pin_irq);
++			if (unlikely(oakmoss_irq_trace))
++				oakmoss_mark(0x6b000000 | ((bank & 0xff) << 16) | (irqoffset << 8) | (pin_irq & 0xff));
+ 		}
+ 	}
++	if (unlikely(oakmoss_irq_trace))
++		oakmoss_mark(0x6d000000 | ((bank & 0xf) << 20) | (readl(pctl->membase + reg) & 0xfffff));
+ 	chained_irq_exit(chip, desc);
+ 
+ }
+--- a/lichee/linux-4.9/arch/arm64/boot/dts/sunxi/sun50iw10p1.dtsi
++++ b/lichee/linux-4.9/arch/arm64/boot/dts/sunxi/sun50iw10p1.dtsi
+@@ -6,6 +6,20 @@
+ 
+ /memreserve/ 0x48000000 0x01000000; /* atf */
+ /memreserve/ 0x48100000 0x00100000; /* arisc dram space */
++/* oakMOSS KDEBUG_MARK (debug kernels only): the mark ring, init/main.c oakmoss_ring_init -
++ * 1 MB of RAM Linux never maps or allocates, clear of U-Boot (top of RAM), the kernel load
++ * area and ATF, so what the last boot wrote there can be read after a reset (/dev/mem mmap). */
++/ {
++	reserved-memory {
++		#address-cells = <2>;
++		#size-cells = <2>;
++		ranges;
++		oakmoss_ring: oakmoss-ring@7f000000 {
++			reg = <0x0 0x7f000000 0x0 0x100000>;
++			no-map;
++		};
++	};
++};
+ 
+ #include <dt-bindings/interrupt-controller/arm-gic.h>
+ #include <dt-bindings/gpio/gpio.h>
+--- a/lichee/linux-4.9/drivers/watchdog/sunxi_wdt.c
++++ b/lichee/linux-4.9/drivers/watchdog/sunxi_wdt.c
+@@ -199,11 +199,23 @@
+ }
+ 
+ #ifdef CONFIG_PM
++/* oakMOSS (debug kernels): oakmoss_wdt_keep=1 re-arms the watchdog at its full timeout on
++ * suspend instead of stopping it, so a freeze on the way into sleep - after this device's
++ * suspend but before the firmware takes over - resets the board by itself instead of needing
++ * a power cycle. Runtime: /sys/module/sunxi_wdt/parameters/oakmoss_wdt_keep. */
++static unsigned int oakmoss_wdt_keep;
++module_param(oakmoss_wdt_keep, uint, 0644);
++
+ static int sunxi_wdt_suspend(struct platform_device *pdev, pm_message_t state)
+ 
+ {
+ 	struct sunxi_wdt_dev *sunxi_wdt = platform_get_drvdata(pdev);
+ 
++	if (oakmoss_wdt_keep) {
++		sunxi_wdt_set_timeout(&sunxi_wdt->wdt_dev, WDT_MAX_TIMEOUT);
++		sunxi_wdt_start(&sunxi_wdt->wdt_dev);
++		return 0;
++	}
+ 	if (watchdog_active(&sunxi_wdt->wdt_dev))
+ 		sunxi_wdt_stop(&sunxi_wdt->wdt_dev);
+ 
