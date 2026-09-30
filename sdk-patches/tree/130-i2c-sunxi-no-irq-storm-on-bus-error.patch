@@ -1,0 +1,61 @@
+oakMOSS: no endless interrupt from an I2C bus error.
+
+A bus error (TWI status 0x00, an illegal level on SDA/SCL) left the controller's interrupt
+flag set: the flag clear in that case sat after its goto and never ran, and the handler
+re-enabled the interrupt unconditionally, so the same interrupt fired again for ever - a
+hard lockup of the CPU taking it. On the XU20 this happens at every suspend with the touch
+driver loaded: the display switches the panel rail (cldo2) off at the end of device suspend,
+the touch controller on twi1 goes down with it, the lines collapse and the idle bus reports
+a bus error (captured 2026-09-29: stat 0x00, ctl 0xc8, no transfer in flight). The board
+froze on the way into sleep, or during resume when the interrupt was taken there.
+
+Clear the flag in the bus-error case, re-enable the interrupt only while a transfer is in
+flight (what the comment above that line already said), and treat an interrupt with no
+transfer in flight as a stray: soft-reset the controller and leave the interrupt off -
+sunxi_i2c_do_xfer resets the controller and enables it again for the next transfer.
+
+--- a/lichee/linux-4.9/drivers/i2c/busses/i2c-sunxi.c
++++ b/lichee/linux-4.9/drivers/i2c/busses/i2c-sunxi.c
+@@ -1692,9 +1692,8 @@
+ 		}
+ 	case 0x00: /* Bus error during master or slave mode due to illegal level condition */
+ 		err_code = 0xff;
++		twi_clear_irq_flag(base_addr);	/* oakMOSS: was dead code after the goto */
+ 		goto err_out;
+-		twi_clear_irq_flag(base_addr);
+-		break;
+ 
+ #if IS_ENABLED(CONFIG_I2C_SLAVE)
+ 	case 0xB8:
+@@ -1751,14 +1750,30 @@
+ 		/* disable irq */
+ 		twi_disable_irq(i2c->base_addr);
+ 
++		/*
++		 * oakMOSS: nothing in flight - a bus error with no transfer (the lines
++		 * collapsing when a device on the bus loses power, e.g. the XU20's touch
++		 * controller when the panel rail switches off at suspend). Reset the
++		 * controller and leave its interrupt off: sunxi_i2c_do_xfer resets it and
++		 * enables it again for the next transfer. The core process would have
++		 * dereferenced the NULL message here.
++		 */
++		if (i2c->status == I2C_XFER_IDLE) {
++			twi_soft_reset(i2c->base_addr, TWI_SRST_REG, TWI_SRST_SRST);
++			return IRQ_HANDLED;
++		}
++
+ 		/* twi core process */
+ 		sunxi_i2c_core_process(i2c);
+ 
+ 		/*
+ 		 * enable irq only when twi is transferring,
+ 		 * otherwise disable irq
++		 * (oakMOSS: the vendor code enabled it unconditionally, so a flag the
++		 * core process did not clear fired again for ever)
+ 		 */
+-		twi_enable_irq(i2c->base_addr);
++		if (i2c->status != I2C_XFER_IDLE)
++			twi_enable_irq(i2c->base_addr);
+ 	}
+ 	return IRQ_HANDLED;
+ }
