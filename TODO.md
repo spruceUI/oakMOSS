@@ -34,7 +34,12 @@ because the base does not.
       must be diffed against the REAL `.config` (`lichee/linux-4.9/.config`),
       not the board file: package KCONFIG lines are merged in at build time.
 - [ ] `PSTORE` + `PSTORE_RAM` (ramoops): the main-zero40 partition scheme already
-      has a `pstore` partition; a lockup post-mortem needs the kernel side.
+      has a `pstore` partition; a lockup post-mortem needs the kernel side. A RAM-backed
+      log does not survive a reset on these boards: boot0 fills DRAM with a test pattern
+      (`0x9c5c9939`/`0x63a366c6`) on every boot, measured 2026-09-29 on a reserved,
+      unmapped region the kernel never touched. What survives is RTC general-purpose
+      register 5 (the debug patch's mark, saved into the U-Boot env as `bootmark`); a
+      panic writer to the `pstore` partition would need an MMC panic-write path.
 - [x] USB host input: `HID_GENERIC` (on), `JOYSTICK_XPAD`, `HID_SONY`, `HID_MICROSOFT`, `HID_LOGITECH`, `BT_HIDP` (round 8; no `HID_NINTENDO` in 4.9)
       (and `USB_STORAGE` for USB drives) — verify which are on; only `hid` is
       known loaded.
@@ -70,10 +75,18 @@ because the base does not.
       main-zero40 hybrid) now that both boards show the UI on our kernel.
 - [ ] **Touch reset with the IRQ installed**: the Hynitron driver's `hyn_resume` and its
       I2C-error recovery still pulse reset after requesting the IRQ, the pattern that froze the
-      XU20 at probe. Harmless while nothing suspends; test before real suspend is used.
-- [ ] **Suspend-to-RAM never resumes** (XU20, 2026-09-18: `echo mem`, an RTC alarm did not
-      wake it). The path is PSCI SYSTEM_SUSPEND into the stock ATF and SCP. spruce uses a
-      pseudo-sleep on these boards meanwhile. Next: `freeze`, then `pm_test` levels.
+      XU20 at probe. Real suspend is in use since 2026-09-28: the XU20 resumed with touch
+      working after RTC and power-key sleeps (2026-09-29/30), so `hyn_resume` has held up; the
+      I2C-error recovery path is still unexercised.
+- [x] **Suspend-to-RAM resumes on all three boards** (was: never resumes, XU20 2026-09-18).
+      Two causes, both in Linux: (1) the XU20's asynchronous device suspend never finished
+      (stock chain, 2026-09-28) - spruce suspends its devices one at a time there
+      (`MAGICX_PM_ASYNC=0`); (2) on the SDK chain the display's suspend cut the panel rail,
+      the XU20's touch controller on twi1 went down with it, and the I2C driver's bus-error
+      handling fired its interrupt for ever, a hard lockup on the way into sleep
+      (2026-09-29) - `sdk-patches/tree/130-*`. Verified on all three boards by RTC-woken and
+      power-key sleeps of about a minute (2026-09-29/30); `docs/hardware-notes.md`, "Sleep
+      on the SDK chain".
 - [ ] **Backlight polarity**: 0 and 1 have each been read as inverted on the XU20/Zero 40
       (HN "Backlight polarity"); spruce mirrors the level on those two boards meanwhile.
 - [ ] **Zero 40 on its own stock chain** (2026-09-16, `scripts/make-hybrid-stock.sh zero40`,
@@ -208,16 +221,14 @@ because the base does not.
 
 ## XU20 V32
 
-- First boot has not happened. Two images failed to come up; the audit could not
-  settle why. A UART capture (PB9/PB10) is worth more than another attempt.
-- Which physical slot is sdc0 and which is sdc2/sdc3: read `/proc/partitions` on a
-  booted unit, then say so in `docs/hardware-notes.md`.
-- Identify the radio by SDIO id; `WIFI_ONBOARD_MODULE` in spruce assumes 8189es.
-- The stock kernel has no UTF-8 NLS and no exFAT: non-ASCII file names on the user
-  card and exFAT cards do not work on this board. A rebuilt kernel is the only fix.
-- `DIAG=1` is the default until a unit boots; flip it once real behaviour is measured.
-- The PowerVR 1.11 userland is TrimUI's; whether it renders through the Android
-  `pvrsrvkm`'s display class is the largest remaining unknown.
+- Boots and runs spruceOS on the SDK chain (`scripts/build.sh image xu20`), with panel,
+  rotation, touch, pad, WiFi, charge mode and real sleep verified on a unit (2026-09-28..30).
+  The system card is `/dev/mmcblk0`, the user card `/dev/mmcblk1p1`.
+- The radio is a Realtek 8189es, as spruce assumes.
+- The Android-kernel lanes (`make-hybrid-xu20.sh`, `make-own-kernel-stock.sh` on the stock
+  chain) are superseded; `DIAG` still defaults to 1 in those scripts. The stock kernel's
+  limits (no UTF-8 NLS, no exFAT) do not apply to our kernel's NLS, and exFAT is missing
+  from both.
 
 - [ ] **The RTP36HD029A panel variant** (analysis 2026-09-28, nothing built). The stock XU20
       U-Boot and its Android kernel (`boot.fex`) both carry an `RTP36HD029A` driver beside
@@ -234,8 +245,8 @@ because the base does not.
 
 ## Verify before building more
 
-- Sleep/wake on both boards (`/sys/power/state` mem, rtc0 wake alarm, panel
-  relight on some Zero 28 revisions — MinUI's raw-brightness trick).
+- ~~Sleep/wake~~: done on all three boards (2026-09-29/30; see the kernel section). Panel
+  relight on other Zero 28 revisions (MinUI's raw-brightness trick) is still unchecked.
 - USB gadget mass storage through configfs (DEP says enabled; never exercised).
 - Headphone jack detection (`audiocodec sunxi Audio Jack`, event1) driving the
   speaker/headphone switch, and the `rc.local` mixer defaults vs the launcher's

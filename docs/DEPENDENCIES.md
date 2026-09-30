@@ -421,3 +421,22 @@ both phase configs — no delta needed, listed in §4/§5 for completeness only.
    dotnet) on Zero28/40 was not benchmarked — `HW_INFO`'s `ram` figure (used
    for `Ngb` capability tags) needs a real number before the proposed device
    profiles in §6 are finalized.
+
+## 9. What spruce relies on since this study (2026-09-26..30)
+
+Added after the study, from bench work with spruceOS on all three boards:
+
+- **One key code per press.** Images from 2026-09-26 on no longer give A a second code
+  (353), nor the XU20's B and MENU (158, 256). spruce checks the pad's key bitmap at run
+  time: if 353 is still listed, it is running on an older image and also accepts the second
+  codes, so one spruce card works on both. The XU20's extra face button is `KEY_HOMEPAGE`
+  (172).
+- **Rumble through sysfs GPIO.** spruce drives the motor on PH3 through `/sys/class/gpio`,
+  which needs `CONFIG_GPIO_SYSFS` (on since 2026-09-26). The Zero 28 has no motor.
+- **Real suspend-to-RAM.** spruce's platform files choose it per board
+  (`MAGICX_REAL_SLEEP=1`), and the XU20 suspends its devices one at a time
+  (`MAGICX_PM_ASYNC=0`). It needs the I2C bus-error fix (`sdk-patches/tree/130-*`) in the
+  image; without it, the XU20 freezes on the way into sleep with the touch driver loaded.
+- **Charge mode stays in the base.** When U-Boot boots for the charger, the base shows its
+  own charge screen instead of starting the launcher, and hands off only when the power key
+  is pressed. spruce needs nothing for this.

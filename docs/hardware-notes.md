@@ -642,6 +642,8 @@ place the sun50i boot ROM looks, which no table rewrite reaches.
 - XR829 26 MHz vs 40 MHz crystal unverified (26 assumed, as Knulli ships); moot
   on boards with the Realtek radio.
 - No `harbourmaster` (PortMaster) device profile for either board yet.
+- The Zero 40 blanks its boot picture for 1-2 s when the GPU driver loads, and its
+  suspend waits ~4 s for an SDIO rescan of the empty WiFi slot (both in `TODO.md`).
 
 ## Backlight polarity (2026-09-17/18)
 
@@ -670,8 +672,66 @@ value.
 **Not settled (2026-09-18).** With the stock 1 in place, spruce's brightness still
 ran inverted on the XU20 and the Zero 40 (a higher setting was darker), while the
 Zero 28 at 0 is right. The trees keep the stock value and spruceOS mirrors the level
-on those two boards instead: its MagicX device class maps setting N to 256 minus the
-usual duty (`BACKLIGHT_REVERSED`), and the platform files' `MAGICX_BACKLIGHT_REVERSED`
-tells pseudo-sleep which end is dark. This reading and the 0-is-inverted one above
+on those two boards instead. Since 2026-09-27 its shell owns the curve and the mirror
+for the MagicX boards (level N gives a duty of 25 x N, 255 at 10, and 256 minus that where
+the platform file sets `MAGICX_BACKLIGHT_REVERSED=1`); PyUI only asks the shell to apply a
+level (spruceOS branch `feat/magicx-fixes-20260928`). This reading and the 0-is-inverted one above
 cannot both describe the same hardware; which polarity is physically right is open.
 
+## Sleep on the SDK chain (2026-09-29/30)
+
+Real suspend-to-RAM works on all three boards. Getting there took two fixes.
+
+**The XU20 froze on the way into sleep.** With the touch driver loaded, a sleep of more than
+a few seconds left the XU20 dark for good. A power cycle was the only way out, because the
+watchdog is stopped by then. Debug marks put the last activity at random devices in late
+suspend, which pointed at a stalled CPU rather than a stuck driver.
+
+The cause is the panel rail. At the end of device suspend the display switches off
+`cldo2`. The XU20's touch controller (Hynitron, on `twi1` at 0x5a) is powered from it, so
+the controller goes down and the bus lines with it. The idle I2C controller then reports a
+bus error (TWI status 0x00). The vendor `i2c-sunxi` handler never cleared the interrupt flag
+for that state (the clear sat after a `goto`) and re-enabled the interrupt unconditionally,
+so the same interrupt fired for ever. CPU0 was locked up; the suspend thread on another CPU
+carried on until it needed CPU0, which is why the marks landed wherever it happened to be.
+
+A debug storm breaker in the handler caught it (stat 0x00, ctl 0xc8, no transfer in
+flight, right after "suspend of devices complete"), and with the interrupt switched off the
+board slept and resumed. The fix is `sdk-patches/tree/130-*`: the flag is cleared, the
+interrupt is re-enabled only while a transfer is in flight, and an interrupt with no
+transfer resets the controller and leaves the interrupt off. On the stock chain the XU20
+had failed differently first: its asynchronous device suspend never finished, and spruce
+suspends its devices one at a time there (`MAGICX_PM_ASYNC=0`). Why the stock chain never
+showed the bus error was not investigated.
+
+**The Zero 40 missed one touch read per resume.** Its touch controller (AXS15205, `twi1`
+0x3b) is also powered with the panel, and it comes out of reset through the panel's own
+power-on sequence. When the chip lost power at suspend, its interrupt line fell and the
+edge was latched. The driver re-enabled the interrupt in `.resume`, so the edge was
+replayed at once. The Zero 40 resumes devices in parallel, so the display was still
+powering the panel, and the read got no answer (`i2c1 incomplete xfer (status 0x48,
+dev addr 0x3b)`). The interrupt now comes back in the PM `.complete` step, after every
+device has resumed (`080-*`). The Zero 40's suspend also waits ~4 s for an SDIO rescan of
+its empty WiFi slot after the radio module is unloaded (`TODO.md`).
+
+**Do not unload the touch module for a sleep test.** `rmmod hynitron` does not free its
+interrupt. The driver requests it through `init-input.c`, device-managed on the input
+device, and userspace keeps that device open. The handler is left pointing into freed
+module memory, and the next edge on PB6 hangs the board.
+
+**How the freeze was traced** (debug images only; `sdk-patches/debug/kdebug-mark.patch`,
+built with `scripts/kdebug.sh build <board>`):
+
+- Marks go to RTC general-purpose register 5. `scripts/kmark-env.py` prepares an image
+  whose U-Boot saves that register into the env (`bootmark`) at the next boot, so the last
+  mark survives a freeze and a reset. `scripts/kmark-pm-decode.py` names it; set
+  `KMARK_SYSTEM_MAP` to the build's `System.map` to name code addresses.
+- Runtime switches: `sunxi_wdt.oakmoss_wdt_keep=1` keeps the watchdog armed through suspend,
+  so a freeze on the way down resets the board instead of needing a power cycle.
+  `psci.oakmoss_cpu_pm` and `i2c_sunxi.oakmoss_twi_reinit` exist for experiments.
+- A 1 MB ring in reserved, unmapped RAM (0x7f000000) records every mark with a timestamp,
+  the CPU and the context; `scripts/kmark-ring.py` decodes a dump taken through `/dev/mem`.
+  It helps within a run but does not survive a reset: boot0 fills DRAM with a test pattern.
+- Sleep does not need a key press. spruce's own `device_enter_sleep`, with the RTC wake
+  alarm as the wake source, reproduces the power-key path, and a hang comes back by itself
+  through the watchdog.
