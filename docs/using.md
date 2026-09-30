@@ -25,7 +25,8 @@ only way back.
 2. Put a launcher card in the second slot (SD2): a **FAT32** card with
    [spruceOS](https://github.com/spruceUI/spruceOS) for the MagicX boards, or any card
    with `magicx/init.sh`. spruce tells the boards apart by `/usr/magicx/device`. exFAT does
-   not work: kernel 4.9 has no exFAT driver.
+   not work: kernel 4.9 has no exFAT driver. An image built from `main` since 2026-09-26
+   needs a spruceOS that matches it (`docs/status.md`).
 3. Power on.
 
 ## What the board does
@@ -39,6 +40,7 @@ only way back.
   charger switches the board off.
 - **Battery too low:** plugged in, the board charges up to a safe level before it goes on;
   without a charger it shows a low-battery picture and switches off.
-- **Sleep:** spruceOS puts the board into real suspend-to-RAM on a short press of the
-  power key, and the power key wakes it. spruce's own idle timer switches a sleeping board
-  off after a while.
+- **Sleep:** a short press of the power key puts the board to sleep, and the power key
+  wakes it. With a spruceOS that turns it on for these boards (`docs/status.md`), that is
+  real suspend-to-RAM; older builds turn the screen off and pause instead. spruce's own
+  idle timer switches a sleeping board off after a while.

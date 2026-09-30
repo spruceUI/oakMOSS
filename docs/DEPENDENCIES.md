@@ -435,8 +435,10 @@ Added after the study, from bench work with spruceOS on all three boards:
   which needs `CONFIG_GPIO_SYSFS` (on since 2026-09-26). The Zero 28 has no motor.
 - **Real suspend-to-RAM.** spruce's platform files choose it per board
   (`MAGICX_REAL_SLEEP=1`), and the XU20 suspends its devices one at a time
-  (`MAGICX_PM_ASYNC=0`). It needs the I2C bus-error fix (`sdk-patches/tree/130-*`) in the
-  image; without it, the XU20 freezes on the way into sleep with the touch driver loaded.
+  (`MAGICX_PM_ASYNC=0`). On the SDK chain it needs the I2C bus-error fix
+  (`sdk-patches/tree/130-*`) in the image: without it, the XU20 froze on the way into sleep
+  with the touch driver loaded. On its stock boot chain (images before 2026-09-28) the XU20
+  slept without it on the bench.
 - **Charge mode stays in the base.** When U-Boot boots for the charger, the base shows its
   own charge screen instead of starting the launcher, and hands off only when the power key
   is pressed. spruce needs nothing for this.
