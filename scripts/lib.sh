@@ -150,6 +150,17 @@ fetch() {
 }
 
 need_sdk() { [ -f "$SDK_DIR/build/envsetup.sh" ] || die "no Tina SDK at $SDK_DIR (run scripts/unpack-sdk.sh)"; }
+
+# kdebug_patch_state <patch> : where a debug patch (sdk-patches/debug/) stands on $SDK_DIR -
+# "applied" when it reverse-applies exactly, "absent" when it forward-applies exactly,
+# "mismatch" otherwise (the tree carries debug edits the patch does not describe, or only
+# part of it). Dry runs only, no fuzz and never -f: a forced partial apply duplicates hunks
+# (2026-09-29: seven kernel files had to be restored from pristine copies).
+kdebug_patch_state() {
+    if ( cd "$SDK_DIR" && patch -p1 -R --dry-run -s -F0 < "$1" >/dev/null 2>&1 ); then echo applied
+    elif ( cd "$SDK_DIR" && patch -p1 -N --dry-run -s -F0 < "$1" >/dev/null 2>&1 ); then echo absent
+    else echo mismatch; fi
+}
 need_mods() { [ -f "$SDK_DIR/.oakmoss-mods" ] || die "SDK modifications not applied (run scripts/apply-sdk-mods.sh)"; }
 
 # squashfs tools: the SDK builds its own (out/host/bin); the host's squashfs-tools 4.x take the same flags.

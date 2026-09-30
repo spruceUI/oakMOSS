@@ -19,6 +19,16 @@ cd "$SDK_DIR" || die "cannot enter $SDK_DIR"
 missing=0
 note() { printf '  %-8s %s\n' "$1" "$2" >&2; }
 
+# The debug patch (sdk-patches/debug/, build.sh KDEBUG_MARK=1) edits files some tree patches
+# also touch, so with it applied their checks read MISSING and a forced re-apply would stack
+# them twice. Checking only warns; changing the tree waits until it is reverted.
+case $(kdebug_patch_state "$OAKMOSS_ROOT/sdk-patches/debug/kdebug-mark.patch") in
+    absent) ;;
+    applied) if [ "$CHECK" = 1 ]; then warn "the debug marker is applied: tree patches it overlaps may read MISSING"
+             else die "the debug marker is applied - revert it first (scripts/kdebug.sh revert, or any non-debug build.sh run)"; fi ;;
+    *) die "the SDK tree carries debug edits the debug patch does not describe (scripts/kdebug.sh check)" ;;
+esac
+
 # 1. Tree patches (rules.mk, kernel config, toolchain menu, package Makefiles).
 
 # patch_targets <patch> : the b/ paths a patch writes to, one per line.
@@ -63,6 +73,9 @@ for patch in "$P"/tree/*.patch; do
     if patch -p1 -R --dry-run -s -f < "$patch" >/dev/null 2>&1; then note applied "$name"; continue; fi
     if patch_effect_present "$patch"; then note "in-tree" "$name"; continue; fi
     if [ "$CHECK" = 1 ]; then note MISSING "$name"; missing=1; continue; fi
+    # never forced: a patch that does not apply cleanly stops here with the tree untouched
+    patch -p1 -N --dry-run -s --no-backup-if-mismatch < "$patch" >/dev/null 2>&1 ||
+        die "patch $name does not apply cleanly to this tree - nothing changed (partly applied, or the tree drifted)"
     while IFS= read -r f; do
         [ -e "$f" ] || continue   # a file the patch creates: nothing to keep
         [ -f "$f.orig" ] || cp -a "$f" "$f.orig"; chmod u+w "$f"
@@ -70,7 +83,7 @@ for patch in "$P"/tree/*.patch; do
     # --no-backup-if-mismatch: GNU patch otherwise saves the file it could not match as
     # <file>.orig - the very name the loop above keeps the pristine SDK copy under - so
     # one failed attempt overwrites the pristine backup (config-4.9.orig, 2026-09-18).
-    patch -p1 -N -s -f --no-backup-if-mismatch < "$patch" || die "patch $name did not apply cleanly"
+    patch -p1 -N -s --no-backup-if-mismatch < "$patch" || die "patch $name did not apply cleanly"
     note patched "$name"
 done
 

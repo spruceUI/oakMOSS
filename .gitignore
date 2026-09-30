@@ -73,3 +73,6 @@ __pycache__/
 *~
 .DS_Store
 Thumbs.db
+
+# scripts/kdebug.sh regen keeps the previous debug patch beside it
+/sdk-patches/debug/*.bak

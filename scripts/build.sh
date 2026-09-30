@@ -181,12 +181,28 @@ apply_overlay() {
     # each initcall and the init hand-off stages write where the boot has got to; the
     # next boot's U-Boot reads it (make-own-kernel-stock.sh KMARK=1). Inert without the
     # boot argument, but still reverted when not asked for, like KDEBUG_FBCON.
-    local kmark=$OAKMOSS_ROOT/sdk-patches/debug/kdebug-mark.patch
+    # Applied, reverted or refused - never forced: when the patch and the tree disagree
+    # (debug sources edited without regenerating the patch) the build stops here with the
+    # tree untouched; scripts/kdebug.sh regen brings the patch back in line.
+    local kmark=$OAKMOSS_ROOT/sdk-patches/debug/kdebug-mark.patch kstate
+    kstate=$(kdebug_patch_state "$kmark")
     if [ "${KDEBUG_MARK:-0}" = 1 ]; then
-        if ( cd "$SDK_DIR" && patch -p1 -R --dry-run -s -f < "$kmark" >/dev/null 2>&1 ); then log "kernel: initcall marker already applied (KDEBUG_MARK)"
-        else ( cd "$SDK_DIR" && patch -p1 -N -s -f --no-backup-if-mismatch < "$kmark" ) || die "KDEBUG_MARK: patch did not apply"; log "kernel: initcall marker applied (KDEBUG_MARK)"; fi
-    elif ( cd "$SDK_DIR" && patch -p1 -R --dry-run -s -f < "$kmark" >/dev/null 2>&1 ); then
-        ( cd "$SDK_DIR" && patch -p1 -R -s -f --no-backup-if-mismatch < "$kmark" ) || die "could not revert the initcall marker"; log "kernel: initcall marker reverted (no KDEBUG_MARK)"
+        case $kstate in
+            applied) "$OAKMOSS_ROOT/scripts/kdebug.sh" check >/dev/null || die "KDEBUG_MARK: the SDK tree has debug edits the patch does not describe (scripts/kdebug.sh check / regen); nothing was changed"
+                     log "kernel: debug marker already applied (KDEBUG_MARK)" ;;
+            absent)
+                ( cd "$SDK_DIR" && patch -p1 -N -s -F0 --no-backup-if-mismatch < "$kmark" ) || die "KDEBUG_MARK: patch did not apply"
+                "$OAKMOSS_ROOT/scripts/kdebug.sh" init >/dev/null || die "KDEBUG_MARK: could not record the pristine copies (scripts/kdebug.sh init)"
+                log "kernel: debug marker applied (KDEBUG_MARK)" ;;
+            *) die "KDEBUG_MARK: sdk-patches/debug/kdebug-mark.patch does not match the SDK tree (neither applied nor cleanly applicable) - after editing debug sources run scripts/kdebug.sh regen; nothing was changed" ;;
+        esac
+    else
+        case $kstate in
+            applied) ( cd "$SDK_DIR" && patch -p1 -R -s -F0 --no-backup-if-mismatch < "$kmark" ) || die "could not revert the debug marker"
+                     log "kernel: debug marker reverted (no KDEBUG_MARK)" ;;
+            absent) ;;
+            *) die "the SDK tree carries debug-marker edits that sdk-patches/debug/kdebug-mark.patch does not describe (scripts/kdebug.sh check) - refusing to build from it; nothing was changed" ;;
+        esac
     fi
     # Kernel object: the SDK's own for the Zero 28, MagicX's Zero 40 object otherwise.
     [ -f "$ENC/encrypt.zero28" ] || die "no $ENC/encrypt.zero28 backup (scripts/apply-sdk-mods.sh)"
