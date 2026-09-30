@@ -146,6 +146,14 @@ because the base does not.
       boot, then mark the smoothly taken-over LCD enabled (or skip the enable there).
       Trace tool: `touch /mnt/UDISK/charge-debug` (charge-screen display trace).
 
+- [ ] **Zero 40: suspend waits ~4 s for an SDIO rescan of the empty WiFi slot.** Real sleep
+      unloads `xradio_wlan` (loaded and associated it refuses the suspend); the MMC core then
+      rescans `sdc1` for a card - `cmd 5` fails four times at 400/300/200/100 kHz, about a second
+      each - and "Freezing remaining freezable tasks" waits for that work (4.126 s, 2026-09-29),
+      so the board goes dark ~4 s after the power key. Options: keep the SDIO host from
+      rescanning while the module is out (unbind it, or mark the slot non-removable), or stop
+      the radio without unloading the module.
+
 ## Rootfs overlay: services and files
 
 - [ ] **A version stamp spruce can read** (next bundle, with spruce's side). Write the image's

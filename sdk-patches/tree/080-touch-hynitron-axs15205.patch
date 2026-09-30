@@ -21,7 +21,7 @@
  obj-$(CONFIG_INPUT_TOUCHSCREEN)	  += tlsc6x/
 --- /dev/null
 +++ b/lichee/linux-4.9/drivers/input/touchscreen/axs15205/axs15205.c
-@@ -0,0 +1,360 @@
+@@ -0,0 +1,379 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * AXS15205 capacitive touch panel controller (I2C), as fitted to the
@@ -91,6 +91,7 @@
 +	u32 max_x, max_y;
 +	bool invert_x, invert_y, swap_xy;
 +	u8 frame[AXS_FRAME_LEN];
++	bool irq_off;		/* disabled by axs_suspend, enabled again by axs_complete */
 +};
 +
 +static int axs_read_frame(struct axs15205 *ts)
@@ -329,20 +330,38 @@
 +	struct axs15205 *ts = i2c_get_clientdata(to_i2c_client(dev));
 +
 +	disable_irq(ts->irq);
++	ts->irq_off = true;
 +	axs_release_all(ts);
 +	return 0;
 +}
 +
-+static int axs_resume(struct device *dev)
++/*
++ * Take interrupts again only once every device has resumed. The chip is powered with the
++ * panel and comes out of reset through the panel's own power-on sequence (lcd_gpio_2), which
++ * the display runs in its resume - in parallel with this one when devices resume
++ * asynchronously. Re-enabled in .resume, the edge latched while the chip lost power at
++ * suspend was replayed at once and its frame read hit a chip still in reset (NACK, status
++ * 0x48, 19 ms into the display's resume; 2026-09-29). By .complete the display has finished
++ * and the replayed edge reads an empty frame, which axs_report drops. .complete also runs
++ * after an aborted suspend, so only a disable of our own is undone.
++ */
++static void axs_complete(struct device *dev)
 +{
 +	struct axs15205 *ts = i2c_get_clientdata(to_i2c_client(dev));
 +
-+	enable_irq(ts->irq);
-+	return 0;
++	if (ts->irq_off) {
++		ts->irq_off = false;
++		enable_irq(ts->irq);
++	}
 +}
-+#endif
 +
-+static SIMPLE_DEV_PM_OPS(axs_pm_ops, axs_suspend, axs_resume);
++static const struct dev_pm_ops axs_pm_ops = {
++	.suspend = axs_suspend,
++	.complete = axs_complete,
++};
++#else
++static const struct dev_pm_ops axs_pm_ops;
++#endif
 +
 +static const struct of_device_id axs_of_match[] = {
 +	{ .compatible = "axs15205,axs15205_touch" },
