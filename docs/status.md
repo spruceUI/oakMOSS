@@ -4,21 +4,19 @@ oakMOSS is bench-tested on one of each board, a Zero 28, a Zero 40 and an XU20 V
 spruceOS on the user card (September 2026). The releases on GitHub are betas. Treat anything
 below that is not marked as tested as untested.
 
-## The latest release, `main` and spruceOS
+## Releases and spruceOS
 
-The latest release, v0.3.0-beta.1 (2026-09-25), is older than this work on `main`:
+v0.4.0-beta.1 (2026-09-30) is the first release with charge mode, the SDK chain on the Zero
+40 and XU20, the kernel fixes for real sleep (the I2C bus-error fix
+`sdk-patches/tree/130-*` for the XU20, the Zero 40's touch after the wake in `080`) and one
+key code per press. v0.3.0-beta.1 and older boot the Zero 40 and XU20 through their stock
+boot0 and U-Boot, have no charge mode, and send a second code for some keys.
 
-- charge mode, and the SDK chain on the Zero 40 and XU20 (the release boots those two
-  through their stock boot0 and U-Boot);
-- the kernel fixes for real sleep: the I2C bus-error fix (`sdk-patches/tree/130-*`, XU20)
-  and the Zero 40's touch after the wake (`080`);
-- one key code per press (2026-09-26).
-
-Images built from `main` since 2026-09-26 need a spruceOS that reads the pad's key bitmap
-(`docs/DEPENDENCIES.md`, section 9). With an older spruceOS the d-pad, volume and MENU come
-out one slot off, and A does not confirm. spruceOS also decides whether a board really
-sleeps: older builds turn the screen off and pause the game instead. As of 2026-09-30 these
-spruceOS changes are not in a spruceOS nightly yet.
+Images from v0.4.0-beta.1 on, and builds from `main` since 2026-09-26, need spruceOS newer
+than v4.4.3-20260930 (spruceOS PR #1735). It reads the pad's key bitmap
+(`docs/DEPENDENCIES.md`, section 9) and turns real sleep on for these boards. With an older
+spruceOS the d-pad, volume and MENU come out one slot off, A does not confirm, and sleep
+only turns the screen off and pauses the game.
 
 ## What runs
 

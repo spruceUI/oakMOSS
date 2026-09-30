@@ -25,8 +25,8 @@ only way back.
 2. Put a launcher card in the second slot (SD2): a **FAT32** card with
    [spruceOS](https://github.com/spruceUI/spruceOS) for the MagicX boards, or any card
    with `magicx/init.sh`. spruce tells the boards apart by `/usr/magicx/device`. exFAT does
-   not work: kernel 4.9 has no exFAT driver. An image built from `main` since 2026-09-26
-   needs a spruceOS that matches it (`docs/status.md`).
+   not work: kernel 4.9 has no exFAT driver. Images from v0.4.0-beta.1 on need spruceOS
+   newer than v4.4.3-20260930 (`docs/status.md`).
 3. Power on.
 
 ## What the board does
