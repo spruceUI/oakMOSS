@@ -1,0 +1,18 @@
+--- a/lichee/linux-4.9/drivers/input/input.c
++++ b/lichee/linux-4.9/drivers/input/input.c
+@@ -250,6 +250,15 @@
+ 		if (*pold == *pval)
+ 			return INPUT_IGNORE_EVENT;
+ 		*/
++		/*
++		 * oakMOSS: drop unchanged multitouch slot values as mainline does. With
++		 * every sample passed, a touch driver using input_mt re-sends its
++		 * slot's ABS_MT_TRACKING_ID on each report, and SDL turns every repeat
++		 * into a finger up + down: no app sees a held touch. Other axes keep
++		 * the vendor behaviour above.
++		 */
++		if (is_mt_event && *pold == *pval)
++			return INPUT_IGNORE_EVENT;
+ 		*pold = *pval;
+ 	}
+ 

@@ -1,0 +1,13 @@
+# oakMOSS: tag the touchscreens so apps that find input devices through udev
+# (libudev: trngaje's advdrastic, libinput) see them. The image has no
+# 60-input-id.rules; udev 243's input_id builtin works, but run on every input
+# device it tags the MagicX pad a mouse (it advertises virtual-mouse buttons
+# 272/273 and ABS_X/ABS_Y), and SDL then stops treating the pad as a joystick.
+# So only the touch controllers: axs_ts (Zero 40), hyn_ts (XU20).
+ACTION=="remove", GOTO="oakmoss_touchscreen_end"
+SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="axs_ts|hyn_ts", IMPORT{builtin}="input_id"
+# XU20: the kernel turns the panel 180 degrees and the touch axes are inverted
+# against it (PyUI corrects the same from evdev). Read by libinput-style
+# consumers; the direction is unverified on hardware.
+SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="hyn_ts", ENV{LIBINPUT_CALIBRATION_MATRIX}="-1 0 1 0 -1 1"
+LABEL="oakmoss_touchscreen_end"

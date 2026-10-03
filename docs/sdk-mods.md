@@ -194,3 +194,17 @@ AVB and A/B slots) and installs it. `build.sh image` refuses a binary without th
 logo rotation, or an Android build, and records its md5 in `BUILD-INFO.txt` (`uboot_md5`).
 
 `mods_version` 7 -> 8.
+
+## Round 15 (2026-10-02): touch that apps can use
+
+DraStic (trngaje's advdrastic, which finds the touchscreen through udev) saw no touchscreen on
+the Zero 40 and XU20, and once it did, no tap registered: the log showed each held touch
+re-reported as a new one.
+
+| what | where | why |
+|---|---|---|
+| `131-input-drop-repeated-mt-values.patch` | `drivers/input/input.c` | The vendor commented out the input core's "drop unchanged value" check (for a g-sensor that repeats samples), so every report passes. Our touch drivers use `input_mt`, which relies on that check: each report re-sent the slot's `ABS_MT_TRACKING_ID` (and `-1` for the four empty slots; raw capture on the Zero 40, 2026-10-02), and SDL turns every repeated tracking ID into a finger up and down, so no app sees a held touch. The check comes back for multitouch values only; other axes keep the vendor behaviour. |
+| `overlay/etc/udev/rules.d/60-oakmoss-touchscreen.rules` | `/etc/udev/rules.d` | The image has no `60-input-id.rules`, so udev tags no input device and libudev users find no touchscreen. The rule runs udev's `input_id` builtin on the two touch controllers only (`axs_ts`, `hyn_ts`): run on every input device it tags the pad a mouse (virtual-mouse buttons 272/273 plus `ABS_X/ABS_Y`), and SDL would stop treating it as a joystick. It also gives the XU20's touchscreen a calibration matrix (panel turned 180 degrees, axes inverted against it). |
+
+`mods_version` 8 -> 9.
+
