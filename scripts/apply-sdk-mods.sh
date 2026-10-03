@@ -124,6 +124,7 @@ package/utils/bluez bluez
 package/utils/e2fsprogs e2fsprogs
 package/libs/libubox libubox
 package/allwinner/stress-ng stress-ng
+package/multimedia/bluez-alsa bluez-alsa
 EOF
 
 # 3. ncurses 5.9 -> 6.2 (OpenWrt 21.02 port). The old directory must leave

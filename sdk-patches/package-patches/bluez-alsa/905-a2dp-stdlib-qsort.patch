@@ -1,0 +1,11 @@
+a2dp_codecs_qsort() calls qsort() without <stdlib.h>: an implicit declaration (a warning under GCC 13, an error from GCC 14).
+--- a/src/a2dp.c	2026-10-03 04:20:12
++++ b/src/a2dp.c	2026-10-03 04:20:12
+@@ -13,6 +13,7 @@
+ #include <errno.h>
+ #include <limits.h>
+ #include <stdbool.h>
++#include <stdlib.h>
+ #include <string.h>
+ #include <strings.h>
+ 
