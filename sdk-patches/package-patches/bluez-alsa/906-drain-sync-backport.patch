@@ -1,0 +1,128 @@
+Drain no longer blocks the daemon for good: upstream 7ae09a4 (v4.1.0) and 0677f97 (v4.2.0), backported to 4.0.0.
+4.0.0 serves the PCM "Drain" command on the main GLib loop thread and waits there in a bare
+pthread_cond_wait() that only the IO thread's 100 ms poll timeout signals. If that thread exits
+mid-drain (BT socket disconnected, write error, cancellation), nothing signals: the main loop stops,
+D-Bus calls get no reply, and `amixer -D bluealsa` and every PCM client hang.
+- 7ae09a4 "Fix PCM drain synchronization - use mutex for sync": wait for a `synced` flag set under
+  the mutex, in a loop, instead of a bare wait. Taken: the flag and the loop (ba_transport_pcm_drain()
+  and the poll timeout in io.c). Not taken: moving to pcm->mutex and the th->changed rename. In 4.0.0
+  the PCM open handler and the IO thread's blocking FIFO write hold pcm->mutex for long stretches
+  (upstream split those off in 0959403); the dedicated synced_mtx, which only the drain, the poll
+  timeout and the thread cleanup take, keeps this change apart from them. The 4.0.0 condition
+  variable `synced` becomes `synced_cond`, since the flag takes upstream's name.
+- 0677f97 "Fix PCM drain lockup caused by transport destroy": the IO thread cleanup marks its PCMs
+  synced and signals. 4.0.0 has no per-PCM thread cleanup, so this goes into
+  ba_transport_thread_cleanup() for the PCMs the exiting thread serves, after the state is reset.
+- Not upstream: a 4.0.0 IO thread that has exited keeps its ID until the main thread joins it, so
+  ba_transport_pcm_drain() also returns ESRCH unless the thread state is RUNNING, checked under
+  synced_mtx. The cleanup resets the state before it takes synced_mtx, so a drain either sees the
+  thread gone or receives the cleanup's wake-up.
+--- a/src/ba-transport.h	2022-06-03 13:38:53
++++ b/src/ba-transport.h	2026-10-03 14:27:23
+@@ -132,7 +132,9 @@
+ 
+ 	/* data synchronization */
+ 	pthread_mutex_t synced_mtx;
+-	pthread_cond_t synced;
++	pthread_cond_t synced_cond;
++	/* indicates whether FIFO buffer was synchronized */
++	bool synced;
+ 
+ 	/* exported PCM D-Bus API */
+ 	char *ba_dbus_path;
+--- a/src/ba-transport.c	2022-06-03 13:38:53
++++ b/src/ba-transport.c	2026-10-03 14:27:23
+@@ -94,7 +94,7 @@
+ 
+ 	pthread_mutex_init(&pcm->mutex, NULL);
+ 	pthread_mutex_init(&pcm->synced_mtx, NULL);
+-	pthread_cond_init(&pcm->synced, NULL);
++	pthread_cond_init(&pcm->synced_cond, NULL);
+ 
+ 	pcm->ba_dbus_path = g_strdup_printf("%s/%s/%s",
+ 			t->d->ba_dbus_path, transport_get_dbus_path_type(t->type),
+@@ -112,7 +112,7 @@
+ 
+ 	pthread_mutex_destroy(&pcm->mutex);
+ 	pthread_mutex_destroy(&pcm->synced_mtx);
+-	pthread_cond_destroy(&pcm->synced);
++	pthread_cond_destroy(&pcm->synced_cond);
+ 
+ 	if (pcm->ba_dbus_path != NULL)
+ 		g_free(pcm->ba_dbus_path);
+@@ -1412,14 +1412,31 @@
+ 
+ int ba_transport_pcm_drain(struct ba_transport_pcm *pcm) {
+ 
+-	if (pthread_equal(pcm->th->id, config.main_thread))
++	struct ba_transport_thread *th = pcm->th;
++
++	if (pthread_equal(th->id, config.main_thread))
+ 		return errno = ESRCH, -1;
+ 
+ 	pthread_mutex_lock(&pcm->synced_mtx);
+ 
+-	ba_transport_thread_signal_send(pcm->th, BA_TRANSPORT_THREAD_SIGNAL_PCM_SYNC);
+-	pthread_cond_wait(&pcm->synced, &pcm->synced_mtx);
++	/* An IO thread which has already exited keeps its ID until the main
++	 * thread joins it, so check its state as well. The thread cleanup
++	 * marks the PCM as synced only after the state has been reset, so if
++	 * the thread is still running here, the wake-up is still to come. */
++	pthread_mutex_lock(&th->state_mtx);
++	const bool running = th->state == BA_TRANSPORT_THREAD_STATE_RUNNING;
++	pthread_mutex_unlock(&th->state_mtx);
++	if (!running) {
++		pthread_mutex_unlock(&pcm->synced_mtx);
++		return errno = ESRCH, -1;
++	}
+ 
++	pcm->synced = false;
++	ba_transport_thread_signal_send(th, BA_TRANSPORT_THREAD_SIGNAL_PCM_SYNC);
++
++	while (!pcm->synced)
++		pthread_cond_wait(&pcm->synced_cond, &pcm->synced_mtx);
++
+ 	pthread_mutex_unlock(&pcm->synced_mtx);
+ 
+ 	/* TODO: Asynchronous transport release.
+@@ -1522,6 +1539,26 @@
+ 	/* Reset transport IO thread state back to NONE. */
+ 	ba_transport_thread_set_state(th, BA_TRANSPORT_THREAD_STATE_NONE, true);
+ 
++	/* The thread may have been terminated while a PCM drain operation is in
++	 * progress. To prevent ba_transport_pcm_drain() from blocking forever,
++	 * we signal that drain is no longer in progress. */
++	struct ba_transport_pcm *pcms[2] = { NULL, NULL };
++	if (t->type.profile & BA_TRANSPORT_PROFILE_MASK_A2DP) {
++		pcms[0] = &t->a2dp.pcm;
++		pcms[1] = &t->a2dp.pcm_bc;
++	}
++	else if (t->type.profile & BA_TRANSPORT_PROFILE_MASK_SCO) {
++		pcms[0] = &t->sco.spk_pcm;
++		pcms[1] = &t->sco.mic_pcm;
++	}
++	for (size_t i = 0; i < ARRAYSIZE(pcms); i++)
++		if (pcms[i] != NULL && pcms[i]->th == th) {
++			pthread_mutex_lock(&pcms[i]->synced_mtx);
++			pcms[i]->synced = true;
++			pthread_mutex_unlock(&pcms[i]->synced_mtx);
++			pthread_cond_signal(&pcms[i]->synced_cond);
++		}
++
+ 	/* Remove reference which was taken by the ba_transport_thread_create(). */
+ 	ba_transport_unref(t);
+ }
+--- a/src/io.c	2022-06-03 13:38:53
++++ b/src/io.c	2026-10-03 14:27:23
+@@ -331,7 +331,10 @@
+ 	switch (poll(fds, ARRAYSIZE(fds), io->timeout)) {
+ 	case 0:
+ 		pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+-		pthread_cond_signal(&pcm->synced);
++		pthread_mutex_lock(&pcm->synced_mtx);
++		pcm->synced = true;
++		pthread_mutex_unlock(&pcm->synced_mtx);
++		pthread_cond_signal(&pcm->synced_cond);
+ 		io->timeout = -1;
+ 		return 0;
+ 	case -1:

@@ -1,0 +1,91 @@
+PCM clients no longer hang or die on the control socket: upstream 916c50f and 5f3eeef (both v4.2.0), backported to 4.0.0.
+The ALSA plugin (and bluealsa-cli) send Drain/Drop/Pause/Resume over the PCM control socket and
+then wait for the reply with poll(..., -1): an app froze for good if the daemon never answered, and
+write() on a socket the daemon had closed (daemon stopped or restarted) raised SIGPIPE and killed it.
+- 916c50f "Protect PCM client control socket from SIGPIPE": send(..., MSG_NOSIGNAL). Taken as is.
+- 5f3eeef "Do not block forever PCM client on control command": the reply wait is bounded, 3000 ms
+  for Drain and 200 ms for Drop, Pause and Resume, and a timeout fails the command with EIO. Taken
+  as is; 4.0.0's one direct caller (bluealsa_pause() in bluealsa-pcm.c) passes 200 like upstream's.
+--- a/src/shared/dbus-client.h	2022-06-03 13:38:53
++++ b/src/shared/dbus-client.h	2026-10-03 14:27:41
+@@ -228,19 +228,20 @@
+ dbus_bool_t bluealsa_dbus_pcm_ctrl_send(
+ 		int fd_pcm_ctrl,
+ 		const char *command,
++		int timeout,
+ 		DBusError *error);
+ 
+ #define bluealsa_dbus_pcm_ctrl_send_drain(fd, err) \
+-	bluealsa_dbus_pcm_ctrl_send(fd, "Drain", err)
++	bluealsa_dbus_pcm_ctrl_send(fd, "Drain", 3000, err)
+ 
+ #define bluealsa_dbus_pcm_ctrl_send_drop(fd, err) \
+-	bluealsa_dbus_pcm_ctrl_send(fd, "Drop", err)
++	bluealsa_dbus_pcm_ctrl_send(fd, "Drop", 200, err)
+ 
+ #define bluealsa_dbus_pcm_ctrl_send_pause(fd, err) \
+-	bluealsa_dbus_pcm_ctrl_send(fd, "Pause", err)
++	bluealsa_dbus_pcm_ctrl_send(fd, "Pause", 200, err)
+ 
+ #define bluealsa_dbus_pcm_ctrl_send_resume(fd, err) \
+-	bluealsa_dbus_pcm_ctrl_send(fd, "Resume", err)
++	bluealsa_dbus_pcm_ctrl_send(fd, "Resume", 200, err)
+ 
+ dbus_bool_t bluealsa_dbus_message_iter_array_get_strings(
+ 		DBusMessageIter *iter,
+--- a/src/shared/dbus-client.c	2022-06-03 13:38:53
++++ b/src/shared/dbus-client.c	2026-10-03 14:27:41
+@@ -18,6 +18,7 @@
+ #include <string.h>
+ #include <strings.h>
+ #include <sys/param.h>
++#include <sys/socket.h>
+ #include <unistd.h>
+ 
+ #include "shared/a2dp-codecs.h"
+@@ -726,18 +727,30 @@
+ dbus_bool_t bluealsa_dbus_pcm_ctrl_send(
+ 		int fd_pcm_ctrl,
+ 		const char *command,
++		int timeout,
+ 		DBusError *error) {
+ 
+ 	ssize_t len = strlen(command);
+-	if (write(fd_pcm_ctrl, command, len) == -1) {
+-		dbus_set_error(error, DBUS_ERROR_FAILED, "Write: %s", strerror(errno));
++	if (send(fd_pcm_ctrl, command, len, MSG_NOSIGNAL) == -1) {
++		dbus_set_error(error, DBUS_ERROR_FAILED, "Send: %s", strerror(errno));
+ 		return FALSE;
+ 	}
+ 
+ 	/* PCM controller socket is created in the non-blocking
+-	 * mode, so we have to poll for reading by ourself. */
++	 * mode, so we have to poll for reading by ourself. If interrupted we
++	 * cannot report error EINTR here because the command has already been
++	 * sent; so we must wait for the response or else this is a fatal error. */
+ 	struct pollfd pfd = { fd_pcm_ctrl, POLLIN, 0 };
+-	poll(&pfd, 1, -1);
++	int res;
++	while ((res = poll(&pfd, 1, timeout)) == -1 && errno == EINTR)
++		continue;
++
++	if (res == 0) {
++		/* poll() timeout - the server has stopped responding to commands */
++		errno = EIO;
++		dbus_set_error(error, DBUS_ERROR_IO_ERROR, "Read: %s", strerror(errno));
++		return FALSE;
++	}
+ 
+ 	char rep[32];
+ 	if ((len = read(fd_pcm_ctrl, rep, sizeof(rep))) == -1) {
+--- a/src/asound/bluealsa-pcm.c	2022-06-03 13:38:53
++++ b/src/asound/bluealsa-pcm.c	2026-10-03 14:27:41
+@@ -763,7 +763,7 @@
+ 	}
+ 
+ 	if (!bluealsa_dbus_pcm_ctrl_send(pcm->ba_pcm_ctrl_fd,
+-				enable ? "Pause" : "Resume", NULL))
++				enable ? "Pause" : "Resume", 200, NULL))
+ 		return -errno;
+ 
+ 	if (enable == 0)

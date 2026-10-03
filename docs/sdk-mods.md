@@ -223,12 +223,49 @@ that locking (bbad9f5, e58331f, d14269a), all in 4.0.0. Separately, 1.3.1 withou
 `--a2dp-volume` copied the headset's AVRCP volume into its own software gain while the headset
 applied it too: half volume on the headset played about 32 dB down.
 
+4.0.0 still drains the same way in a narrower case: the PCM "Drain" command runs on the main GLib
+loop thread and waits there, with no timeout, for a signal only the IO thread's 100 ms poll timeout
+sends. A client that dies mid-drain is handled (the IO thread keeps running and signals), but an
+IO thread that exits mid-drain (headset disconnected or out of range, BT write error) leaves the
+main loop blocked for good, with the same symptoms. Upstream fixed this after 4.0.0, and its ALSA
+plugin waited for every control reply with no time limit; those fixes are backported (906, 907).
+
 | what | where | why |
 |---|---|---|
-| `133-bluez-alsa-4.0.0.patch` | `package/multimedia/bluez-alsa/Makefile` | 1.3.1 (snapshot 20180913) -> 4.0.0. 4.0.0 is the newest this SDK can build: 4.3.x needs glib >= 2.58.2 and sbc >= 1.5, the SDK has glib 2.50.1 and sbc 1.3 (4.0.0 needs glib >= 2.32, sbc >= 1.2, dbus-1 >= 1.6; BlueZ 5.54 meets bluez >= 5.0); 5.x renames the daemon (`bluealsad`) and CLI, which spruce calls by name. SBC only: AAC, aptX, aptX HD, FastStream, LC3plus, LDAC, MP3, mSBC, oFono, UPower and systemd off (`fdk-aac` no longer pulled in). Installs `bluealsa`, `bluealsa-aplay`, `bluealsa-cli`, the pcm/ctl plugins in `/usr/lib/alsa-lib`, `20-bluealsa.conf` in `/usr/share/alsa/alsa.conf.d` (where this alsa-lib's `alsa.conf` hooks load add-ons) and the D-Bus policy `/etc/dbus-1/system.d/bluealsa.conf` (4.x owns `org.bluealsa` on the system bus). Declares `bluez-libs` and `libdbus`, which it links. Nothing starts the daemon at boot (no init script, procd entry or `bt_init.sh` line); spruce runs `bluealsa -p a2dp-source --a2dp-volume`. |
+| `133-bluez-alsa-4.0.0.patch` | `package/multimedia/bluez-alsa/Makefile` | 1.3.1 (snapshot 20180913) -> 4.0.0. 4.0.0 is the newest this SDK can build (glib 2.50.1, sbc 1.3): 4.1.0 calls `sbc_reinit_a2dp()`, which libsbc exports from 1.5 (upstream 23662ac raised the declared floor in 4.1.1); 4.1.1 also generates its D-Bus code with `gdbus-codegen --interface-info-body`, which neither the SDK's host glib 2.50 nor the build container's (Ubuntu 18.04, glib 2.56) has; 4.2.0 and 4.3.x need glib >= 2.58.2 (ed24c9c) and bluez >= 5.51 (4.0.0 needs glib >= 2.32, sbc >= 1.2, dbus-1 >= 1.6; BlueZ 5.54 meets bluez >= 5.0). 4.3.0 also opens a new codec configuration whenever a client asks for another rate (13b0bf8), which made earbuds announce a disconnect on every app switch on another spruce base; 5.x renames the daemon (`bluealsad`) and CLI, which spruce calls by name. SBC only: AAC, aptX, aptX HD, FastStream, LC3plus, LDAC, MP3, mSBC, oFono, UPower and systemd off (`fdk-aac` no longer pulled in). Installs `bluealsa`, `bluealsa-aplay`, `bluealsa-cli`, the pcm/ctl plugins in `/usr/lib/alsa-lib`, `20-bluealsa.conf` in `/usr/share/alsa/alsa.conf.d` (where this alsa-lib's `alsa.conf` hooks load add-ons) and the D-Bus policy `/etc/dbus-1/system.d/bluealsa.conf` (4.x owns `org.bluealsa` on the system bus). Declares `bluez-libs` and `libdbus`, which it links. Nothing starts the daemon at boot (no init script, procd entry or `bt_init.sh` line); spruce runs `bluealsa -p a2dp-source --a2dp-volume`. |
 | `sdk-patches/package-patches/bluez-alsa/905-a2dp-stdlib-qsort.patch` | `package/multimedia/bluez-alsa/patches/` | `src/a2dp.c` calls `qsort()` without `<stdlib.h>`: an implicit declaration, a warning under GCC 13 and an error from GCC 14. |
+| `sdk-patches/package-patches/bluez-alsa/906-drain-sync-backport.patch` | `package/multimedia/bluez-alsa/patches/` | The daemon's drain cannot block its main loop for good: upstream 7ae09a4 (4.1.0) and 0677f97 (4.2.0), adapted to 4.0.0 (see "Backported from upstream" below). |
+| `sdk-patches/package-patches/bluez-alsa/907-pcm-ctrl-nosignal-timeout.patch` | `package/multimedia/bluez-alsa/patches/` | PCM clients (the ALSA plugin in every app, `bluealsa-cli`) neither hang on nor are killed by the PCM control socket: upstream 916c50f and 5f3eeef (4.2.0), as upstream wrote them. |
 | `apply-sdk-mods.sh` step 3b | `package/multimedia/bluez-alsa/patches/` | The SDK's two patches for the 2018 source (`0001-add-extern-hfp-over-pcm-support`, `0002-fix-volume-adjustment-is-limited-by-name-length`) do not apply to 4.0.0 and move to `.oakmoss-orig/bluez-alsa-20180913-patches/`. |
 | `scripts/lib.sh`, `fetch-inputs.sh`, `apply-sdk-mods.sh` step 5 | `dl/bluez-alsa-4.0.0.tar.gz` | The v4.0.0 tag archive is pinned (`BLUEZALSA_*`, sha256 = the Makefile's `PKG_HASH`), fetched into `inputs/` and staged into `dl/`. |
 
 `mods_version` 10 -> 11.
+
+### Backported from upstream
+
+The source is the v4.0.0 tag; these upstream commits are carried as patches on it. Each patch's
+header names the commits and says what was taken and what was changed.
+
+| upstream commit | release | what it fixes | in oakMOSS |
+|---|---|---|---|
+| 7ae09a4 Fix PCM drain synchronization - use mutex for sync | 4.1.0 | `ba_transport_pcm_drain()` used a bare `pthread_cond_wait()` with no condition to check: a signal sent before the wait, or none at all, left it waiting forever. Upstream waits in a loop for a `synced` flag set under the mutex. | 906. Taken: the flag, the loop, and the flag set in io.c's poll timeout. Changed: the flag stays under 4.0.0's dedicated `synced_mtx`, not `pcm->mutex` as upstream (in 4.0.0 the PCM open handler and the IO thread's blocking FIFO write hold `pcm->mutex` for long stretches; upstream moved those to a client mutex in 0959403). The condition variable is renamed `synced` -> `synced_cond` so the flag can take upstream's name. Upstream's `th->changed` -> `th->cond` rename is left out. |
+| 0677f97 Fix PCM drain lockup caused by transport destroy | 4.2.0 | An IO thread cancelled or exiting mid-drain never signalled the drain. Upstream's per-PCM thread cleanup now marks the PCM synced. | 906. 4.0.0 has no per-PCM thread cleanup, so the same lines go in `ba_transport_thread_cleanup()`, for the PCMs whose `th` is the exiting thread, after the state is reset to NONE. |
+| (none: oakMOSS) | - | A 4.0.0 IO thread that has exited keeps its ID until the main thread joins it, so a drain arriving after the cleanup ran would still wait forever. | 906. The drain checks the thread state under `synced_mtx` and returns ESRCH unless it is RUNNING. The cleanup resets the state before it takes `synced_mtx`, so a drain either sees the thread gone or gets the cleanup's wake-up. Lock order: `synced_mtx` -> `state_mtx`, and nothing takes them the other way round. |
+| 916c50f Protect PCM client control socket from SIGPIPE | 4.2.0 | `write()` to a control socket the daemon had closed (daemon stopped or restarted) raised SIGPIPE and killed the app. | 907, as upstream: `send(..., MSG_NOSIGNAL)`. |
+| 5f3eeef Do not block forever PCM client on control command | 4.2.0 | The plugin waited for each control reply with `poll(..., -1)`: an app froze for good if the daemon never answered. | 907, as upstream: 3000 ms for Drain, 200 ms for Drop, Pause and Resume, then EIO. 4.0.0's one direct caller, the plugin's `bluealsa_pause()`, passes 200 as upstream's does. |
+
+Considered and not backported:
+- f58b26b (4.1.0), 0bcebad and 3ee983c (4.2.0): rework of the plugin's local drain (wait until the
+  ring buffer reaches the FIFO, `snd_pcm_abort()` support, a bounded local wait). 4.0.0's plugin
+  drain does not wait locally (it sends Drain, which 907 now bounds), and 0bcebad builds on
+  f58b26b and 4.2's plugin I/O thread. The cost is audio quality: the last fraction of a second
+  of a stream can be cut at close. It does not hang.
+- 0959403 (4.1.0, a separate client mutex per PCM): a restructuring that 906 works around by
+  keeping `synced_mtx`.
+- cccc177 (4.1.0): PCM open (also on the main loop) waits forever if an IO thread fails during
+  setup. That is the open path, not drain; SBC setup fails only on an allocation or encoder-init
+  error. Left as a known residual.
+- 5466efc (4.1.0): fixes `ba_transport_stop()` as 4.1 rewrote it around a TERMINATED thread state.
+  4.0.0 has no such state, and its stop asks the thread manager to cancel and then waits on the
+  thread IDs.
 
