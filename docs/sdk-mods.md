@@ -209,3 +209,25 @@ re-reported as a new one.
 
 `mods_version` 8 -> 10 (9 was round 15 without 132).
 
+## Round 16 (2026-10-03): Bluetooth audio that does not wedge
+
+The Zero 40 (BlueZ 5.54 + the SDK's bluez-alsa 1.3.1, measured 2026-10-03) lost Bluetooth audio
+for good after RetroArch's in-game menu or a game-switcher exit: bluealsa's main and control
+threads sat in `futex_wait` with no IO thread left, bluetoothd logged `Endpoint replied with an
+error: org.freedesktop.DBus.Error.NoReply` and `Unable to select a valid configuration`, every
+connect failed with `org.bluez.Error.Failed`, and `amixer -D bluealsa scontrols` blocked. In
+1.3.1, `ctl.c` serves every request under `config.devices_mutex` and DRAIN waits on
+`pcm->drained` with that mutex held, while the A2DP IO thread signals "drained" only from a
+100 ms poll timeout and exits on FIFO EOF or a write error without signalling. Upstream rewrote
+that locking (bbad9f5, e58331f, d14269a), all in 4.0.0. Separately, 1.3.1 without
+`--a2dp-volume` copied the headset's AVRCP volume into its own software gain while the headset
+applied it too: half volume on the headset played about 32 dB down.
+
+| what | where | why |
+|---|---|---|
+| `133-bluez-alsa-4.0.0.patch` | `package/multimedia/bluez-alsa/Makefile` | 1.3.1 (snapshot 20180913) -> 4.0.0. 4.0.0 is the newest this SDK can build: 4.3.x needs glib >= 2.58.2 and sbc >= 1.5, the SDK has glib 2.50.1 and sbc 1.3 (4.0.0 needs glib >= 2.32, sbc >= 1.2, dbus-1 >= 1.6; BlueZ 5.54 meets bluez >= 5.0); 5.x renames the daemon (`bluealsad`) and CLI, which spruce calls by name. SBC only: AAC, aptX, aptX HD, FastStream, LC3plus, LDAC, MP3, mSBC, oFono, UPower and systemd off (`fdk-aac` no longer pulled in). Installs `bluealsa`, `bluealsa-aplay`, `bluealsa-cli`, the pcm/ctl plugins in `/usr/lib/alsa-lib`, `20-bluealsa.conf` in `/usr/share/alsa/alsa.conf.d` (where this alsa-lib's `alsa.conf` hooks load add-ons) and the D-Bus policy `/etc/dbus-1/system.d/bluealsa.conf` (4.x owns `org.bluealsa` on the system bus). Declares `bluez-libs` and `libdbus`, which it links. Nothing starts the daemon at boot (no init script, procd entry or `bt_init.sh` line); spruce runs `bluealsa -p a2dp-source --a2dp-volume`. |
+| `apply-sdk-mods.sh` step 3b | `package/multimedia/bluez-alsa/patches/` | The SDK's two patches for the 2018 source (`0001-add-extern-hfp-over-pcm-support`, `0002-fix-volume-adjustment-is-limited-by-name-length`) do not apply to 4.0.0 and move to `.oakmoss-orig/bluez-alsa-20180913-patches/`. |
+| `scripts/lib.sh`, `fetch-inputs.sh`, `apply-sdk-mods.sh` step 5 | `dl/bluez-alsa-4.0.0.tar.gz` | The v4.0.0 tag archive is pinned (`BLUEZALSA_*`, sha256 = the Makefile's `PKG_HASH`), fetched into `inputs/` and staged into `dl/`. |
+
+`mods_version` 10 -> 11.
+

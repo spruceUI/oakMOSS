@@ -57,6 +57,10 @@ GCC750_SHA256=b81946e7f01f90528a1f7352ab08cc602b9ccc05d4e44da4bd501c5a189ee661
 BINUTILS228_TARBALL=binutils-2.28.tar.gz            # phase-2 fallback toolchain only
 BINUTILS228_URL=https://ftp.gnu.org/gnu/binutils/$BINUTILS228_TARBALL
 BINUTILS228_SHA256=cd717966fc761d840d451dbd58d44e1e5b92949d2073d75b73fccb476d772fcf
+# bluez-alsa 4.0.0 (tree patch 133): the GitHub tag archive, byte-identical to tag v4.0.0.
+BLUEZALSA_TARBALL=bluez-alsa-4.0.0.tar.gz
+BLUEZALSA_URL=https://github.com/arkq/bluez-alsa/archive/refs/tags/v4.0.0.tar.gz
+BLUEZALSA_SHA256=ce5e060e61669d61d44f5f9bad34a7b88378376e9d49d31482406a68127a6b29
 
 # Shaun Inman's main-zero40 release: the Zero 40 boot chain for the hybrid image.
 MAINZERO40_VERSION=20260202-1

@@ -136,6 +136,19 @@ else
     rm -rf package/libs/ncurses; cp -a "$P/ncurses-6.2" package/libs/ncurses; note replaced "package/libs/ncurses -> 6.2"
 fi
 
+# 3b. bluez-alsa 1.3.1 -> 4.0.0 (tree patch 133 rewrites the package Makefile). The SDK's
+#     two quilt patches were written for the 2018 snapshot and do not apply to 4.0.0; they
+#     move aside with the rest of the replaced versions.
+for f in 0001-add-extern-hfp-over-pcm-support.patch 0002-fix-volume-adjustment-is-limited-by-name-length.patch; do
+    src=package/multimedia/bluez-alsa/patches/$f
+    if [ ! -e "$src" ]; then note absent "$src"
+    elif [ "$CHECK" = 1 ]; then note MISSING "$src still in place (bluez-alsa 4.0.0)"; missing=1
+    else
+        mkdir -p .oakmoss-orig/bluez-alsa-20180913-patches
+        mv "$src" .oakmoss-orig/bluez-alsa-20180913-patches/; note moved "$src -> .oakmoss-orig/bluez-alsa-20180913-patches/"
+    fi
+done
+
 # 4. GCC 7.5.0 patch set for the phase-2 fallback toolchain (menu option added by tree patch 030).
 if [ -d toolchain/gcc/patches/7.5.0 ] && diff -rq "$P/gcc-7.5.0-patches" toolchain/gcc/patches/7.5.0 >/dev/null 2>&1; then note present "toolchain/gcc/patches/7.5.0"
 elif [ "$CHECK" = 1 ]; then note MISSING "toolchain/gcc/patches/7.5.0"; missing=1
@@ -143,10 +156,10 @@ else mkdir -p toolchain/gcc/patches/7.5.0; cp -a "$P"/gcc-7.5.0-patches/. toolch
 fi
 
 # 5. Source tarballs the SDK cannot download any more.
-for t in "$NCURSES_TARBALL" "$GCC750_TARBALL" "$BINUTILS228_TARBALL"; do
+for t in "$NCURSES_TARBALL" "$BLUEZALSA_TARBALL" "$GCC750_TARBALL" "$BINUTILS228_TARBALL"; do
     if [ -f "dl/$t" ]; then note present "dl/$t"
     elif [ -f "$INPUTS_DIR/$t" ]; then [ "$CHECK" = 1 ] || { cp -a "$INPUTS_DIR/$t" "dl/$t"; note staged "dl/$t"; }
-    elif [ "$t" = "$NCURSES_TARBALL" ]; then note MISSING "dl/$t (scripts/fetch-inputs.sh)"; missing=1
+    elif [ "$t" = "$NCURSES_TARBALL" ] || [ "$t" = "$BLUEZALSA_TARBALL" ]; then note MISSING "dl/$t (scripts/fetch-inputs.sh)"; missing=1
     fi
 done
 
@@ -164,6 +177,6 @@ done
 if [ "$CHECK" = 1 ]; then
     [ "$missing" = 0 ] && log "all SDK modifications are in place" || die "SDK modifications missing (run without --check)"
 else
-    { echo "oakmoss_mods_version=10"; echo "applied=$(date -u +%FT%TZ)"; echo "oakmoss=$(oakmoss_version)"; } > .oakmoss-mods
+    { echo "oakmoss_mods_version=11"; echo "applied=$(date -u +%FT%TZ)"; echo "oakmoss=$(oakmoss_version)"; } > .oakmoss-mods
     log "SDK modifications applied; ledger: docs/sdk-mods.md"
 fi

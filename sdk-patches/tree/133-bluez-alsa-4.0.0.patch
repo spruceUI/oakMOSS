@@ -1,0 +1,96 @@
+--- a/package/multimedia/bluez-alsa/Makefile
++++ b/package/multimedia/bluez-alsa/Makefile
+@@ -1,43 +1,79 @@
+ include $(TOPDIR)/rules.mk
+ 
++# oakMOSS (sdk-patches/tree/133): bluez-alsa 4.0.0 replaces the SDK's 2018 snapshot
++# (1.3.1), whose control thread deadlocked on DRAIN under the device-pool mutex and
++# whose software gain stacked on the headset's own volume. 4.0.0 is the newest
++# release this SDK can build (glib 2.50, sbc 1.3; 4.3.x needs glib 2.58.2 and
++# sbc 1.5) and keeps the bluealsa daemon and CLI names spruce relies on.
+ PKG_NAME:=bluez-alsa
+-PKG_VERSION:=20180913
++PKG_VERSION:=4.0.0
+ PKG_RELEASE:=1
+ PKG_MAINTAINER:=
+ PKG_LICENSE:=MIT
+-PKG_LICENSE_FILES:=LICENSE.txt
++PKG_LICENSE_FILES:=LICENSE
+ 
++# The v4.0.0 tag archive. scripts/lib.sh pins it (BLUEZALSA_*), fetch-inputs.sh
++# downloads it and apply-sdk-mods.sh stages it into dl/, so no build downloads.
+ PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
+-PKG_BUILD_DIR := $(COMPILE_DIR)/$(PKG_NAME)-20180913
++PKG_SOURCE_URL:=https://codeload.github.com/arkq/bluez-alsa/tar.gz/v$(PKG_VERSION)?
++PKG_HASH:=ce5e060e61669d61d44f5f9bad34a7b88378376e9d49d31482406a68127a6b29
+ 
+ PKG_FIXUP:=autoreconf
++PKG_INSTALL:=1
+ 
+ include $(BUILD_DIR)/package.mk
+ 
+ define Package/bluez-alsa
+   SECTION:=multimedia
+   CATEGORY:=Multimedia
+-  DEPENDS:=+alsa-lib +bluez-daemon +glib2 +sbc +fdk-aac
++  DEPENDS:=+alsa-lib +bluez-libs +bluez-daemon +glib2 +libdbus +sbc
+   TITLE:=Bluetooth Audio ALSA backend
+-  URL:=https://github.com/Arkq/bluez-alsa
++  URL:=https://github.com/arkq/bluez-alsa
+ endef
+ 
+ define Package/bluez-alsa/description
+-  ALSA plugin supporting Bluetooth audio
++  ALSA plugin supporting Bluetooth audio (SBC only)
+ endef
+ 
+-CONFIGURE_ARGS +=
++# SBC only. Nothing here starts the daemon: spruce does, as
++# `bluealsa -p a2dp-source --a2dp-volume`.
++CONFIGURE_ARGS += \
++	--disable-aac \
++	--disable-aptx \
++	--disable-aptx-hd \
++	--disable-faststream \
++	--disable-lc3plus \
++	--disable-ldac \
++	--disable-mp3lame \
++	--disable-mpg123 \
++	--disable-msbc \
++	--disable-ofono \
++	--disable-upower \
++	--disable-systemd \
++	--disable-manpages \
++	--disable-test \
++	--disable-hcitop \
++	--disable-rfcomm \
++	--disable-a2dpconf \
++	--enable-aplay \
++	--enable-cli \
++	--with-alsaplugindir=/usr/lib/alsa-lib \
++	--with-alsaconfdir=/usr/share/alsa/alsa.conf.d \
++	--with-dbusconfdir=/etc/dbus-1/system.d
++
+ TARGET_LDFLAGS += $(if $(CONFIG_USE_GLIBC), -ldl -lresolv)
+ 
+ define Package/bluez-alsa/install
+-	$(INSTALL_DIR) $(1)/usr/share/alsa/alsa.conf.d/
+-	$(CP) $(PKG_BUILD_DIR)/src/asound/20-bluealsa.conf $(1)/usr/share/alsa/alsa.conf.d/
+-	$(INSTALL_DIR) $(1)/usr/lib/alsa-lib
+-	$(CP) $(PKG_BUILD_DIR)/src/asound/.libs/libasound_module_*_bluealsa.so $(1)/usr/lib/alsa-lib
+ 	$(INSTALL_DIR) $(1)/usr/bin
+-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/src/bluealsa $(1)/usr/bin/
+-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/utils/bluealsa-aplay $(1)/usr/bin/
+-	$(INSTALL_DIR) $(1)/etc/init.d
++	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/bluealsa $(1)/usr/bin/
++	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/bluealsa-aplay $(1)/usr/bin/
++	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/bluealsa-cli $(1)/usr/bin/
++	$(INSTALL_DIR) $(1)/usr/lib/alsa-lib
++	$(CP) $(PKG_INSTALL_DIR)/usr/lib/alsa-lib/libasound_module_*_bluealsa.so $(1)/usr/lib/alsa-lib/
++	$(INSTALL_DIR) $(1)/usr/share/alsa/alsa.conf.d
++	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/usr/share/alsa/alsa.conf.d/20-bluealsa.conf $(1)/usr/share/alsa/alsa.conf.d/
++	$(INSTALL_DIR) $(1)/etc/dbus-1/system.d
++	$(INSTALL_DATA) $(PKG_INSTALL_DIR)/etc/dbus-1/system.d/bluealsa.conf $(1)/etc/dbus-1/system.d/
+ endef
+ 
+ $(eval $(call BuildPackage,bluez-alsa))
