@@ -6,6 +6,14 @@ below that is not marked as tested as untested.
 
 ## Releases and spruceOS
 
+v0.4.1-beta.1 (2026-10-04) fixes touch for programs that read the touchscreen themselves:
+the kernel drops repeated multitouch values again, so a held touch stays held
+(`sdk-patches/tree/131-*`), and udev marks the touch controllers as touchscreens
+(`overlay/etc/udev/rules.d/60-oakmoss-touchscreen.rules`). Tested in DraStic (trngaje's
+build) and DSperate on the Zero 40 and XU20. It also replaces the SDK's 2018 bluez-alsa with
+4.0.0 for Bluetooth audio, with later upstream fixes backported (`133`, `docs/sdk-mods.md`,
+Round 16). It pairs with spruceOS v4.5.0 or a newer nightly.
+
 v0.4.0-beta.1 (2026-09-30) is the first release with charge mode, the SDK chain on the Zero
 40 and XU20, the kernel fixes for real sleep (the I2C bus-error fix
 `sdk-patches/tree/130-*` for the XU20, the Zero 40's touch after the wake in `080`) and one
@@ -57,6 +65,7 @@ and restarts the kernel when the check fails. The XU20 runs with the Zero 40's o
 ## Known gaps
 
 - The fixes for newer board revisions in main-zero40 v20260202-1 are not in our inputs.
+- Bluetooth audio on the Zero 40 (bluez-alsa 4.0.0) has not been tested with a headset yet.
 - The Zero 40 blanks its boot picture for 1-2 s when the GPU driver loads (`TODO.md`).
 - The Zero 40 takes ~4 s longer to go to sleep: after its radio module is unloaded, the
   kernel rescans the empty WiFi slot (`TODO.md`).
