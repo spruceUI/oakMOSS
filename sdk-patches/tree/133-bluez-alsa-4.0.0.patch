@@ -49,7 +49,7 @@
  
 -CONFIGURE_ARGS +=
 +# SBC only. Nothing here starts the daemon: spruce does, as
-+# `bluealsa -p a2dp-source --a2dp-volume`.
++# `bluealsa -p a2dp-source`.
 +CONFIGURE_ARGS += \
 +	--disable-aac \
 +	--disable-aptx \
