@@ -196,7 +196,8 @@ and the `tina-sysroot` shim are oakMOSS's.
 
 ncurses 6.2 (MIT-style ncurses license), bluez-alsa 4.0.0 (Arkadiusz Bokowy, MIT;
 github.com/arkq/bluez-alsa tag v4.0.0, replacing the SDK's 2018 snapshot through tree patch
-133), GCC 7.5.0 and binutils 2.28 (GPL-3.0,
+133), zlib 1.3.1 (Jean-loup Gailly and Mark Adler, zlib license; zlib.net, replacing the
+SDK's 1.2.8 through tree patch 135), GCC 7.5.0 and binutils 2.28 (GPL-3.0,
 fallback toolchain only), and glibc 2.29 from sourceware git (LGPL-2.1, fallback
 only). libmad 0.15.1b (Underbit, GPL-2.0), BusyBox 1.27.2 (GPL-2.0), BlueZ 5.54
 (GPL-2.0 / LGPL-2.1), e2fsprogs 1.42.12 (GPL-2.0 / LGPL-2.0), libubox (ISC),

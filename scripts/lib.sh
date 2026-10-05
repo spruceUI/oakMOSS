@@ -61,6 +61,11 @@ BINUTILS228_SHA256=cd717966fc761d840d451dbd58d44e1e5b92949d2073d75b73fccb476d772
 BLUEZALSA_TARBALL=bluez-alsa-4.0.0.tar.gz
 BLUEZALSA_URL=https://github.com/arkq/bluez-alsa/archive/refs/tags/v4.0.0.tar.gz
 BLUEZALSA_SHA256=ce5e060e61669d61d44f5f9bad34a7b88378376e9d49d31482406a68127a6b29
+# zlib 1.3.1 (tree patch 135): zlib.net's release archive (GitHub's v1.3.1 asset is byte-identical),
+# signed by Mark Adler (5ED4 6A67 21D3 6558 7791  E2AA 783F CD8E 58BC AFBA).
+ZLIB_TARBALL=zlib-1.3.1.tar.gz
+ZLIB_URL=https://zlib.net/fossils/$ZLIB_TARBALL
+ZLIB_SHA256=9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23
 
 # Shaun Inman's main-zero40 release: the Zero 40 boot chain for the hybrid image.
 MAINZERO40_VERSION=20260202-1

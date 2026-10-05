@@ -157,10 +157,10 @@ else mkdir -p toolchain/gcc/patches/7.5.0; cp -a "$P"/gcc-7.5.0-patches/. toolch
 fi
 
 # 5. Source tarballs the SDK cannot download any more.
-for t in "$NCURSES_TARBALL" "$BLUEZALSA_TARBALL" "$GCC750_TARBALL" "$BINUTILS228_TARBALL"; do
+for t in "$NCURSES_TARBALL" "$BLUEZALSA_TARBALL" "$ZLIB_TARBALL" "$GCC750_TARBALL" "$BINUTILS228_TARBALL"; do
     if [ -f "dl/$t" ]; then note present "dl/$t"
     elif [ -f "$INPUTS_DIR/$t" ]; then [ "$CHECK" = 1 ] || { cp -a "$INPUTS_DIR/$t" "dl/$t"; note staged "dl/$t"; }
-    elif [ "$t" = "$NCURSES_TARBALL" ] || [ "$t" = "$BLUEZALSA_TARBALL" ]; then note MISSING "dl/$t (scripts/fetch-inputs.sh)"; missing=1
+    elif [ "$t" = "$NCURSES_TARBALL" ] || [ "$t" = "$BLUEZALSA_TARBALL" ] || [ "$t" = "$ZLIB_TARBALL" ]; then note MISSING "dl/$t (scripts/fetch-inputs.sh)"; missing=1
     fi
 done
 
@@ -178,6 +178,6 @@ done
 if [ "$CHECK" = 1 ]; then
     [ "$missing" = 0 ] && log "all SDK modifications are in place" || die "SDK modifications missing (run without --check)"
 else
-    { echo "oakmoss_mods_version=12"; echo "applied=$(date -u +%FT%TZ)"; echo "oakmoss=$(oakmoss_version)"; } > .oakmoss-mods
+    { echo "oakmoss_mods_version=13"; echo "applied=$(date -u +%FT%TZ)"; echo "oakmoss=$(oakmoss_version)"; } > .oakmoss-mods
     log "SDK modifications applied; ledger: docs/sdk-mods.md"
 fi

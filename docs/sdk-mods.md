@@ -289,7 +289,34 @@ set" and switched those decompressors off.
 
 `mods_version` 11 -> 12.
 
-## Round 18 (2026-10-05): two slots and updates
+## Round 18 (2026-10-05): zlib 1.3.1
+
+The SDK's zlib is 1.2.8 (2013), linked without zlib's version script, so `libz.so.1.2.8`
+exports every function unversioned. It has none of the functions zlib 1.2.9 added
+(`inflateValidate`, `inflateCodesUsed`, `uncompress2`, `gzfread`, `gzfwrite`,
+`deflateGetDictionary`, `adler32_z`, `crc32_z`). libpng 1.6 imports `inflateValidate` (version
+`ZLIB_1.2.9`), and the copies on the spruce card are linked with `-z now`: a process that loads one
+of them next to this library stops at start with `symbol lookup error ... inflateValidate, version
+ZLIB_1.2.9`. A host-side symbol pass of spruce Development 80efbef66 against the v0.4.2 images
+(2026-10-05) found four such copies that MagicX launches load (mupen64plus, OpenBOR, pcsx,
+yabasanshiro); each launcher puts its own libz first, so they run today. PortMaster's DevilutionX
+bundles libpng but takes libz from the system, and gets this one. No file needs a version above
+`ZLIB_1.2.9`.
+
+1.3.1 rather than 1.2.9: 1.2.10 fixed two bugs 1.2.9 introduced (gzwrite could write corrupt gzip
+files; `deflate_stored()` mishandled zero-length input) and 1.2.11 a third (a stored block pulled
+from the window). 1.2.8 also carries the 2016 audit findings (CVE-2016-9840 to -9843, fixed in
+1.2.9), CVE-2018-25032 (deflate memory corruption, fixed in 1.2.12) and CVE-2022-37434
+(`inflateGetHeader` overflow, fixed in 1.2.13). 1.3.1 is what Debian 13 and Ubuntu 26.04 ship;
+1.3.2 (2026-02) is newer and less deployed.
+
+| what | where | why |
+|---|---|---|
+| `135-zlib-1.3.1.patch` | `package/libs/zlib/Makefile` | 1.2.8 -> 1.3.1, `PKG_HASH` (sha256) instead of `PKG_MD5SUM`. The build recipe is unchanged: `LDSHARED` still leaves out `--version-script`, so the library stays unversioned like 1.2.8 and binds the way it did, with the newer functions added. Source `zlib-1.3.1.tar.gz` from zlib.net/fossils (GitHub's v1.3.1 asset is byte-identical), sha256 `9a93b2b7...df23`, signature checked against Mark Adler's key (`5ED4 6A67 21D3 6558 7791 E2AA 783F CD8E 58BC AFBA`); pinned in `scripts/lib.sh`, staged into `dl/` by `apply-sdk-mods.sh`. |
+
+`mods_version` 12 -> 13.
+
+## Round 20 (2026-10-08): two slots and updates
 
 | what | where | why |
 |---|---|---|
