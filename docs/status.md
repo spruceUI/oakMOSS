@@ -47,6 +47,8 @@ boot0 and U-Boot; the launcher, pad, touch, audio and WiFi were first proven tha
 | WiFi | Realtek 8189es | XR829 | Realtek 8189es |
 | charge mode | yes | yes | yes |
 | real sleep (power key and RTC) | yes | yes | yes |
+| Bluetooth audio (bluez-alsa 4.0.0) | - (no Bluetooth) | yes (XR829 over UART; headset tested) | - (no Bluetooth) |
+| squashfs images (loop mounts) | XZ, LZO, LZ4, gzip, zstd | XZ, LZO, LZ4, gzip, zstd | XZ, LZO, LZ4, gzip, zstd |
 
 Touch loads as a module once the board has settled: built into the kernel, its probe
 stalled boots at the logo (`docs/hardware-notes.md`, "Touch drivers stalled the boot").

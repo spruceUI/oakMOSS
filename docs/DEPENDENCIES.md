@@ -31,7 +31,7 @@ below apply equally to the 7.5.0 substitute.
 - BASE-OS onboard WiFi: XR829 kernel driver + firmware, currently OFF (§5/§7) — spruce/PyUI expect a working `wlan0` for its whole networking stack.
 
 **Tier B — spruce full feature set (Bluetooth, USB modes, external storage)**
-- `bluez-daemon`/`bluez-libs`/`bluez-utils`/`bluez-alsa` + the XR829 BT HCI path — currently disabled by Moss's phase configs (§5, §7) even though `trimui_a133p.sh:196` unconditionally starts `/etc/bluetooth/bluetoothd`.
+- `bluez-daemon`/`bluez-libs`/`bluez-utils`/`bluez-alsa` + the XR829 BT HCI path — currently disabled by Moss's phase configs (§5, §7) even though `trimui_a133p.sh:196` unconditionally starts `/etc/bluetooth/bluetoothd`. *(Since then: the build's `configs/ext-armgnu13.config` turns the bluez set on, and bluez-alsa is 4.0.0 since round 16, `docs/sdk-mods.md`.)*
 - USB gadget: mass storage + ADB via configfs — already enabled (§7).
 - exFAT for SD2 cards >32GB — no in-kernel path exists anywhere checked (Tina 4.9.191 kernel, Knulli's newer sunxi64 kernel for the same board); needs FUSE (`CONFIG_FUSE_FS` already `=m`) + an `exfat-fuse`/`exfatprogs` userspace package, not found anywhere in the Tina package tree.
 - `CONFIG_INPUT_FF_MEMLESS`, `CONFIG_SND_USB_AUDIO` — external controller rumble / USB audio dongles, both currently off.
@@ -337,7 +337,8 @@ No in-kernel exFAT anywhere checked (Tina 4.9.191 or Knulli's newer sunxi64
 tree for this same board) — plan on FUSE (`CONFIG_FUSE_FS` already `=m`,
 L3390) + `exfat-fuse`/`exfatprogs`, not a kernel option. `CONFIG_SQUASHFS_ZSTD`/
 `LZ4`/`LZO` (L3459-3462) are all off, only XZ — nice-to-have pending
-confirmation whether any PortMaster runtime squashfs uses zstd.
+confirmation whether any PortMaster runtime squashfs uses zstd. *(Since round 17 the kernel
+reads XZ, LZO, LZ4, gzip and zstd; see item 8 below.)*
 `CONFIG_MODVERSIONS` is off (L267): any prebuilt `.ko` (spruce's own
 `zram.ko`/`lzo.ko`/`zsmalloc.ko`, or a prebuilt xr829/GE8300 module) must be
 built against a kernel with an identical version+config to `insmod` cleanly —
@@ -416,7 +417,11 @@ both phase configs — no delta needed, listed in §4/§5 for completeness only.
 8. **PortMaster runtime squashfs compressor**: only 2 runtime squashfs
    images were sampled (`frt_3.3.4`, `solarus-1.6.5`, both XZ-compatible in
    practice); whether any catalog runtime actually needs zstd (which this
-   kernel config lacks, §7) was not exhaustively checked.
+   kernel config lacks, §7) was not exhaustively checked. *(2026-10-04: read from
+   46 PortMaster runtimes (2022-2026): 45 are gzip, including `frt_3.3.4` and
+   `solarus-1.6.5`, and one, the 32-bit Godot 4.5, is zstd. The kernel then read
+   only XZ and LZO, so these did not mount; round 17 added gzip, LZ4 and zstd,
+   `docs/sdk-mods.md`.)*
 9. **RAM/CPU headroom** for heavy PortMaster runtimes (mono, Godot 4.x,
    dotnet) on Zero28/40 was not benchmarked — `HW_INFO`'s `ram` figure (used
    for `Ngb` capability tags) needs a real number before the proposed device

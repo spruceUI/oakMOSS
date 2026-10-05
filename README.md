@@ -21,8 +21,8 @@ Releases are on the [releases page](https://github.com/spruceUI/oakMOSS/releases
 
 ## Where things stand
 
-All three boards boot spruceOS with their panel, pad, WiFi and audio, and touch on the two
-boards that have it. Charge mode works when a board is plugged in while off, and the boards
+All three boards boot spruceOS with their panel, pad, WiFi and audio, touch on the two
+boards that have it, and Bluetooth audio on the Zero 40. Charge mode works when a board is plugged in while off, and the boards
 really sleep and wake. From v0.4.1-beta.1 on, the images pair with spruceOS v4.5.0 or a
 newer nightly. It is bench-tested on one of each board; the releases are betas. Details
 and known gaps: [docs/status.md](docs/status.md).

@@ -7,9 +7,10 @@ SDK checksum, toolchain, kernel object, U-Boot and overlay hashes, and the C lib
 ## What the image contains
 
 A glibc 2.38 / libstdc++ 13 userland (Arm GNU Toolchain 13.3; why newer than Moss's:
-`docs/toolchain.md`) on the vendor's 4.9.191 kernel, with ncurses 6, libmad, bluez and a
-BusyBox that has unzip, losetup and stat. The kernel has loop devices, uinput and joydev
-built in, and drivers for both radios (XR829, Realtek 8189es). The PowerVR GE8300 blobs are
+`docs/toolchain.md`) on the vendor's 4.9.191 kernel, with ncurses 6, libmad, bluez with
+bluez-alsa 4.0.0, and a BusyBox that has unzip, losetup and stat. The kernel has loop
+devices, uinput and joydev built in, squashfs that reads XZ, LZO, LZ4, gzip and zstd
+images, and drivers for both radios (XR829, Realtek 8189es). The PowerVR GE8300 blobs are
 included, and the TrimUI SDL2 libraries the launcher expects are under `/usr/magicx/lib`.
 
 ## What you need
@@ -83,6 +84,12 @@ Without `DIAG=0` those images carry the diagnostic hand-off; the script's header
 - `scripts/build.sh cont` resumes a build without wiping it.
 - After changing a package Makefile, remove `sdk/lichee/out/a133-aw3/compile_dir/target/<pkg>*`.
 - `scripts/build.sh image <board>` repacks without a full rebuild.
+- Kernel options go in `config-4.9` through `sdk-patches/tree/020`. The build then appends the
+  top config's `CONFIG_KERNEL_*` lines, and the later line wins: that is how the rootfs
+  compressor choice once switched squashfs decompressors off (`134`, `docs/sdk-mods.md`,
+  Round 17). Check what the kernel really got in `sdk/lichee/lichee/linux-4.9/.config`, or in
+  the image's `System.map`; `build.sh image` reconfigures the kernel only when that merged
+  configuration changes.
 
 ## Diagnostic and debug images
 

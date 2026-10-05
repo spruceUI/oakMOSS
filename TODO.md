@@ -13,7 +13,9 @@ because the base does not.
 - [x] `BLK_DEV_LOOP` (PortMaster runtimes), `INPUT_UINPUT` (gptokeyb),
       `INPUT_JOYDEV` (jsN readers), `INPUT_FF_MEMLESS` (rumble on external pads),
       `SND_USB_AUDIO`, `SQUASHFS_LZ4/LZO`, `NLS_UTF8` + FAT default iocharset utf8,
-      `VIDEO_SUNXI_VIN` off (MODS, DEP §7; `sdk-patches/tree/020`).
+      `VIDEO_SUNXI_VIN` off (MODS, DEP §7; `sdk-patches/tree/020`). LZ4 took effect only in
+      round 17, with gzip and zstd beside it (`134`: the rootfs compressor choice had switched
+      it off).
 - [x] `ZRAM` + `ZSMALLOC` (+ `CRYPTO_LZ4`/`LZO`) (round 8): the launcher's compressed-swap
       option logs "zram device not found" on every boot; without the modules the
       launcher would have to ship its own `zram.ko`, which `MODVERSIONS=n` makes a
@@ -127,11 +129,12 @@ because the base does not.
 - [ ] **One image for both boards**: the `/usr/magicx/device` marker is written at
       build time; detect the board at boot (DTB model / panel) and write it, once
       the Zero 40 panel driver lives in our tree.
-- [?] **Bluetooth chip**: the Zero 28's radio is a Realtek RTL8189ES-class part
-      (WiFi only); the Zero 40's is an XR829 (SDIO 0x0a9e:0x2282, WiFi + UART BT),
-      yet MagicX's stock Zero 40 rootfs activates an AIC `hciattach` on `/dev/ttyS1`
-      (with xr829 and rtl8723ds variants beside it). Probe the UART before building
-      anything; our rootfs ships `fw_xr829_bt.bin` and bluez.
+- [x] **Bluetooth chip** (settled 2026-10-04): the Zero 28's radio is a Realtek
+      RTL8189ES-class part (WiFi only), and so is the XU20's; the Zero 40's is an XR829
+      (SDIO 0x0a9e:0x2282, WiFi + UART BT on `/dev/ttyS1`), although MagicX's stock Zero 40
+      rootfs activates an AIC `hciattach`. spruce brings it up the way the base's
+      `bt_init.sh_xr829` does, with our `fw_xr829_bt.bin` and bluez; headset audio through
+      bluez-alsa 4.0.0 (MODS, round 16) was tested on 2026-10-04.
 - [ ] **xradio error-path use-after-free**: `xr829/wlan/main.c` `xradio_core_init`
       calls `xradio_unregister_bh` when `xradio_load_firmware` fails, and that does
       `kthread_stop` on a bh thread that has already exited; the build does not
