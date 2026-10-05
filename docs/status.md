@@ -6,6 +6,12 @@ below that is not marked as tested as untested.
 
 ## Releases and spruceOS
 
+v0.4.2-beta.1 (2026-10-04) lets the kernel mount squashfs images compressed with gzip, LZ4 and
+zstd as well as XZ and LZO: most PortMaster runtimes are gzip, and the 32-bit Godot 4.5 runtime
+is zstd. Until then the kernel mounted only XZ and LZO, whatever its config said (`134`,
+`docs/sdk-mods.md`, Round 17). Tested on all three boards. It pairs with spruceOS v4.5.0 or a
+newer nightly, as v0.4.1-beta.1 does.
+
 v0.4.1-beta.1 (2026-10-04) fixes touch for programs that read the touchscreen themselves:
 the kernel drops repeated multitouch values again, so a held touch stays held
 (`sdk-patches/tree/131-*`), and udev marks the touch controllers as touchscreens
