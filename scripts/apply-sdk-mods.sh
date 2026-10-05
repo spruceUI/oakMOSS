@@ -178,6 +178,6 @@ done
 if [ "$CHECK" = 1 ]; then
     [ "$missing" = 0 ] && log "all SDK modifications are in place" || die "SDK modifications missing (run without --check)"
 else
-    { echo "oakmoss_mods_version=11"; echo "applied=$(date -u +%FT%TZ)"; echo "oakmoss=$(oakmoss_version)"; } > .oakmoss-mods
+    { echo "oakmoss_mods_version=12"; echo "applied=$(date -u +%FT%TZ)"; echo "oakmoss=$(oakmoss_version)"; } > .oakmoss-mods
     log "SDK modifications applied; ledger: docs/sdk-mods.md"
 fi
