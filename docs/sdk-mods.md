@@ -16,7 +16,7 @@ found while porting the tree to GCC 13 / glibc 2.38.
 | patch | path | change | reason | source |
 |---|---|---|---|---|
 | `010-rules-mk-external-toolchain-override` | `rules.mk` | env-driven external-toolchain block (`TINA_EXT_TOOLCHAIN_{ROOT,PREFIX,TARGET_NAME,SYSROOT}`, `TINA_EXT_KERNEL_CROSS`), `CONFIG_TOOLCHAIN_BIN_PATH="./wrap ./bin"`, glibc >= 2.34 file specs; the libc spec is set a second time after the SDK's late reassignment | docs/toolchain.md | oakMOSS |
-| `020-kernel-config-4.9` | `device/config/chips/a133/configs/aw3/linux/config-4.9` | `NLS_UTF8=y`, FAT iocharset `utf8`, `VIDEO_SUNXI_VIN` off (Moss "changes not present in configs"); `BLK_DEV_LOOP=y` (MIN_COUNT 8), `INPUT_UINPUT=y`, `INPUT_JOYDEV=y`, `INPUT_FF_MEMLESS=y`, `SND_USB_AUDIO=m`, `XR829_WLAN=m`, `SQUASHFS_LZ4/LZO=y` (deps §7), `SQUASHFS_ZLIB=y` (round 17; LZ4 and gzip took effect only with 134); the 21 `XRADIO*`/`XRMAC*`/`NF_LOG_COMMON`/`IPV6_FOU*`/`BT_XR_BLUEDROID_SUPPORT` symbols `olddefconfig` resolved once XR829 was on (the build's non-interactive `silentoldconfig` aborts on new prompts) | PortMaster loop mounts, gptokeyb uinput, joystick nodes, rumble, USB audio, onboard radio | Moss, deps, oakMOSS |
+| `020-kernel-config-4.9` | `device/config/chips/a133/configs/aw3/linux/config-4.9` | `NLS_UTF8=y`, FAT iocharset `utf8`, `VIDEO_SUNXI_VIN` off (Moss "changes not present in configs"); `BLK_DEV_LOOP=y` (MIN_COUNT 8), `INPUT_UINPUT=y`, `INPUT_JOYDEV=y`, `INPUT_FF_MEMLESS=y`, `SND_USB_AUDIO=m`, `XR829_WLAN=m`, `SQUASHFS_LZ4/LZO=y` (deps §7), `SQUASHFS_ZLIB/ZSTD=y` (round 17; LZ4 and gzip took effect only with 134); the 21 `XRADIO*`/`XRMAC*`/`NF_LOG_COMMON`/`IPV6_FOU*`/`BT_XR_BLUEDROID_SUPPORT` symbols `olddefconfig` resolved once XR829 was on (the build's non-interactive `silentoldconfig` aborts on new prompts) | PortMaster loop mounts, gptokeyb uinput, joystick nodes, rumble, USB audio, onboard radio | Moss, deps, oakMOSS |
 | `030-toolchain-gcc-7.5.0-option` | `toolchain/gcc/{Config.version,Config.in,common.mk}` | new menu option `GCC_USE_VERSION_7_5_0` (vanilla GNU gcc-7.5.0.tar.xz, md5 recorded, `HOST_BUILD_DIR` set) | releases.linaro.org no longer serves `gcc-linaro-7.4-2019.02.tar.xz`; fallback toolchain only | oakMOSS |
 | `040-gpu-km-kernel-cross` | `package/kernel/gpu-km/Makefile` | `CROSS_COMPILE=$(KERNEL_CROSS)` instead of `$(TARGET_CROSS)` | the PowerVR rogue_km build keys its compiler config on the prefix and has no `aarch64-none-linux-gnu.mk`; the module belongs with the kernel's compiler | oakMOSS |
 | `050-libffi-no-multi-os-directory` | `package/libs/libffi/Makefile` | `CONFIGURE_ARGS += --disable-multi-os-directory`, placed before `$(eval $(call BuildPackage))` (OpenWrt expands the args at eval time; appending after has no effect) | Arm's gcc reports a `lib64` multi-os dir, libffi installed to `usr/lib64` and packaging failed | oakMOSS |
@@ -270,10 +270,10 @@ Considered and not backported:
   4.0.0 has no such state, and its stop asks the thread manager to cancel and then waits on the
   thread IDs.
 
-## Round 17 (2026-10-04): squashfs images compressed with gzip and LZ4
+## Round 17 (2026-10-04): squashfs images compressed with gzip, LZ4 and zstd
 
 spruce asked for zlib: squashfs images made with `mksquashfs`'s default compressor, gzip, did not
-mount. The built kernels (`System.map`) had only the XZ and LZO decompressors: `SQUASHFS_LZ4=y`
+mount (nearly all of PortMaster's runtimes; its 32-bit Godot 4.5 runtime is zstd). The built kernels (`System.map`) had only the XZ and LZO decompressors: `SQUASHFS_LZ4=y`
 from round 8 had never taken effect either. Tina's `KERNEL_SQUASHFS_{XZ,LZ4,ZLIB}` are one choice,
 the rootfs image's compressor (`config/Config-images.in`), and `build/kernel-defaults.mk` copied all
 three into the kernel's configuration after config-4.9: the two not chosen arrived last as "is not
@@ -281,7 +281,7 @@ set" and switched those decompressors off.
 
 | what | where | why |
 |---|---|---|
-| `020-kernel-config-4.9.patch` | `device/config/chips/a133/configs/aw3/linux/config-4.9` | `SQUASHFS_ZLIB=y`. `ZLIB_INFLATE` was already built in, so this adds only squashfs's zlib wrapper. |
-| `134-kernel-keeps-squashfs-decompressors.patch` | `build/kernel-defaults.mk` | The choice's unchosen "is not set" lines are no longer copied, so config-4.9 decides which decompressors the kernel has: XZ, LZ4, LZO and gzip. The rootfs image stays XZ. |
+| `020-kernel-config-4.9.patch` | `device/config/chips/a133/configs/aw3/linux/config-4.9` | `SQUASHFS_ZLIB=y`, `SQUASHFS_ZSTD=y`. `ZLIB_INFLATE` was already built in, so gzip adds only squashfs's zlib wrapper; zstd brings in the kernel's backported zstd decompressor (`lib/zstd`, hidden `ZSTD_DECOMPRESS` and `XXHASH`, no new prompts). |
+| `134-kernel-keeps-squashfs-decompressors.patch` | `build/kernel-defaults.mk` | The choice's unchosen "is not set" lines are no longer copied, so config-4.9 decides which decompressors the kernel has: XZ, LZ4, LZO, gzip and zstd. The rootfs image stays XZ. |
 
 `mods_version` 11 -> 12.
