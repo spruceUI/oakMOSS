@@ -32,6 +32,7 @@ found while porting the tree to GCC 13 / glibc 2.38.
 | `package/utils/e2fsprogs/patches/905-sysmacros.patch` | `#include <sys/sysmacros.h>` in every file using makedev/major/minor | glibc >= 2.28 dropped them from `<sys/types.h>`; a forced `-include` via CFLAGS broke the large-file `struct stat` setup | oakMOSS |
 | `package/libs/libubox/patches/900-libubox-no-werror.patch` | drop `-Werror` from libubox's CMakeLists | GCC 13 `-Werror=array-bounds` in blobmsg.c | oakMOSS |
 | `package/libs/ncurses/` | REPLACED by OpenWrt v21.02.7's ncurses 6.2 package (`$(INCLUDE_DIR)` -> `$(BUILD_DIR)`, `--with-termlib=tinfo`, libtinfo installed); 5.9 moved to `.oakmoss-orig/ncurses-5.9` (left under `package/`, it stays registered and builds) | 5.9's wide-char build breaks under GCC 13 + glibc 2.38; spruce's rnano, mupen64plus and libmp3lame need `libncursesw.so.6` + `libtinfo.so.6` | OpenWrt |
+| `package/libs/openssl/` | REPLACED by `sdk-patches/openssl-1.1.1w` (round 19): the SDK's package at OpenSSL 1.1.1w with OpenWrt 22.03's 1.1.1 configure/compile steps and patches 100/110/120/130; 1.1.0i moved to `.oakmoss-orig/openssl-1.1.0i` | spruce's card libraries need OpenSSL 1.1.1 (round 19) | OpenWrt, oakMOSS |
 | `toolchain/gcc/patches/7.5.0/` | OpenWrt v19.07.10's 22-patch GCC 7.5.0 set (18 byte-identical to the SDK's linaro-7.4 set) | goes with tree patch 030 | OpenWrt |
 | `dl/ncurses-6.2.tar.gz` (+ `dl/gcc-7.5.0.tar.xz`, `dl/binutils-2.28.tar.gz` for the fallback) | pre-fetched sources | the SDK's download URLs for these are dead or absent | GNU |
 | `lichee/linux-4.9/drivers/char/sunxi_encrypt/encrypt.zero28` | backup of the SDK's original object (452120 B, 2024-12-16, md5 `f28d35eb…`) | `build.sh` swaps the object per board | oakMOSS |
@@ -315,6 +316,27 @@ from the window). 1.2.8 also carries the 2016 audit findings (CVE-2016-9840 to -
 | `135-zlib-1.3.1.patch` | `package/libs/zlib/Makefile` | 1.2.8 -> 1.3.1, `PKG_HASH` (sha256) instead of `PKG_MD5SUM`. The build recipe is unchanged: `LDSHARED` still leaves out `--version-script`, so the library stays unversioned like 1.2.8 and binds the way it did, with the newer functions added. Source `zlib-1.3.1.tar.gz` from zlib.net/fossils (GitHub's v1.3.1 asset is byte-identical), sha256 `9a93b2b7...df23`, signature checked against Mark Adler's key (`5ED4 6A67 21D3 6558 7791 E2AA 783F CD8E 58BC AFBA`); pinned in `scripts/lib.sh`, staged into `dl/` by `apply-sdk-mods.sh`. |
 
 `mods_version` 12 -> 13.
+
+## Round 19 (2026-10-05): OpenSSL 1.1.1w
+
+The SDK's OpenSSL is 1.1.0i (August 2018, out of support since September 2019), built without
+ENGINE support, compression, Camellia, SEED or IDEA. Nothing in the image links it; spruce's card
+does: its libcurl, libssl and libssh copies are OpenSSL 1.1.1 builds that need version
+`OPENSSL_1_1_1` and those functions. The host symbol census of round 18 found flycast's and
+DSperate's curl and libssl (`Emu/DC/lib64`, `Emu/NDS/lib64`) running only because their launchers
+put their own `lib64` first: whenever this library loads first they stop at start with `version
+OPENSSL_1_1_1 not found`. 1.1.1w is the last 1.1.1 release and keeps the 1.1 sonames, so it is a
+superset of 1.1.0i; OpenSSL 3 renames the libraries and would leave every 1.1 consumer without a
+provider. 1.1.1 is out of support too (September 2023) and later advisories are not fixed in it,
+but 1.1.0i misses five more years of fixes, high-severity ones among them (CVE-2022-0778,
+CVE-2023-0286).
+
+| what | where | why |
+|---|---|---|
+| `sdk-patches/openssl-1.1.1w/` | `package/libs/openssl/` (replaced; 1.1.0i kept in `.oakmoss-orig/openssl-1.1.0i`) | The SDK's package (Makefile, `Config.in`, the cryptodev header) at 1.1.1w, with OpenWrt 22.03's 1.1.1 configure and compile steps: `--libdir=lib` (Arm's GCC reports a `lib64` multi-os directory), `--cross-compile-prefix` instead of 1.1.0's `AR="ar r"` (1.1.1 adds its own `ARFLAGS`), parallel make. Patches are OpenWrt 22.03's 100 (AF_ALG configure check), 110 (the `linux-aarch64-openwrt` target), 120 (no CFLAGS in the binary) and 130 (no tests or fuzzers). Not carried from the SDK: `0001` (Allwinner's AF_ALG CTS mode; the AF_ALG engine stays off), `0002` (`no-rsa`; RSA is on), `180` (patches `Makefile.shared`, which 1.1.1 does not have), `200` (upstream since 1.1.1). Source `openssl-1.1.1w.tar.gz` from openssl.org (GitHub's `OpenSSL_1_1_1w` asset is byte-identical), sha256 `cf309895...6ac8` (OpenWrt's pin and the published `.sha256` agree), signature checked against the OpenSSL OMC key (`EFC0 A467 D613 CB83 C7ED 6D30 D894 E2CE 8B3D 79F5`); pinned in `scripts/lib.sh`, staged into `dl/` by `apply-sdk-mods.sh`. |
+| `configs/ext-armgnu13.config` | (config) | `OPENSSL_ENGINE=y` with dynamic engines (none installed: AF_ALG, devcrypto and padlock stay off), `OPENSSL_WITH_COMPRESSION=y` (`zlib-dynamic`; TLS compression stays off unless an application turns it on), `OPENSSL_OTHER_OPTIONS=y` with Camellia, IDEA and SEED; ARIA and SM2/SM3/SM4 are on by default in 1.1.1. Unchanged: no SSLv3, TLS 1.0 or TLS 1.1 methods, no DTLS, no binary-field curves, no error strings, `--api=1.1.0`. TLS 1.3 comes with 1.1.1. |
+
+`mods_version` 13 -> 14.
 
 ## Round 20 (2026-10-08): two slots and updates
 

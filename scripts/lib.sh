@@ -66,6 +66,11 @@ BLUEZALSA_SHA256=ce5e060e61669d61d44f5f9bad34a7b88378376e9d49d31482406a68127a6b2
 ZLIB_TARBALL=zlib-1.3.1.tar.gz
 ZLIB_URL=https://zlib.net/fossils/$ZLIB_TARBALL
 ZLIB_SHA256=9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23
+# OpenSSL 1.1.1w (sdk-patches/openssl-1.1.1w): openssl.org's archive (GitHub's OpenSSL_1_1_1w asset is
+# byte-identical), signed with the OpenSSL OMC key (EFC0 A467 D613 CB83 C7ED  6D30 D894 E2CE 8B3D 79F5).
+OPENSSL_TARBALL=openssl-1.1.1w.tar.gz
+OPENSSL_URL=https://www.openssl.org/source/old/1.1.1/$OPENSSL_TARBALL
+OPENSSL_SHA256=cf3098950cb4d853ad95c0841f1f9c6d3dc102dccfcacd521d93925208b76ac8
 
 # Shaun Inman's main-zero40 release: the Zero 40 boot chain for the hybrid image.
 MAINZERO40_VERSION=20260202-1

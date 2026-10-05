@@ -201,7 +201,8 @@ also rotates the framebuffer in hardware (see the last point).
   (`overlay/etc/udev/rules.d/60-oakmoss-touchscreen.rules`), which libudev users need, and the
   kernel drops repeated multitouch values, so a held touch stays held.
 - **Library versions** (the study): `zlib` 1.2.8 (1.3.1 since round 18, tree patch 135), `libpng` 1.2.56 (the old 1.2 branch, not 1.6),
-  `libjpeg` (IJG) 9a, `freetype` 2.6.1, `bluez` 5.54, `dbus` 1.10.4. `libffi` is `libffi.so.7`.
+  `libjpeg` (IJG) 9a, `freetype` 2.6.1, `bluez` 5.54, `dbus` 1.10.4, `openssl` 1.1.0i (1.1.1w since round 19; nothing in
+  the image links it, spruce's card libraries do). `libffi` is `libffi.so.7`.
 - **SDL2 is not a Tina package**: only SDL 1.2 (`package/multimedia/sdl/Makefile`), and it is
   off. spruce, PyUI and RetroArch bring SDL2 themselves, and the base ships TrimUI's SDL2 2.26.1
   under `/usr/magicx/lib` (§1, §2).

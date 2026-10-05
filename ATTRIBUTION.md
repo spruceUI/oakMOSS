@@ -189,6 +189,10 @@ and the `tina-sysroot` shim are oakMOSS's.
 - `sdk-patches/ncurses-6.2/`: the ncurses 6.2 package from OpenWrt v21.02.7
   (`package/libs/ncurses`, GPL-2.0), adapted to the Tina tree (`$(INCLUDE_DIR)` to
   `$(BUILD_DIR)`, `--with-termlib=tinfo`, libtinfo installed).
+- `sdk-patches/openssl-1.1.1w/`: the SDK's OpenSSL package brought to 1.1.1w with the
+  configure and compile steps and patches 100, 110, 120 and 130 of OpenWrt 22.03's
+  (`package/libs/openssl` on `openwrt-22.03`, GPL-2.0); its `include/crypto/cryptodev.h` is
+  cryptodev-linux's public-domain header, carried as the SDK has it.
 - `sdk-patches/gcc-7.5.0-patches/`: OpenWrt v19.07.10's GCC 7.5.0 patch set
   (`toolchain/gcc/patches/7.5.0`, GPL-2.0), for the fallback from-source toolchain.
 
@@ -197,7 +201,8 @@ and the `tina-sysroot` shim are oakMOSS's.
 ncurses 6.2 (MIT-style ncurses license), bluez-alsa 4.0.0 (Arkadiusz Bokowy, MIT;
 github.com/arkq/bluez-alsa tag v4.0.0, replacing the SDK's 2018 snapshot through tree patch
 133), zlib 1.3.1 (Jean-loup Gailly and Mark Adler, zlib license; zlib.net, replacing the
-SDK's 1.2.8 through tree patch 135), GCC 7.5.0 and binutils 2.28 (GPL-3.0,
+SDK's 1.2.8 through tree patch 135), OpenSSL 1.1.1w (OpenSSL and SSLeay licenses; openssl.org,
+replacing the SDK's 1.1.0i through `sdk-patches/openssl-1.1.1w`), GCC 7.5.0 and binutils 2.28 (GPL-3.0,
 fallback toolchain only), and glibc 2.29 from sourceware git (LGPL-2.1, fallback
 only). libmad 0.15.1b (Underbit, GPL-2.0), BusyBox 1.27.2 (GPL-2.0), BlueZ 5.54
 (GPL-2.0 / LGPL-2.1), e2fsprogs 1.42.12 (GPL-2.0 / LGPL-2.0), libubox (ISC),
