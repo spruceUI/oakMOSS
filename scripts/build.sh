@@ -123,14 +123,20 @@ apply_overlay() {
     else
         cp -a "$sysp.orig" "$sysp"
     fi
-    # A/B slots (docs/updates.md): boot_normal runs ab_check first, which counts a trial
+    # A/B slots (docs/updates.md): boot_normal first runs ab_<ab_try>, which counts a trial
     # boot of an updated slot and goes back to the previous slot when one never confirmed.
+    # This U-Boot has no hush parser, so the branch is the variable's name, not an if.
     local env=$SDK_DIR/device/config/chips/a133/configs/aw3/linux/env-4.9.cfg
-    sed -i -e '/^ab_check=/d' -e 's|^boot_normal=sunxi_flash read|boot_normal=run ab_check;sunxi_flash read|' "$env"
-    grep -qxF 'boot_normal=run ab_check;sunxi_flash read 45000000 ${boot_partition};bootm 45000000' "$env" ||
-        die "$env: boot_normal is not the one ab_check was written for"
+    sed -i -e '/^ab_\(check\|1\|2\)\?=/d' \
+        -e 's|^boot_normal=\(run ab_[^;]*;\)*sunxi_flash read|boot_normal=run ab_${ab_try};sunxi_flash read|' "$env"
+    grep -qxF 'boot_normal=run ab_${ab_try};sunxi_flash read 45000000 ${boot_partition};bootm 45000000' "$env" ||
+        die "$env: boot_normal is not the one the slot check was written for"
     [ -z "$(tail -c1 "$env")" ] || echo >> "$env"
-    echo 'ab_check=if test -n "${ab_try}"; then if test "${ab_try}" = "1"; then setenv ab_try 2; saveenv; else setenv boot_partition ${ab_fallback_boot}; setenv root_partition ${ab_fallback_root}; setenv ab_try; setenv ab_fallback_boot; setenv ab_fallback_root; setenv ab_reverted 1; saveenv; reset; fi; fi' >> "$env"
+    cat >> "$env" <<'EOF'
+ab_=setenv ab_try
+ab_1=setenv ab_try 2; saveenv
+ab_2=setenv boot_partition ${ab_fallback_boot}; setenv root_partition ${ab_fallback_root}; setenv ab_try; setenv ab_fallback_boot; setenv ab_fallback_root; setenv ab_reverted 1; saveenv; reset
+EOF
     # Kernel console on the panel: KDEBUG_FBCON=1 builds a kernel whose console is
     # the display, so a panic or oops before userland is readable on the device
     # itself. These boards expose no serial header on the lab units, so without it

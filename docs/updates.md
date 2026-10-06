@@ -18,13 +18,23 @@ slots.
 
 ## Which slot boots
 
-U-Boot boots `boot_partition` with `root_partition` as root. `build.sh` adds `ab_check` to
-the env and runs it first in `boot_normal`:
+U-Boot loads the kernel from `boot_partition` (`boot_normal`). While it starts, it sets
+`mmc_root` from `root_partition` by exact partition name (`board/sunxi/board_helper.c`), so
+the kernel's `root=` follows the env. The device tree is U-Boot's own, from the U-Boot
+package: the boot image is header version 0 and carries none.
 
-- `ab_try=1`: an update has just been installed. U-Boot sets `ab_try=2` and boots it.
-- `ab_try=2`: that slot never confirmed. U-Boot switches back to `ab_fallback_boot` and
-  `ab_fallback_root`, sets `ab_reverted=1` and resets.
-- no `ab_try`: a normal boot.
+This U-Boot has no hush parser, so there is no `if`. `build.sh` puts `run ab_${ab_try}` at the
+front of `boot_normal` and adds three scripts:
+
+- `ab_` (no `ab_try`): a normal boot.
+- `ab_1`: an update has just been installed. Sets `ab_try=2`, saves and boots it.
+- `ab_2`: that slot never confirmed. Switches back to `ab_fallback_boot` and
+  `ab_fallback_root`, sets `ab_reverted=1`, saves and resets. `root=` is worked out before
+  `bootcmd`, which is why it resets rather than booting on.
+
+`bootcmd` stays `run setargs_nand boot_normal`: U-Boot compares it word for word to tell a
+normal boot from a charger boot (`board/sunxi/sunxi_bootargs.c`). `setargs_mmc` is not
+touched either, because `check_user_data` parses it.
 
 `runmagicx.sh` confirms the slot as soon as userland runs, before the charge screen or the
 launcher, by clearing `ab_try` and the fallback.
@@ -62,12 +72,9 @@ Upload the `.omupd` of each board with the images, and list it in `SHA256SUMS`.
 
 ## Still to prove on hardware
 
-- `saveenv` and `reset` work from `ab_check` (`CONFIG_CMD_SAVEENV`, the hush parser in
-  `sun50iw10p1_tina_defconfig`). Without them the board still boots the new slot, but never
-  falls back.
-- U-Boot rewrites `root=` from `root_partition` for `rootfs_b` as it does for `rootfs`.
-- The boot ROM falls back to boot0 at sector 256, and boot0 to the package at 24576, when the
-  main copy is damaged. Without that, the copies change nothing and an interrupted
-  bootloader write still needs a reflash.
-- A fallback after a slot that does not boot: break `boot_b` on a test card and see the board
-  return to slot A with `ab_reverted=1`.
+- The fallback copies: Allwinner's own writer puts boot0 at 256 and the package at 24576
+  (`drivers/sunxi_flash/mmc/sdmmc.c`, `UBOOT_BACKUP_START_SECTOR_IN_SDMMC`), but boot0 is a
+  prebuilt binary, so that it reads them is not visible in the SDK. Zero the main package on
+  a test card and see it still boot.
+- A whole update, and a fallback: install one, then break `boot_b` on a test card and see the
+  board return to slot A with `ab_reverted=1`.
