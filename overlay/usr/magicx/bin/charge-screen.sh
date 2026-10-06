@@ -74,6 +74,13 @@ if [ "$MODE" = frame ]; then
     exit 0
 fi
 
+# `charge-screen.sh loading`: the loading frame, while oakmoss-update.sh installs an update.
+if [ "$MODE" = loading ]; then
+    echo 0 > "$FBSYS/blank" 2>/dev/null
+    show loading
+    exit 0
+fi
+
 # The picture first, before waiting for the input nodes: nothing else is on the panel until
 # a frame is up (on the Zero 40 /etc/init.d/chargeframe has usually put one up already).
 dbg "start"

@@ -45,7 +45,8 @@ scripts/build.sh all zero28 zero40 xu20   # the userland (~20-40 min on 8 cores)
 
 `scripts/build.sh image <board>` rebuilds one board's image without the userland step. The
 image to flash is `builds/<stamp>-<board>/oakmoss-<board>-<stamp>-sd1.img`; `COMPRESS=1` also
-writes an `.img.xz`. `build.sh image` refuses a U-Boot binary that lacks the panels, or an
+writes an `.img.xz`. Beside it, `oakmoss-<board>-<version>.omupd` updates a card that already
+has two slots (`docs/updates.md`). `build.sh image` refuses a U-Boot binary that lacks the panels, or an
 Android one: after a fresh SDK unpack, run `build.sh uboot` first.
 
 ### The image lanes

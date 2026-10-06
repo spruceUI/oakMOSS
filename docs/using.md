@@ -34,6 +34,10 @@ only way back.
 - **Boot:** oakMOSS mounts the second card at `/mnt/SDCARD` and hands off to its launcher
   (`.tmp_update/updater`, or `magicx/init.sh`). With no card, or when the launcher exits,
   the board powers off (`overlay/usr/magicx/bin/runmagicx.sh`).
+- **Updates:** an `oakmoss-<board>-<version>.omupd` at the root of the launcher card is
+  installed into the second slot on the next boot. If the new slot does not start, the board
+  goes back to the old one (`docs/updates.md`). Cards flashed before the two-slot layout
+  need one full flash first.
 - **Plugged in while off:** the board comes up in charge mode. U-Boot shows a charging
   picture, then a screen with the battery level. The screen goes dark after 30 seconds, and
   any button brings it back. Power while it is lit starts the launcher. Unplugging the

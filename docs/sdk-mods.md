@@ -47,6 +47,8 @@ found while porting the tree to GCC 13 / glibc 2.38.
 | `target/allwinner/generic/boot-resource/boot-resource/bootlogo.bmp` | `overlay/bootlogo.bmp` if present, else the SDK's original | Moss's logo is his and is not shipped; `scripts/make-boot-resource.py --logo zero28 overlay/bootlogo.bmp` draws oakMOSS's own (the spruce tree, `assets/spruce-tree.png`). The Zero 28's boot-resource partition is 256 KiB, so its logo is 200 px | oakMOSS |
 | `package/add-rootfs-demo/{usr,etc}` | the whole `overlay/` (`/usr/magicx` with `bin/runmagicx.sh`, the SDL2 blobs, the `device` marker; `/etc/modules.d/net-xr829` empty; `/etc/init.d/wpa_supplicant` a no-op) plus `boards/<board>/overlay/`; `add-rootfs-demo` copies it into the rootfs and re-squashes, so these override what the packages installed | `/usr/magicx/device` is what the launcher reads to tell `zero28` from `zero40`; the empty modules file stops the XR829 driver autoloading and tearing down the Realtek 8189es's SDIO card (docs/hardware-notes.md); the init stub replaces wifimanager's S96 service, which started a second wpa_supplicant on wlan0 (empty `/etc/wifi/wpa_supplicant.conf`) that sent a DISCONNECT after every association the launcher's own supplicant made (Zero 28, 2026-09-16) - the launcher owns the radio | Moss, oakMOSS |
 | `package/add-rootfs-demo/usr/magicx/tina_config.gz` | gzip of the build's `.config` | Moss's `install.sh` ships it in the image | Moss |
+| `package/add-rootfs-demo/usr/magicx/version` | `git describe` of the build | what the launcher compares with the latest release (`docs/updates.md`) | oakMOSS |
+| `device/config/chips/a133/configs/aw3/linux/env-4.9.cfg` | `boot_normal` runs `ab_check` first; `ab_check` added | trial boot and fallback for the second slot (`docs/updates.md`) | oakMOSS |
 | `lichee/linux-4.9/drivers/char/sunxi_encrypt/encrypt` | Zero 28: the SDK's object; Zero 40: MagicX's object from `Zero40-lichee.zip` (329272 B, 2025-09-22, md5 `33a0a6d7…`). The kernel's OpenWrt stamp does not track the prebuilt object, so `build.sh` records the linked md5 (`.linked-md5`) and forces a kernel relink when it changes | the Zero 40 kernel needs its own object | MagicX |
 
 ## Config-level choices (`configs/ext-armgnu13.config` vs Moss's `phase1.config`)
@@ -285,3 +287,11 @@ set" and switched those decompressors off.
 | `134-kernel-keeps-squashfs-decompressors.patch` | `build/kernel-defaults.mk` | The choice's unchosen "is not set" lines are no longer copied, so config-4.9 decides which decompressors the kernel has: XZ, LZ4, LZO, gzip and zstd. The rootfs image stays XZ. |
 
 `mods_version` 11 -> 12.
+
+## Round 18 (2026-10-05): two slots and updates
+
+| what | where | why |
+|---|---|---|
+| `boards/<board>/sys_partition.fex` | `rootfs` 600 -> 512 MiB; `boot_b` (15 MiB) and `rootfs_b` (512 MiB) added after it | a second slot for updates (`docs/updates.md`) |
+| `scripts/add-boot-backups.py` | the finished image | second copies of boot0 (sector 256) and the U-Boot package (24576) |
+| `scripts/make-update.py` | `builds/<stamp>-<board>/` | `oakmoss-<board>-<version>.omupd` from the finished image |

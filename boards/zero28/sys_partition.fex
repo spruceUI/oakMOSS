@@ -59,8 +59,19 @@ size = 512
 
 [partition]
     name         = rootfs
-    size         = 1228800
+    size         = 1048576
     downloadfile = "rootfs.fex"
+    user_type    = 0x8000
+
+;   Second slot for updates (docs/updates.md): empty on a new card.
+[partition]
+    name         = boot_b
+    size         = 30720
+    user_type    = 0x8000
+
+[partition]
+    name         = rootfs_b
+    size         = 1048576
     user_type    = 0x8000
 
 [partition]

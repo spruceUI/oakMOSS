@@ -14,7 +14,15 @@ export LD_LIBRARY_PATH=/usr/magicx/lib:$LD_LIBRARY_PATH
 
 LOG=/mnt/UDISK/oakmoss-boot.log
 log() { echo "$(cut -d' ' -f1 /proc/uptime) $*" >> "$LOG" 2>/dev/null; }
-echo "=== boot $(date '+%Y-%m-%d %H:%M:%S') device=$(cat /usr/magicx/device 2>/dev/null)" >> "$LOG" 2>/dev/null
+echo "=== boot $(date '+%Y-%m-%d %H:%M:%S') device=$(cat /usr/magicx/device 2>/dev/null) version=$(cat /usr/magicx/version 2>/dev/null) slot=$(fw_printenv -n root_partition 2>/dev/null)" >> "$LOG" 2>/dev/null
+
+# Reaching userland confirms an updated slot (docs/updates.md); until then U-Boot
+# falls back to the previous one on the next boot.
+if [ -n "$(fw_printenv -n ab_try 2>/dev/null)" ]; then
+    printf 'ab_try\nab_fallback_boot\nab_fallback_root\n' > /tmp/ab-confirm &&
+        fw_setenv -s /tmp/ab-confirm && log "updated slot confirmed"
+fi
+[ "$(fw_printenv -n ab_reverted 2>/dev/null)" = 1 ] && log "the updated slot did not boot; U-Boot went back to this one"
 
 # Plugged in while off (androidboot.mode=charger from U-Boot, charge_mode = 1): a charging
 # screen with the battery level until the power key, then the launcher (charge-screen.sh
@@ -49,6 +57,17 @@ while ! grep -q ' /mnt/SDCARD ' /proc/mounts; do
     [ "$n" -ge 20 ] && break
     sleep 0.5
     n=$((n + 1))
+done
+
+for pkg in /mnt/SDCARD/oakmoss-"$(cat /usr/magicx/device 2>/dev/null)"-*.omupd; do
+    [ -f "$pkg" ] || break
+    charge-screen.sh loading
+    if oakmoss-update.sh "$pkg"; then
+        sync
+        reboot
+        exit 0
+    fi
+    break
 done
 
 MAGICX_PATH=/mnt/SDCARD/magicx/init.sh
