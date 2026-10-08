@@ -1,15 +1,19 @@
 #!/bin/sh
 # oakMOSS debug image: one record per boot of how it started and how the boot before ended.
 # Usage: oakmoss-debug.sh boot | late | shutdown   (run by /etc/init.d/oakmoss-debug)
-D=/mnt/UDISK/oakmoss-debug
-CARD=/mnt/SDCARD/oakmoss-debug
-CUR=/tmp/oakmoss-debug.cur
+D=/mnt/UDISK/oakmoss-debug		# small ring on the 3 MB overlay: boot.txt and a short shutdown.txt
+CARD=/mnt/SDCARD/oakmoss-debug		# the full records
+T=/tmp/oakmoss-debug			# this boot's record until the card is there
 KEEP=30
+KEEP_UDISK=6
 
 now() { date '+%Y-%m-%d %H:%M:%S'; }
 up() { cut -d' ' -f1 /proc/uptime; }
 knob() { [ -w "$1" ] && echo "$2" > "$1"; }
-rec() { printf '%s/boot-%04d' "$D" "$1"; }
+name() { printf 'boot-%04d' "$1"; }
+card_up() { grep -q ' /mnt/SDCARD ' /proc/mounts; }
+# The overlay that holds /mnt/UDISK is 3 MB: nothing goes there with under 1 MB free.
+udisk_ok() { [ "$(df -k /overlay 2>/dev/null | tail -n 1 | awk '{ print $(NF - 2) }')" -ge 1024 ] 2>/dev/null; }
 
 # Nothing this script writes carries the serial number, MAC addresses or network names.
 mask() {
@@ -82,17 +86,18 @@ src_name() {
 	esac
 }
 
-prune() {	# keep the last $KEEP records in $1
+prune() {	# prune <dir> <count>: keep the last <count> records
+	k=$2
 	set -- $(ls -d "$1"/boot-* 2>/dev/null | sort)
-	while [ $# -gt $KEEP ]; do rm -rf "$1"; shift; done
+	while [ $# -gt "$k" ]; do rm -rf "$1"; shift; done
 }
 
 boot() {
-	mkdir -p $D || return
+	mkdir -p $D $T || return
 	n=$(( $(cat $D/bootcount 2>/dev/null || echo 0) + 1 ))
-	echo $n > $D/bootcount
-	R=$(rec $n); P=$(rec $((n - 1)))
-	mkdir -p "$R" && echo "$R" > $CUR
+	echo $n > $D/bootcount; echo $n > $T/n
+	R=$T/$(name $n); P=$D/$(name $((n - 1)))
+	mkdir -p "$R"
 	mark=$(arg oakmoss.prev_mark); pwron=$(arg oakmoss.pwron); f0=$(arg oakmoss.f0); src=$(arg oakmoss.src)
 	case $f0 in 0x*) [ $((f0 & 8)) = 8 ] && f0="$f0 (bit 3, U-Boot's charging flag, is SET)" ;; esac
 	{
@@ -115,36 +120,24 @@ boot() {
 		elif [ -d "$P" ]; then
 			echo "${P##*/}: no shutdown recorded: power loss, crash, hang, long press, or a reboot that bypassed init"
 		else
-			echo "no record of the boot before"
+			echo "no record of the boot before on this card"
 		fi
 		echo
 		echo "== Kernel command line"; cat /proc/cmdline; echo
 		echo "== PMIC registers (AXP2202)"; pmic; echo
 		echo "== Power supplies"; supplies
 	} 2>&1 | mask > "$R/boot.txt"
+	if udisk_ok; then mkdir -p "$D/${R##*/}" && cp "$R/boot.txt" "$D/${R##*/}/"; fi
+	prune $D $KEEP_UDISK
 	knob /proc/sys/kernel/softlockup_panic 1
 	knob /proc/sys/kernel/hung_task_timeout_secs 120
 	knob /proc/sys/kernel/hung_task_panic 0
-	prune $D
-}
-
-to_card() {	# this record, the one before it and the boot log, onto the SD card
-	grep -q ' /mnt/SDCARD ' /proc/mounts || return
-	mkdir -p $CARD || return
-	n=$(cat $D/bootcount)
-	cp /usr/magicx/share/oakmoss-debug-README.txt $CARD/README.txt
-	mask < /mnt/UDISK/oakmoss-boot.log > $CARD/oakmoss-boot.log 2>/dev/null
-	for r in "$(rec $((n - 1)))" "$(rec "$n")"; do
-		[ -d "$r" ] && cp -r "$r" $CARD/
-	done
-	prune $CARD
-	sync
 }
 
 spruce_log() {	# a compact summary where spruce's Bug report task packs logs from (Saves/spruce/*.log)
 	[ -d /mnt/SDCARD/Saves/spruce ] || return
-	n=$(cat $D/bootcount); r=$(rec "$n"); s=$r/shutdown.txt
-	[ -f "$s" ] || s=$(rec $((n - 1)))/shutdown.txt
+	n=$(cat $T/n); r=$CARD/$(name "$n"); s=$r/shutdown.txt
+	[ -f "$s" ] || s=$CARD/$(name $((n - 1)))/shutdown.txt
 	{
 		echo "oakMOSS debug summary, written $(now) at uptime $(up) s; full records: oakmoss-debug/ on this card"
 		cat /etc/oakmoss-debug 2>/dev/null
@@ -152,9 +145,9 @@ spruce_log() {	# a compact summary where spruce's Bug report task packs logs fro
 		echo "== The last 10 boots, newest first"
 		i=$n
 		while [ $i -gt 0 ] && [ $i -gt $((n - 10)) ]; do
-			b=$(rec $i)/boot.txt
+			b=$CARD/$(name $i)/boot.txt
 			if [ -f "$b" ]; then
-				echo "-- boot-$(printf %04d $i)"
+				echo "-- $(name $i)"
 				sed -n '/^== How this boot started/,/^== Kernel command line/p' "$b" | grep -v '^== Kernel command line'
 				[ -f "${b%/*}/shutdown.txt" ] && echo "its shutdown began $(sed -n 's/^started: //p' "${b%/*}/shutdown.txt")"
 			fi
@@ -174,14 +167,27 @@ spruce_log() {	# a compact summary where spruce's Bug report task packs logs fro
 	} 2>&1 | mask > /mnt/SDCARD/Saves/spruce/oakmoss-debug.log
 }
 
+to_card() {	# this boot's record and the short ones the base card kept, onto the SD card
+	card_up && mkdir -p $CARD || return
+	cp /usr/magicx/share/oakmoss-debug-README.txt $CARD/README.txt
+	mask < /mnt/UDISK/oakmoss-boot.log > $CARD/oakmoss-boot.log 2>/dev/null
+	for r in $D/boot-*; do		# a record the card does not have yet (no card at that boot)
+		[ -d "$r" ] && [ ! -d "$CARD/${r##*/}" ] && cp -r "$r" $CARD/
+	done
+	cp -r $T/boot-* $CARD/
+	prune $CARD $KEEP
+	sync
+}
+
 late() {
-	R=$(cat $CUR 2>/dev/null) || return
+	[ -f $T/n ] || return
 	sleep 60
+	R=$T/$(name "$(cat $T/n)")
 	dmesg | mask > "$R/dmesg.txt"
 	m=$(arg oakmoss.prev_mark)
 	echo "$(up) debug: ${R##*/} recorded, last mark $m ($(mark_name "$m"))" >> /mnt/UDISK/oakmoss-boot.log
 	i=0
-	until grep -q ' /mnt/SDCARD ' /proc/mounts; do
+	until card_up; do
 		i=$((i + 1)); [ $i -gt 60 ] && return
 		sleep 5
 	done
@@ -191,8 +197,8 @@ late() {
 }
 
 shutdown() {
-	R=$(cat $CUR 2>/dev/null); [ -n "$R" ] || R=$D/boot-unknown
-	mkdir -p "$R"
+	[ -f $T/n ] || return
+	R=$T/$(name "$(cat $T/n)")
 	{
 		echo "started: $(now) at uptime $(up) s"
 		echo "an orderly shutdown or reboot: procd is running the K scripts"
@@ -206,7 +212,11 @@ shutdown() {
 	# A task stuck for 30 s from here on panics, so a hung shutdown reboots and leaves mark 0x63.
 	knob /proc/sys/kernel/hung_task_timeout_secs 30
 	knob /proc/sys/kernel/hung_task_panic 1
-	if grep -q ' /mnt/SDCARD ' /proc/mounts; then
+	if udisk_ok && [ -d "$D/${R##*/}" ]; then	# the short form: no process list, a shorter log
+		sed -e '/^== Processes/,$d' "$R/shutdown.txt" > "$D/${R##*/}/shutdown.txt"
+		{ echo "== Kernel log, last 60 lines"; tail -n 60 "$R/shutdown.txt"; } >> "$D/${R##*/}/shutdown.txt"
+	fi
+	if card_up; then
 		mkdir -p "$CARD/${R##*/}" && cp "$R/shutdown.txt" "$CARD/${R##*/}/"
 		spruce_log
 	fi
