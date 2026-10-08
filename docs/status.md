@@ -81,6 +81,10 @@ and restarts the kernel when the check fails. The XU20 runs with the Zero 40's o
 - BusyBox 1.27 has no `bc`.
 - The XR829's crystal is assumed to be 26 MHz.
 - An XU20 revision with the RTP36HD029A panel would be dark on this image (`TODO.md`).
+- Two slots and updates (`docs/updates.md`) and SD1 installs (`docs/cards.md`) are tested on
+  the host only, not yet on the boards.
+- With spruce on SD1, spruce's `SD_DEV` (`/dev/mmcblk1p1`) names the wrong card until spruce
+  takes it from the mounts (`docs/cards.md`).
 
 The spruceOS side (platform files, PyUI device classes, the card builder) lives in
 [spruceOS](https://github.com/spruceUI/spruceOS), not here.

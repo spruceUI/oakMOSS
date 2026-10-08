@@ -13,7 +13,7 @@
 # format (the board's page size, B G R A bytes), written to both pages and flipped to; the kernel's
 # framebuffer rotation turns them for the panel on the flip.
 
-MODE=$1                 # "frame": draw once and exit (see below)
+MODE=$1                 # "frame", "updating", "nofrontend-off": draw once and exit; "nofrontend" (see below)
 FRAMES=/usr/magicx/share/charge
 FB=/dev/fb0
 FBSYS=/sys/class/graphics/fb0
@@ -52,11 +52,16 @@ show() {
     dbg "show $1"
 }
 
+# `charge-screen.sh nofrontend`: the same charging screen, reading "No frontend detected, charging",
+# when no card has a launcher (runmagicx.sh); the power key returns 0 and the cards are checked again.
+LEVEL=level
+[ "$MODE" = nofrontend ] && [ -f "$FRAMES/nofe-level-000.rgba.gz" ] && LEVEL=nofe-level
+
 level_frame() {
     c=$(cat "$BAT" 2>/dev/null)
     case "$c" in ''|*[!0-9]*) c=0 ;; esac
     c=$(( (c + 2) / 5 * 5 )); [ "$c" -gt 100 ] && c=100
-    printf 'level-%03d' "$c"
+    printf '%s-%03d' "$LEVEL" "$c"
 }
 
 # `charge-screen.sh frame`: draw the level frame once and exit. /etc/init.d/chargeframe runs
@@ -74,10 +79,11 @@ if [ "$MODE" = frame ]; then
     exit 0
 fi
 
-# `charge-screen.sh updating`: "Updating, do not power off" while oakmoss-update.sh writes the card.
-if [ "$MODE" = updating ]; then
+# `charge-screen.sh updating`: "Updating, do not power off" while oakmoss-update.sh writes the card;
+# `charge-screen.sh nofrontend-off`: "No frontend, power off in 10s" (runmagicx.sh powers off).
+if [ "$MODE" = updating ] || [ "$MODE" = nofrontend-off ]; then
     echo 0 > "$FBSYS/blank" 2>/dev/null
-    show updating || show loading
+    show "$MODE" || show loading
     exit 0
 fi
 
@@ -175,7 +181,7 @@ while :; do
 done
 
 stop_readers
-log "power key at $(cat "$BAT" 2>/dev/null)%; starting the launcher"
+log "power key at $(cat "$BAT" 2>/dev/null)%; $([ "$MODE" = nofrontend ] && echo 'checking the cards again' || echo 'starting the launcher')"
 echo 0 > "$FBSYS/blank" 2>/dev/null
 show loading
 [ -n "$gov" ] && echo "$gov" > "$GOV" 2>/dev/null

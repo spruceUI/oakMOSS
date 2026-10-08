@@ -2,13 +2,13 @@
 # oakMOSS hand-off, run by /etc/rc.local at the end of boot.
 #
 # Contract, as established by Shaun Inman's Moss-zero28 runmagicx.sh (the Zero 28
-# hook, mirrored from what TrimUI and Miyoo do on their Tina builds): wait for the
-# user card at /mnt/SDCARD, run /mnt/SDCARD/magicx/init.sh if present, otherwise
-# /mnt/SDCARD/.tmp_update/updater, and power off when neither exists. Two
-# differences: the wait is 10 s instead of 3 s (some cards enumerate late), and
-# the device powers off if the hand-off returns without a shutdown of the
-# launcher's own under way, so a crashed launcher never leaves the base OS
-# idling behind the boot logo.
+# hook, mirrored from what TrimUI and Miyoo do on their Tina builds): the user card at
+# /mnt/SDCARD, run /mnt/SDCARD/magicx/init.sh if present, otherwise
+# /mnt/SDCARD/.tmp_update/updater. Differences: the card can be SD1's own SPRUCEOS
+# partition or SD2, whichever carries the newer spruce (oakmoss-cards.sh, docs/cards.md);
+# with no launcher on either the board shows a no-frontend screen; and the device powers
+# off if the hand-off returns without a shutdown of the launcher's own under way, so a
+# crashed launcher never leaves the base OS idling behind the boot logo.
 export PATH=/usr/magicx/bin:$PATH
 export LD_LIBRARY_PATH=/usr/magicx/lib:$LD_LIBRARY_PATH
 
@@ -60,44 +60,56 @@ if [ "$(cat /usr/magicx/device 2>/dev/null)" = zero40 ]; then
     fi
 fi
 
-n=0
-while ! grep -q ' /mnt/SDCARD ' /proc/mounts; do
-    [ "$n" -ge 20 ] && break
-    sleep 0.5
-    n=$((n + 1))
-done
-
-# Debug records and kernel marks stay on unless SD1's partition can be read and holds no
-# oakmoss-debug file. The env carries it to U-Boot, so kernel marks follow from the next boot.
-SD1_ROOT=	# SD1's partition: none on this card layout yet
-debug=1
-[ -n "$SD1_ROOT" ] && grep -q " $SD1_ROOT " /proc/mounts && [ ! -e "$SD1_ROOT/oakmoss-debug" ] && debug=0
-if [ "$(fw_printenv -n oakmoss_debug 2>/dev/null)" != "$debug" ] && fw_setenv oakmoss_debug "$debug"; then
-    log "oakmoss_debug set to $debug"
-    [ "$debug" = 1 ] && [ ! -f /tmp/oakmoss-debug/n ] && /etc/init.d/oakmoss-debug start
-fi
-
-# Every update on the card goes to the installer, which picks the newest and shows its own frame.
-pkgs=$(ls /mnt/SDCARD/oakmoss-"$(cat /usr/magicx/device 2>/dev/null)"-*.omupd 2>/dev/null)
-if [ -n "$pkgs" ] && oakmoss-update.sh $pkgs; then
-    sync
-    reboot
-    exit 0
-fi
-
 MAGICX_PATH=/mnt/SDCARD/magicx/init.sh
 UPDATER_PATH=/mnt/SDCARD/.tmp_update/updater
-if [ -f "$MAGICX_PATH" ]; then
-    log "running $MAGICX_PATH"
-    "$MAGICX_PATH"
-elif [ -f "$UPDATER_PATH" ]; then
-    log "running $UPDATER_PATH"
-    "$UPDATER_PATH"
-else
-    log "no card or nothing to run after ${n} x 0.5 s; powering off"
+while :; do
+    # The cards: the host at /mnt/SDCARD, the other at /mnt/SDCARD_INT or /mnt/SDCARD_EXT.
+    oakmoss-cards.sh mount
+    HOST=none SD1_ROOT= SD2_ROOT=
+    [ -f /tmp/oakmoss-cards ] && . /tmp/oakmoss-cards
+
+    # Debug records and kernel marks stay on unless SD1's partition can be read and holds no
+    # oakmoss-debug file. The env carries it to U-Boot, so kernel marks follow from the next boot.
+    debug=1
+    [ -n "$SD1_ROOT" ] && [ ! -e "$SD1_ROOT/oakmoss-debug" ] && debug=0
+    if [ "$(fw_printenv -n oakmoss_debug 2>/dev/null)" != "$debug" ] && fw_setenv oakmoss_debug "$debug"; then
+        log "oakmoss_debug set to $debug"
+        [ "$debug" = 1 ] && [ ! -f /tmp/oakmoss-debug/n ] && /etc/init.d/oakmoss-debug start
+    fi
+
+    # Updates from both cards go to the installer, which picks the newest and shows its own frame.
+    dev=$(cat /usr/magicx/device 2>/dev/null)
+    pkgs=$(ls /mnt/SDCARD/oakmoss-"$dev"-*.omupd /mnt/SDCARD_INT/oakmoss-"$dev"-*.omupd \
+        /mnt/SDCARD_EXT/oakmoss-"$dev"-*.omupd 2>/dev/null)
+    if [ -n "$pkgs" ] && oakmoss-update.sh $pkgs; then
+        sync
+        reboot
+        exit 0
+    fi
+
+    [ -f "$MAGICX_PATH" ] || [ -f "$UPDATER_PATH" ] && break
+
+    # No launcher on any card: with the charger in, the charging screen until the power key
+    # (then the cards again) or until the charger goes (it powers off); otherwise power off.
+    if [ "$(cat /sys/class/power_supply/axp2202-usb/online 2>/dev/null)" = 1 ]; then
+        log "no frontend on any card (host $HOST); charging screen"
+        /usr/magicx/bin/charge-screen.sh nofrontend || exit 0
+        continue
+    fi
+    log "no frontend on any card (host $HOST) and no charger; powering off in 10 s"
+    /usr/magicx/bin/charge-screen.sh nofrontend-off
+    sleep 10
     sync
     poweroff
     exit 0
+done
+
+if [ -f "$MAGICX_PATH" ]; then
+    log "running $MAGICX_PATH"
+    "$MAGICX_PATH"
+else
+    log "running $UPDATER_PATH"
+    "$UPDATER_PATH"
 fi
 rc=$?
 # The launcher also returns when it is itself rebooting or powering off: spruce's

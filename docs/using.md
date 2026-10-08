@@ -29,12 +29,20 @@ only way back.
    v4.5.0 or a newer nightly (`docs/status.md`).
 3. Power on.
 
+**spruce on SD1 instead.** On its first boot the board adds a `SPRUCEOS` partition in the
+rest of SD1 (`docs/cards.md`). Boot the card in the device once before you put it in a PC;
+the PC then shows `SPRUCEOS` as a drive, and spruce can be copied onto it. When both
+cards carry spruce, the newer one runs, and SD1 wins a tie.
+
 ## What the board does
 
-- **Boot:** oakMOSS mounts the second card at `/mnt/SDCARD` and hands off to its launcher
-  (`.tmp_update/updater`, or `magicx/init.sh`). With no card, or when the launcher exits,
-  the board powers off (`overlay/usr/magicx/bin/runmagicx.sh`).
-- **Updates:** an `oakmoss-<board>-<version>.omupd` at the root of the launcher card is
+- **Boot:** oakMOSS mounts the card with the newer spruce at `/mnt/SDCARD` (`docs/cards.md`) and
+  hands off to its launcher (`.tmp_update/updater`, or `magicx/init.sh`). When the launcher
+  exits, the board powers off (`overlay/usr/magicx/bin/runmagicx.sh`).
+- **No launcher on any card:** with the charger in, the board shows "No frontend detected,
+  charging" with the battery level, and the power key checks the cards again. Without a
+  charger it shows "No frontend, power off in 10s" and switches off.
+- **Updates:** an `oakmoss-<board>-<version>.omupd` at the root of either card is
   installed into the second slot on the next boot, with the charger in or the battery at
   30 % or more. If the new slot does not start, the board
   goes back to the old one (`docs/updates.md`). Cards flashed before the two-slot layout

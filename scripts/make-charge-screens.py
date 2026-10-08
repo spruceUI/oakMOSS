@@ -19,6 +19,9 @@ Writes, for <board>:
       NNN = 0, 5, ... 100 %: the same, larger, plus a battery icon and the percentage;
   .../loading.rgba.gz   "Loading frontend", shown after the power key while the launcher starts.
   .../updating.rgba.gz  "Updating, do not power off", while oakmoss-update.sh writes the card.
+  .../nofe-level-NNN.rgba.gz   "No frontend detected, charging": the level screen when no card
+      has a launcher and the charger is in (charge-screen.sh nofrontend);
+  .../nofrontend-off.rgba.gz   "No frontend, power off in 10s", the same without the charger.
 The Linux frames are the framebuffer's own format (B, G, R, A bytes: ARGB8888, measured on the Zero 28
 with one-byte colour bars)
 at the size apps draw in; the kernel rotates them for the panel on every flip.
@@ -33,6 +36,8 @@ mbr = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(mbr)
 FB = {"zero28": (640, 480), "zero40": (480, 800), "xu20": (1024, 768)}   # the size apps draw in
 
 CHARGE_TEXT = "Charging, press Power to turn on"
+NOFRONTEND_TEXT = "No frontend detected, charging"
+NOFRONTEND_OFF_TEXT = "No frontend, power off in 10s"
 # U-Boot's other battery pictures (board/sunxi/power_manage.c): bat0 in a charger boot below
 # the safe level (it charges until the voltage is safe, then goes on), low_pwr on a power-on
 # without a charger below it (shut down 3 s later). Drawn with an empty battery, no percentage.
@@ -95,6 +100,9 @@ def main(board):
         save(f"level-{level:03d}", card(w, h, [CHARGE_TEXT], battery=level))
     save("loading", card(w, h, ["Loading frontend"]))
     save("updating", card(w, h, ["Updating, do not power off"]))
+    for level in LEVELS:
+        save(f"nofe-level-{level:03d}", card(w, h, [NOFRONTEND_TEXT], battery=level))
+    save("nofrontend-off", card(w, h, [NOFRONTEND_OFF_TEXT]))
     # U-Boot centres its pictures, so each is cut to its content symmetrically about the centre;
     # the charge picture is the level screen with the battery left black, so Linux's first frame
     # draws the same tree and text at the same place and only the battery appears. They fit
@@ -114,7 +122,7 @@ def main(board):
             os.path.join(out, name + ".bmp"), format="BMP")
     if board != "zero28":
         mbr.logo(board).save(os.path.join(ROOT, "boards", board, "boot-resource", "bootlogo.bmp"), format="BMP")
-    print(f"{board}: {len(LEVELS)} level frames + loading + updating ({w}x{h}), battery_charge.bmp {bmp.size[0]}x{bmp.size[1]}")
+    print(f"{board}: {len(LEVELS)} level frames x 2 + loading + updating + nofrontend-off ({w}x{h}), battery_charge.bmp {bmp.size[0]}x{bmp.size[1]}")
 
 
 if __name__ == "__main__":

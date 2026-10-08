@@ -43,6 +43,8 @@ found while porting the tree to GCC 13 / glibc 2.38.
 | path | change | reason | source |
 |---|---|---|---|
 | `target/allwinner/a133-aw3/defconfig` | REPLACED by the build config (`configs/ext-armgnu13.config`; `phase1`/`phase2*` for the fallback). `build/toplevel.mk` copies this file over `.config` on every `make` when the variant is `tina` (lines 96-103) and `menuconfig` writes back here, so editing `.config` is futile. This is the mechanism behind Moss's "copying a config to .config re-enables everything" note; two builds were lost to it | the config must live where the SDK reads it | oakMOSS |
+| `target/allwinner/a133-aw3/base-files/etc/config/fstab` | rebuilt from `fstab.orig` on every build without its two `/mnt/SDCARD` entries (`/dev/mmcblk1`, `/dev/mmcblk1p1`) | `oakmoss-cards.sh` mounts the cards (`docs/cards.md`); a card inserted later must not land on the host's mount point | oakMOSS |
+| `package/add-rootfs-demo/usr/magicx/bin/oakmoss-sd1part` | `src/sd1part.c`, built static with the Arm toolchain | SD1's `SPRUCEOS` partition; the image has no GPT tool | oakMOSS |
 | `target/allwinner/a133-aw3/base-files/etc/rc.local` | `overlay/etc/rc.local`: the SDK's mixer defaults plus `exec` of `/usr/magicx/bin/runmagicx.sh` | the hand-off | Moss |
 | `package/base-files/files/etc/banner` | `overlay/etc/banner` | Moss's banner | Moss |
 | `target/allwinner/generic/boot-resource/boot-resource/bootlogo.bmp` | `overlay/bootlogo.bmp` if present, else the SDK's original | Moss's logo is his and is not shipped; `scripts/make-boot-resource.py --logo zero28 overlay/bootlogo.bmp` draws oakMOSS's own (the spruce tree, `assets/spruce-tree.png`). The Zero 28's boot-resource partition is 256 KiB, so its logo is 200 px | oakMOSS |

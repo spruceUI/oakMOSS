@@ -87,11 +87,25 @@ apply_overlay() {
         cp -a "$OAKMOSS_ROOT/boards/$board/boot-resource/." "$bres/"
     fi
     cp -a "$ov/etc/rc.local" "$SDK_DIR/target/allwinner/a133-aw3/base-files/etc/rc.local"
+    # The cards are mounted by oakmoss-cards.sh (docs/cards.md), not by block's hotplug: the SDK's two
+    # /mnt/SDCARD entries go, so a card inserted later never lands on top of the host card.
+    local fstab=$SDK_DIR/target/allwinner/a133-aw3/base-files/etc/config/fstab
+    [ -f "$fstab.orig" ] || cp -a "$fstab" "$fstab.orig"
+    awk 'BEGIN { RS = ""; ORS = "\n\n" } !/option[ \t]+target[ \t]+.\/mnt\/SDCARD./' "$fstab.orig" > "$fstab"
+    ! grep -q '/mnt/SDCARD' "$fstab" && grep -q "'/overlay'" "$fstab" || die "$fstab: not the fstab the card mounts were written for"
     cp -a "$ov/etc/banner"   "$SDK_DIR/package/base-files/files/etc/banner"
     rm -rf "$SDK_DIR/package/add-rootfs-demo/usr" "$SDK_DIR/package/add-rootfs-demo/etc"
     cp -a "$ov/usr" "$SDK_DIR/package/add-rootfs-demo/usr"
     cp -a "$ov/etc" "$SDK_DIR/package/add-rootfs-demo/etc"
     [ -d "$bov" ] && cp -a "$bov/." "$SDK_DIR/package/add-rootfs-demo/"
+    # SD1's SPRUCEOS partition (src/sd1part.c): static, from the Arm toolchain, like diag's fbfill.
+    local cc=$ARMGNU_DIR/bin/aarch64-none-linux-gnu-gcc
+    if [ -x "$cc" ]; then
+        "$cc" -static -Os -s -Wall -Wextra -Werror -o "$SDK_DIR/package/add-rootfs-demo/usr/magicx/bin/oakmoss-sd1part" \
+            "$OAKMOSS_ROOT/src/sd1part.c" || die "oakmoss-sd1part did not build"
+    else
+        warn "no Arm toolchain at $ARMGNU_DIR: the image gets no oakmoss-sd1part, so no SD1 installs"
+    fi
     printf '%s\n' "$DEVICE_MARKER" > "$SDK_DIR/package/add-rootfs-demo/usr/magicx/device"
     oakmoss_version > "$SDK_DIR/package/add-rootfs-demo/usr/magicx/version"
     oakmoss_build > "$SDK_DIR/package/add-rootfs-demo/usr/magicx/build"
