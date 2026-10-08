@@ -316,6 +316,16 @@ check_uboot() {  # check_uboot [binary]: the installed one by default
     return 0
 }
 
+# packed_uboot_debug <sd1 image>: whether the U-Boot in its boot package (toc1 at 16400 KiB) is the debug one.
+packed_uboot_debug() {
+    local t s; t=$(mktemp -d)
+    dd if="$1" of="$t/toc1" bs=1024 skip=16400 count=8192 2>/dev/null
+    python3 "$OAKMOSS_ROOT/scripts/toc1-item.py" --extract "$t/toc1" u-boot "$t/u-boot" >/dev/null ||
+        { rm -rf "$t"; die "no U-Boot in the boot package of $1"; }
+    s=$(strings "$t/u-boot"); rm -rf "$t"
+    grep -q 'oakmoss\.prev_mark' <<<"$s"
+}
+
 run_make() {  # run_make <label> <pre-commands>
     local label=$1 pre=$2 LOG
     LOG=$BUILDS_DIR/logs/$label-$(stamp).log
@@ -390,16 +400,18 @@ case $STEP in
             > "$SDK_DIR/package/add-rootfs-demo/etc/oakmoss-debug"
         cp -p "$UBOOT_BIN" "$UBOOT_BIN.oakmoss-normal"
         trap 'mv -f "$UBOOT_BIN.oakmoss-normal" "$UBOOT_BIN"' EXIT
-        cp -p "$DEBUG_UBOOT" "$UBOOT_BIN"
-        log "U-Boot: the debug build is in place for this pack ($(md5_of "$UBOOT_BIN"))"
     fi
+    # The debug U-Boot goes in right before pack: make rebuilds U-Boot when its tree changed (after
+    # uboot-debug), and installed a normal one over an earlier swap (2026-10-07, Zero 28).
+    PREPACK=
+    [ "${KDEBUG_IMAGE:-0}" = 1 ] && PREPACK="cp -p /home/builder/builds/${DEBUG_UBOOT##*/} device/config/chips/a133/bin/${UBOOT_BIN##*/} && echo '=== pack takes the debug U-Boot';"
     # pack's output is checked: it reports a partition overflow ("dl file
     # boot-resource.fex size too large", "update_mbr failed") and still returns, and
     # the card was then built from the PREVIOUS pack's stale output (2026-09-18, a Zero 28
     # image with the old logo and the old hand-off). Its exit status and the word ERROR
     # are no use: a good pack prints ERROR lines too. A good pack ends with Dragon's
     # "image.cfg SUCCESS".
-    if ! "$RUN" "$LUNCH echo '=== kernel+rootfs refresh' \$(date); make -j$JOBS 2>&1 | tail -40; [ \${PIPESTATUS[0]} = 0 ] || { echo '=== image: make FAILED'; exit 1; }; gzip -c .config > package/add-rootfs-demo/usr/magicx/tina_config.gz; add-rootfs-demo 2>&1 | tail -5; echo '=== pack' \$(date); pack 2>&1 | tee /tmp/oakmoss-pack.log | tail -25; if grep -q 'update_mbr failed\|size too large' /tmp/oakmoss-pack.log || ! grep -q 'Dragon execute image.cfg SUCCESS' /tmp/oakmoss-pack.log; then echo '=== image: pack FAILED'; exit 1; fi; ls -la out/a133-aw3/*.img" 2>&1 | tee "$LOG"; then
+    if ! "$RUN" "$LUNCH echo '=== kernel+rootfs refresh' \$(date); make -j$JOBS 2>&1 | tail -40; [ \${PIPESTATUS[0]} = 0 ] || { echo '=== image: make FAILED'; exit 1; }; gzip -c .config > package/add-rootfs-demo/usr/magicx/tina_config.gz; add-rootfs-demo 2>&1 | tail -5; $PREPACK echo '=== pack' \$(date); pack 2>&1 | tee /tmp/oakmoss-pack.log | tail -25; if grep -q 'update_mbr failed\|size too large' /tmp/oakmoss-pack.log || ! grep -q 'Dragon execute image.cfg SUCCESS' /tmp/oakmoss-pack.log; then echo '=== image: pack FAILED'; exit 1; fi; ls -la out/a133-aw3/*.img" 2>&1 | tee "$LOG"; then
         die "image step failed (log: $LOG)"
     fi
     IMG=$(ls -t "$SDK_DIR"/out/a133-aw3/tina_a133-aw3_*.img | head -1)
@@ -409,6 +421,12 @@ case $STEP in
     [ -f "$RAW" ] || die "OpenixCard produced no raw image"
     FINAL=$OUT/oakmoss-$BOARD-$ST$SUFFIX-sd1.img
     cp -a "$RAW" "$FINAL"
+    # Read back the U-Boot the image really carries: the debug build in a debug image, never elsewhere.
+    if [ "${KDEBUG_IMAGE:-0}" = 1 ]; then
+        packed_uboot_debug "$FINAL" || die "the U-Boot packed into $FINAL is not the debug build"
+    elif packed_uboot_debug "$FINAL"; then
+        die "the U-Boot packed into $FINAL is the debug build: run scripts/build.sh uboot"
+    fi
     "$OAKMOSS_ROOT/scripts/add-boot-backups.py" "$FINAL" || die "could not add the boot0 and U-Boot copies"
     UPDATE=$OUT/oakmoss-$BOARD-$(oakmoss_version).omupd
     "$OAKMOSS_ROOT/scripts/make-update.py" "$FINAL" "$BOARD" "$(oakmoss_version)" "$UPDATE" "$(oakmoss_build)" ||
