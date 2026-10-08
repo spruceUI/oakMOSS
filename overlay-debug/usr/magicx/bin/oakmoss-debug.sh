@@ -141,6 +141,39 @@ to_card() {	# this record, the one before it and the boot log, onto the SD card
 	sync
 }
 
+spruce_log() {	# a compact summary where spruce's Bug report task packs logs from (Saves/spruce/*.log)
+	[ -d /mnt/SDCARD/Saves/spruce ] || return
+	n=$(cat $D/bootcount); r=$(rec "$n"); s=$r/shutdown.txt
+	[ -f "$s" ] || s=$(rec $((n - 1)))/shutdown.txt
+	{
+		echo "oakMOSS debug summary, written $(now) at uptime $(up) s; full records: oakmoss-debug/ on this card"
+		cat /etc/oakmoss-debug 2>/dev/null
+		echo
+		echo "== The last 10 boots, newest first"
+		i=$n
+		while [ $i -gt 0 ] && [ $i -gt $((n - 10)) ]; do
+			b=$(rec $i)/boot.txt
+			if [ -f "$b" ]; then
+				echo "-- boot-$(printf %04d $i)"
+				sed -n '/^== How this boot started/,/^== Kernel command line/p' "$b" | grep -v '^== Kernel command line'
+				[ -f "${b%/*}/shutdown.txt" ] && echo "its shutdown began $(sed -n 's/^started: //p' "${b%/*}/shutdown.txt")"
+			fi
+			i=$((i - 1))
+		done
+		echo
+		echo "== This boot: PMIC and power supplies"
+		sed -n '/^== PMIC registers/,$p' "$r/boot.txt"
+		if [ -f "$s" ]; then
+			echo
+			echo "== The latest shutdown record (${s%/*})"
+			cat "$s"
+		fi
+		echo
+		echo "== This boot: kernel log, last 200 lines"
+		dmesg | tail -n 200
+	} 2>&1 | mask > /mnt/SDCARD/Saves/spruce/oakmoss-debug.log
+}
+
 late() {
 	R=$(cat $CUR 2>/dev/null) || return
 	sleep 60
@@ -153,6 +186,8 @@ late() {
 		sleep 5
 	done
 	to_card
+	spruce_log
+	sync
 }
 
 shutdown() {
@@ -173,6 +208,7 @@ shutdown() {
 	knob /proc/sys/kernel/hung_task_panic 1
 	if grep -q ' /mnt/SDCARD ' /proc/mounts; then
 		mkdir -p "$CARD/${R##*/}" && cp "$R/shutdown.txt" "$CARD/${R##*/}/"
+		spruce_log
 	fi
 	sync
 }

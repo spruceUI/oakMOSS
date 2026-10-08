@@ -113,7 +113,8 @@ Without `DIAG=0` those images carry the diagnostic hand-off; the script's header
   - the KDEBUG_MARK and KDEBUG_FTRACE kernel, plus KDEBUG_HANG (`kdebug-hang.config`: lockup and
     hung-task detectors, a 5 s panic timeout);
   - `overlay-debug/`, which records every boot and every orderly shutdown in
-    `/mnt/UDISK/oakmoss-debug` and copies the records to the SD card's `oakmoss-debug/`.
+    `/mnt/UDISK/oakmoss-debug` and copies the records to the SD card's `oakmoss-debug/`, with a
+    summary in `Saves/spruce/oakmoss-debug.log`, which spruce's Bug report task packs and sends.
 
   RAM cannot carry a log across a reset here (boot0 overwrites DRAM), and the SD controller has
   no panic-safe writer, so the RTC mark and these records stand in for pstore.
