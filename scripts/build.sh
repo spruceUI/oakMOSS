@@ -6,6 +6,10 @@
 #   scripts/build.sh image <board>       overlay -> add-rootfs-demo -> pack -> OpenixCard -> builds/
 #   scripts/build.sh uboot               rebuild U-Boot (sun50iw10p1_tina_defconfig) with the tree patches
 #                                        (102, 103) and install it where pack takes it
+#   scripts/build.sh uboot-debug         build the debug U-Boot (sdk-patches/debug/uboot-debug.patch) into
+#                                        builds/u-boot-debug-sun50iw10p1.bin; the installed one stays
+#   scripts/build.sh debug [board ...]   public debug images: uboot-debug, then image with KDEBUG_IMAGE=1
+#                                        for zero28, zero40 and xu20 (or the boards given), then a normal tree
 #   scripts/build.sh all [board ...]     ext, then image for zero28 and zero40 (or the boards given)
 #   scripts/build.sh phase1 | phase2     Moss-faithful fallback on the vendor/from-source toolchain
 #                                        (TOOLCHAIN=vendor; see docs/toolchain.md)
@@ -16,7 +20,9 @@
 #      COMPRESS=1 (also write an .img.xz), OAKMOSS_WORK / BUILDS_DIR (see lib.sh),
 #      KDEBUG_FBCON=1 (kernel console on the panel; debug cards only, see apply_overlay),
 #      KDEBUG_MARK=1 (initcall progress marker for oakmoss_mark=; debug cards only),
-#      KDEBUG_FTRACE=1 (ftrace + event tracing for trace-cmd; debug cards only).
+#      KDEBUG_FTRACE=1 (ftrace + event tracing for trace-cmd; debug cards only),
+#      KDEBUG_HANG=1 (lockup and hung-task detectors, 5 s panic timeout; debug cards only),
+#      KDEBUG_IMAGE=1 (the public debug image: debug U-Boot, KDEBUG_MARK/FTRACE/HANG, overlay-debug).
 # Everything runs inside the container except OpenixCard, which runs on the host.
 . "$(dirname "$0")/lib.sh"
 need_sdk; need_mods
@@ -88,6 +94,8 @@ apply_overlay() {
     cp -a "$ov/usr" "$SDK_DIR/package/add-rootfs-demo/usr"
     cp -a "$ov/etc" "$SDK_DIR/package/add-rootfs-demo/etc"
     [ -d "$bov" ] && cp -a "$bov/." "$SDK_DIR/package/add-rootfs-demo/"
+    # The public debug image's boot and shutdown records; a normal build drops them with the rest.
+    [ "${KDEBUG_IMAGE:-0}" = 1 ] && cp -a "$OAKMOSS_ROOT/overlay-debug/." "$SDK_DIR/package/add-rootfs-demo/"
     printf '%s\n' "$DEVICE_MARKER" > "$SDK_DIR/package/add-rootfs-demo/usr/magicx/device"
     oakmoss_version > "$SDK_DIR/package/add-rootfs-demo/usr/magicx/version"
     oakmoss_build > "$SDK_DIR/package/add-rootfs-demo/usr/magicx/build"
@@ -185,16 +193,27 @@ EOF
     # kernel's and the later line wins - its '# CONFIG_KERNEL_FTRACE is not set' built the
     # first KDEBUG_FTRACE kernel without tracing (2026-09-24, read back with ikconfig).
     local kftrace=$OAKMOSS_ROOT/sdk-patches/debug/kdebug-ftrace.config
-    if kdebug_block "$kcfg" '# CONFIG_FTRACE is not set' 'CONFIG_FTRACE=y' \
+    if kdebug_block KDEBUG_FTRACE "$kcfg" '# CONFIG_FTRACE is not set' 'CONFIG_FTRACE=y' \
         "$(grep -E '^(CONFIG_|# CONFIG_)' "$kftrace")"; then
         log "kernel config: CONFIG_FTRACE $([ "${KDEBUG_FTRACE:-0}" = 1 ] && echo '=y (KDEBUG_FTRACE)' || echo 'off again (no KDEBUG_FTRACE)')"
     fi
-    if kdebug_block "$SDK_DIR/target/allwinner/a133-aw3/defconfig" \
+    if kdebug_block KDEBUG_FTRACE "$SDK_DIR/target/allwinner/a133-aw3/defconfig" \
         '# CONFIG_KERNEL_FTRACE is not set' 'CONFIG_KERNEL_FTRACE=y' \
         "$(printf '%s\n' CONFIG_KERNEL_FTRACE=y CONFIG_KERNEL_FUNCTION_TRACER=y \
                           CONFIG_KERNEL_FUNCTION_GRAPH_TRACER=y CONFIG_KERNEL_DYNAMIC_FTRACE=y)"; then
         log "top config: CONFIG_KERNEL_FTRACE $([ "${KDEBUG_FTRACE:-0}" = 1 ] && echo '=y (KDEBUG_FTRACE)' || echo 'off again')"
     fi
+    # Hang detection: KDEBUG_HANG=1 answers sdk-patches/debug/kdebug-hang.config in three places
+    # (lockup detector, hung-task detector, panic timeout); overlay-debug sets what panics.
+    local khang=$OAKMOSS_ROOT/sdk-patches/debug/kdebug-hang.config what name off on pat
+    for what in 'LOCKUP_DETECTOR|# CONFIG_LOCKUP_DETECTOR is not set|CONFIG_LOCKUP_DETECTOR=y|LOCKUP' \
+                'DETECT_HUNG_TASK|# CONFIG_DETECT_HUNG_TASK is not set|CONFIG_DETECT_HUNG_TASK=y|HUNG_TASK' \
+                'PANIC_TIMEOUT|CONFIG_PANIC_TIMEOUT=0|CONFIG_PANIC_TIMEOUT=5|PANIC_TIMEOUT'; do
+        IFS='|' read -r name off on pat <<<"$what"
+        if kdebug_block KDEBUG_HANG "$kcfg" "$off" "$on" "$(grep -E "^(# )?CONFIG_[A-Z_]*$pat" "$khang")"; then
+            log "kernel config: $name $([ "${KDEBUG_HANG:-0}" = 1 ] && echo 'on (KDEBUG_HANG)' || echo 'off again (no KDEBUG_HANG)')"
+        fi
+    done
     # Initcall marker: KDEBUG_MARK=1 applies sdk-patches/debug/kdebug-mark.patch,
     # which lets a card pass oakmoss_mark=<phys> (an RTC general-purpose register) so
     # each initcall and the init hand-off stages write where the boot has got to; the
@@ -245,22 +264,22 @@ EOF
     fi
 }
 
-# kdebug_block FILE OFF ON BLOCK: with KDEBUG_FTRACE=1, BLOCK (which contains ON) takes the
-# place of the OFF line; without it, ON goes back to OFF and the rest of BLOCK goes. Anchored
-# on either form, so a half-applied block left by an aborted build is completed in place;
-# the file is written only when its state is wrong (a write to the kernel config invalidates
-# its configure stamp). Returns 0 when it changed the file.
+# kdebug_block SWITCH FILE OFF ON BLOCK: with $SWITCH=1 (KDEBUG_FTRACE, KDEBUG_HANG), BLOCK (which
+# contains ON) takes the place of the OFF line; without it, ON goes back to OFF and the rest of
+# BLOCK goes. Anchored on either form, so a half-applied block left by an aborted build is
+# completed in place; the file is written only when its state is wrong (a write to the kernel
+# config invalidates its configure stamp). Returns 0 when it changed the file.
 kdebug_block() {
-    local file=$1 off=$2 on=$3 block=$4 missing
+    local want=${!1:-0} file=$2 off=$3 on=$4 block=$5 missing
     missing=$(printf '%s\n' "$block" | grep -vxF -f "$file" || true)
-    if [ "${KDEBUG_FTRACE:-0}" = 1 ] && [ -n "$missing" ]; then
+    if [ "$want" = 1 ] && [ -n "$missing" ]; then
         awk -v blk="$block" -v off="$off" -v on="$on" 'NR==FNR { drop[$0]=1; next }
             $0 == off || $0 == on { if (!done++) print blk; next }
             !($0 in drop)' <(printf '%s\n' "$block") "$file" > "$file.kdebug"
-        grep -qxF "$on" "$file.kdebug" || { rm -f "$file.kdebug"; die "KDEBUG_FTRACE: no '$off' line in $file"; }
+        grep -qxF "$on" "$file.kdebug" || { rm -f "$file.kdebug"; die "$1: no '$off' line in $file"; }
         mv "$file.kdebug" "$file"
         return 0
-    elif [ "${KDEBUG_FTRACE:-0}" != 1 ] && grep -qxF "$on" "$file"; then
+    elif [ "$want" != 1 ] && grep -qxF "$on" "$file"; then
         awk -v off="$off" -v on="$on" 'NR==FNR { drop[$0]=1; next }
             $0 == on { print off; next }
             !($0 in drop)' <(printf '%s\n' "$block") "$file" > "$file.kdebug" && mv "$file.kdebug" "$file"
@@ -274,18 +293,26 @@ kdebug_block() {
 # panels (103) - those boards' SDK-chain cards would boot with a dark panel until Linux. So
 # the image step refuses a binary without them, and `build.sh uboot` makes the right one.
 UBOOT_BIN=$SDK_DIR/device/config/chips/a133/bin/u-boot-sun50iw10p1.bin
-check_uboot() {
-    [ -f "$UBOOT_BIN" ] || die "no U-Boot binary at $UBOOT_BIN"
+DEBUG_UBOOT=$BUILDS_DIR/u-boot-debug-sun50iw10p1.bin
+check_uboot() {  # check_uboot [binary]: the installed one by default
+    local f=${1:-$UBOOT_BIN}
+    [ -f "$f" ] || die "no U-Boot binary at $f"
     # Here-strings, not pipes: under pipefail `printf | grep -q` fails when grep stops at the
     # first match and printf takes SIGPIPE, which refused a good binary at random.
-    local s; s=$(strings "$UBOOT_BIN")
+    local s; s=$(strings "$f")
     local want
     for want in RTP40WV101B RTP32HD016A disp_rotation_used; do
         grep -qx "$want" <<<"$s" ||
-            die "U-Boot at $UBOOT_BIN lacks '$want' (patches 102/103): run scripts/build.sh uboot"
+            die "U-Boot at $f lacks '$want' (patches 102/103): run scripts/build.sh uboot"
     done
     grep -q '^ANDROID: Booting slot' <<<"$s" &&
-        die "U-Boot at $UBOOT_BIN is the Android build (sun50iw10p1_defconfig): run scripts/build.sh uboot"
+        die "U-Boot at $f is the Android build (sun50iw10p1_defconfig): run scripts/build.sh uboot"
+    # The debug U-Boot (oakmoss.* arguments) only ever goes into a KDEBUG_IMAGE pack, swapped in and out.
+    if grep -q 'oakmoss\.prev_mark' <<<"$s"; then
+        [ "$f" = "$DEBUG_UBOOT" ] || die "U-Boot at $f is the debug build: run scripts/build.sh uboot"
+    else
+        [ "$f" != "$DEBUG_UBOOT" ] || die "$f is not the debug U-Boot: run scripts/build.sh uboot-debug"
+    fi
     return 0
 }
 
@@ -320,12 +347,52 @@ case $STEP in
     TOOLCHAIN=vendor "$RUN" "cd lichee/brandy-2.0/u-boot-2018 && make distclean >/dev/null && make sun50iw10p1_tina_defconfig >/dev/null && make -j$JOBS >/dev/null 2>&1 && cp -p u-boot-sun50iw10p1.bin ../../../device/config/chips/a133/bin/" ||
         die "U-Boot build failed"
     check_uboot; log "U-Boot installed: $UBOOT_BIN ($(md5_of "$UBOOT_BIN"))" ;;
+  uboot-debug)
+    # Built from the tree with sdk-patches/debug/uboot-debug.patch on, kept in builds/ and never
+    # installed (the image step swaps it in for a KDEBUG_IMAGE pack); the patch comes out again.
+    UPATCH=$OAKMOSS_ROOT/sdk-patches/debug/uboot-debug.patch
+    case $(kdebug_patch_state "$UPATCH") in
+        absent)  ( cd "$SDK_DIR" && patch -p1 -N -s -F0 --no-backup-if-mismatch < "$UPATCH" ) || die "uboot-debug: the patch did not apply" ;;
+        applied) log "uboot-debug: the patch was already on the tree" ;;
+        *) die "uboot-debug: sdk-patches/debug/uboot-debug.patch does not match the U-Boot tree; nothing was changed" ;;
+    esac
+    trap '( cd "$SDK_DIR" && patch -p1 -R -s -F0 --no-backup-if-mismatch < "$UPATCH" ) || log "uboot-debug: could not take the patch out again"' EXIT
+    ULOG=logs/uboot-debug-$(stamp).log
+    TOOLCHAIN=vendor "$RUN" "cd lichee/brandy-2.0/u-boot-2018 && make distclean >/dev/null && make sun50iw10p1_tina_defconfig >/dev/null && make -j$JOBS > /home/builder/builds/$ULOG 2>&1" ||
+        die "debug U-Boot build failed (log: $BUILDS_DIR/$ULOG)"
+    cp -p "$SDK_DIR/lichee/brandy-2.0/u-boot-2018/u-boot-sun50iw10p1.bin" "$DEBUG_UBOOT"
+    check_uboot "$DEBUG_UBOOT"; log "debug U-Boot: $DEBUG_UBOOT ($(md5_of "$DEBUG_UBOOT"))" ;;
+  debug)
+    boards=("$@"); [ ${#boards[@]} = 0 ] && boards=(zero28 zero40 xu20)
+    "$0" uboot-debug
+    for b in "${boards[@]}"; do KDEBUG_IMAGE=1 "$0" image "$b"; done
+    "$0" overlay zero28 >/dev/null     # the kernel debug patch and config blocks come out again
+    log "debug images built; the SDK tree is back to normal (scripts/kdebug.sh check: absent)" ;;
   image)
     BOARD=${1:?board: zero28|zero40|xu20}
     [ -x "$OPENIXCARD_BIN" ] || die "OpenixCard not found at $OPENIXCARD_BIN (scripts/build-openixcard.sh)"
+    # A debug pack that was killed outright leaves the normal U-Boot aside: it goes back first.
+    if [ -f "$UBOOT_BIN.oakmoss-normal" ]; then
+        mv -f "$UBOOT_BIN.oakmoss-normal" "$UBOOT_BIN"; log "U-Boot: put back the normal binary an interrupted debug build left aside"
+    fi
     check_uboot
+    SUFFIX=
+    if [ "${KDEBUG_IMAGE:-0}" = 1 ]; then
+        check_uboot "$DEBUG_UBOOT"
+        export KDEBUG_MARK=1 KDEBUG_FTRACE=1 KDEBUG_HANG=1
+        SUFFIX=-debug
+    fi
     apply_overlay "$BOARD"
-    ST=$(stamp); OUT=$BUILDS_DIR/$ST-$BOARD; mkdir -p "$OUT"; LOG=$BUILDS_DIR/logs/image-$BOARD-$ST.log
+    ST=$(stamp); OUT=$BUILDS_DIR/$ST-$BOARD$SUFFIX; mkdir -p "$OUT"; LOG=$BUILDS_DIR/logs/image-$BOARD$SUFFIX-$ST.log
+    if [ "${KDEBUG_IMAGE:-0}" = 1 ]; then
+        printf '%s\n' "image: oakMOSS debug image for $BOARD, built $ST from $(oakmoss_version)" \
+            "debug: U-Boot oakmoss.* arguments and RTC marks; kernel KDEBUG_MARK, FTRACE, HANG; boot and shutdown records" \
+            > "$SDK_DIR/package/add-rootfs-demo/etc/oakmoss-debug"
+        cp -p "$UBOOT_BIN" "$UBOOT_BIN.oakmoss-normal"
+        trap 'mv -f "$UBOOT_BIN.oakmoss-normal" "$UBOOT_BIN"' EXIT
+        cp -p "$DEBUG_UBOOT" "$UBOOT_BIN"
+        log "U-Boot: the debug build is in place for this pack ($(md5_of "$UBOOT_BIN"))"
+    fi
     # pack's output is checked: it reports a partition overflow ("dl file
     # boot-resource.fex size too large", "update_mbr failed") and still returns, and
     # the card was then built from the PREVIOUS pack's stale output (2026-09-18, a Zero 28
@@ -340,7 +407,7 @@ case $STEP in
     ( cd "$OUT" && LD_LIBRARY_PATH="${OPENIXCARD_LIBDIR:-}${OPENIXCARD_LIBDIR:+:}${LD_LIBRARY_PATH:-}" "$OPENIXCARD_BIN" -d "$(basename "$IMG")" 2>&1 | tail -15 ) | tee -a "$LOG"
     RAW=$OUT/$(basename "$IMG").dump.out/$(basename "$IMG")
     [ -f "$RAW" ] || die "OpenixCard produced no raw image"
-    FINAL=$OUT/oakmoss-$BOARD-$ST-sd1.img
+    FINAL=$OUT/oakmoss-$BOARD-$ST$SUFFIX-sd1.img
     cp -a "$RAW" "$FINAL"
     "$OAKMOSS_ROOT/scripts/add-boot-backups.py" "$FINAL" || die "could not add the boot0 and U-Boot copies"
     UPDATE=$OUT/oakmoss-$BOARD-$(oakmoss_version).omupd
@@ -361,10 +428,17 @@ case $STEP in
       echo "libc=$(strings "$ROOTFS/lib/libc.so.6" 2>/dev/null | grep -m1 'GNU C Library')"
       echo "libstdcxx=$(for f in "$ROOTFS"/usr/lib/libstdc++.so.6.0.*; do [ -e "$f" ] && basename "$f" && break; done)"
       echo "outputs=$(basename "$FINAL") (raw GPT image: dd or Etcher to SD1, whole card); $(basename "$UPDATE") (update for cards with two slots, docs/updates.md); $(basename "$IMG") (Allwinner PhoenixSuit image); $(basename "$IMG").dump/rootfs.fex (rootfs squashfs, used by the hybrid and diag images)"
+      if [ "${KDEBUG_IMAGE:-0}" = 1 ]; then
+        echo "debug=public debug image: debug U-Boot (sdk-patches/debug/uboot-debug.patch), kernel KDEBUG_MARK + KDEBUG_FTRACE + KDEBUG_HANG, overlay-debug $(cd "$OAKMOSS_ROOT/overlay-debug" && find . -type f | sort | xargs md5sum | md5sum | cut -c1-32)"
+      fi
     } > "$OUT/BUILD-INFO.txt"
     # System.map beside the build: a KDEBUG_MARK card reports initcall addresses, and
     # scripts/analyze-card-readback.py names them from this file.
     cp "$SDK_DIR/lichee/linux-4.9/System.map" "$OUT/System.map" 2>/dev/null || true
+    if [ "${KDEBUG_IMAGE:-0}" = 1 ]; then
+        mv -f "$UBOOT_BIN.oakmoss-normal" "$UBOOT_BIN"; trap - EXIT
+        log "U-Boot: the normal build is back ($(md5_of "$UBOOT_BIN"))"
+    fi
     [ "${COMPRESS:-0}" = 1 ] && { log "compressing"; xz -T0 -6 -k "$FINAL"; }
     log "image ready: $OUT"; ls -la "$OUT" >&2 ;;
   all)
