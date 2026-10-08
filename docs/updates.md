@@ -24,7 +24,8 @@ the kernel's `root=` follows the env. The device tree is U-Boot's own, from the 
 package: the boot image is header version 0 and carries none.
 
 This U-Boot has no hush parser, so there is no `if`. `build.sh` puts `run ab_${ab_try}` at the
-front of `boot_normal` and adds three scripts:
+front of `boot_normal` and adds three scripts, starting each build from the SDK's own copy of
+the env file (`env-4.9.cfg.orig`):
 
 - `ab_` (no `ab_try`): a normal boot.
 - `ab_1`: an update has just been installed. Sets `ab_try=2`, saves and boots it.
@@ -37,28 +38,37 @@ normal boot from a charger boot (`board/sunxi/sunxi_bootargs.c`). `setargs_mmc` 
 touched either, because `check_user_data` parses it.
 
 `runmagicx.sh` confirms the slot as soon as userland runs, before the charge screen or the
-launcher, by clearing `ab_try` and the fallback.
+launcher, by clearing `ab_try` and the fallback. Confirming only means the new slot reached
+userland: a slot whose launcher then fails is still kept, and the way back is the next update
+or a full flash. If the confirming write fails, that is logged, and the next boot goes back.
+A fallback (`ab_reverted=1`) is logged on the first boot after it, then cleared.
 
 ## The update file
 
 `build.sh image` writes `oakmoss-<board>-<version>.omupd` next to the image
 (`scripts/make-update.py`). It holds the kernel slot, the squashfs, boot0, the U-Boot package
 and boot-resource, each with the sha256 of what goes on the card. The first 4 KiB are a text
-manifest (`FORMAT=omupd1`, `BOARD`, `VERSION`, `PARTS` and per part `_OFFSET`, `_LENGTH`,
-`_GZIP`, `_SIZE`, `_SHA256`). Each part follows at a 4 KiB-aligned offset. `/usr/magicx/version`
-in the image carries the same version.
+manifest (`FORMAT=omupd1`, `BOARD`, `VERSION`, `BUILD`, `PARTS` and per part `_OFFSET`,
+`_LENGTH`, `_GZIP`, `_SIZE`, `_SHA256`). Each part follows at a 4 KiB-aligned offset.
+`/usr/magicx/version` in the image carries the same version, and `/usr/magicx/build` the same
+`BUILD`: the commit time, which orders updates.
 
 ## Installing
 
 The launcher downloads the file for its board to the root of the card and reboots. On the next
-boot `runmagicx.sh` finds `/mnt/SDCARD/oakmoss-<board>-*.omupd`, shows the loading picture and
-runs `oakmoss-update.sh`, which:
+boot `runmagicx.sh` passes every `/mnt/SDCARD/oakmoss-<board>-*.omupd` to `oakmoss-update.sh`,
+which:
 
-1. checks the board and every part's sha256;
-2. writes the kernel and the squashfs into the slot that is not running, and reads them back;
-3. writes boot0, the U-Boot package and boot-resource when they differ from the card's, copy
+1. keeps the newest package whose `BUILD` is above this image's and renames the others `.old`,
+   so an older file is never installed and is not looked at again;
+2. waits, writing nothing, while the battery is under 30 % and no charger is in (the package
+   stays for the next boot);
+3. shows "Updating, do not power off" (`charge-screen.sh updating`) and checks the board and
+   every part's sha256;
+4. writes the kernel and the squashfs into the slot that is not running, and reads them back;
+5. writes boot0, the U-Boot package and boot-resource when they differ from the card's, copy
    first and main last, each read back;
-4. sets `boot_partition`, `root_partition`, the fallback, `ab_try=1` and
+6. sets `boot_partition`, `root_partition`, the fallback, `ab_try=1` and
    `parts_clean=rootfs_data` in one `fw_setenv -s` write. Tina's preinit wipes the overlay
    on the next boot, so no file from the old slot hides one in the new.
 
@@ -68,7 +78,9 @@ On success the file is deleted and the board reboots. On any failure the file is
 
 ## Releasing
 
-Upload the `.omupd` of each board with the images, and list it in `SHA256SUMS`.
+Upload the `.omupd` of each board with the images, and list it in `SHA256SUMS`. The raw
+image now carries an empty slot B, about 440 MiB of zeros, so publish the compressed image
+(`COMPRESS=1`, `.img.xz`) rather than the raw one.
 
 ## Still to prove on hardware
 

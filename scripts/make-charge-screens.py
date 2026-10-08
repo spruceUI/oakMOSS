@@ -18,6 +18,7 @@ Writes, for <board>:
   boards/<board>/overlay/usr/magicx/share/charge/level-NNN.rgba.gz   the Linux screen at
       NNN = 0, 5, ... 100 %: the same, larger, plus a battery icon and the percentage;
   .../loading.rgba.gz   "Loading frontend", shown after the power key while the launcher starts.
+  .../updating.rgba.gz  "Updating, do not power off", while oakmoss-update.sh writes the card.
 The Linux frames are the framebuffer's own format (B, G, R, A bytes: ARGB8888, measured on the Zero 28
 with one-byte colour bars)
 at the size apps draw in; the kernel rotates them for the panel on every flip.
@@ -93,6 +94,7 @@ def main(board):
     for level in LEVELS:
         save(f"level-{level:03d}", card(w, h, [CHARGE_TEXT], battery=level))
     save("loading", card(w, h, ["Loading frontend"]))
+    save("updating", card(w, h, ["Updating, do not power off"]))
     # U-Boot centres its pictures, so each is cut to its content symmetrically about the centre;
     # the charge picture is the level screen with the battery left black, so Linux's first frame
     # draws the same tree and text at the same place and only the battery appears. They fit
@@ -112,7 +114,7 @@ def main(board):
             os.path.join(out, name + ".bmp"), format="BMP")
     if board != "zero28":
         mbr.logo(board).save(os.path.join(ROOT, "boards", board, "boot-resource", "bootlogo.bmp"), format="BMP")
-    print(f"{board}: {len(LEVELS)} level frames + loading ({w}x{h}), battery_charge.bmp {bmp.size[0]}x{bmp.size[1]}")
+    print(f"{board}: {len(LEVELS)} level frames + loading + updating ({w}x{h}), battery_charge.bmp {bmp.size[0]}x{bmp.size[1]}")
 
 
 if __name__ == "__main__":

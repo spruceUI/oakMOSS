@@ -74,10 +74,10 @@ if [ "$MODE" = frame ]; then
     exit 0
 fi
 
-# `charge-screen.sh loading`: the loading frame, while oakmoss-update.sh installs an update.
-if [ "$MODE" = loading ]; then
+# `charge-screen.sh updating`: "Updating, do not power off" while oakmoss-update.sh writes the card.
+if [ "$MODE" = updating ]; then
     echo 0 > "$FBSYS/blank" 2>/dev/null
-    show loading
+    show updating || show loading
     exit 0
 fi
 

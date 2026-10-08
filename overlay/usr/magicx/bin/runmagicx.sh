@@ -19,10 +19,18 @@ echo "=== boot $(date '+%Y-%m-%d %H:%M:%S') device=$(cat /usr/magicx/device 2>/d
 # Reaching userland confirms an updated slot (docs/updates.md); until then U-Boot
 # falls back to the previous one on the next boot.
 if [ -n "$(fw_printenv -n ab_try 2>/dev/null)" ]; then
-    printf 'ab_try\nab_fallback_boot\nab_fallback_root\n' > /tmp/ab-confirm &&
-        fw_setenv -s /tmp/ab-confirm && log "updated slot confirmed"
+    if printf 'ab_try\nab_fallback_boot\nab_fallback_root\n' > /tmp/ab-confirm &&
+        fw_setenv -s /tmp/ab-confirm; then
+        log "updated slot confirmed"
+    else
+        log "could not confirm the updated slot: the next boot goes back to $(fw_printenv -n ab_fallback_root 2>/dev/null)"
+    fi
 fi
-[ "$(fw_printenv -n ab_reverted 2>/dev/null)" = 1 ] && log "the updated slot did not boot; U-Boot went back to this one"
+# Logged once: the flag is cleared after it is reported.
+if [ "$(fw_printenv -n ab_reverted 2>/dev/null)" = 1 ]; then
+    log "the updated slot did not boot; U-Boot went back to this one"
+    fw_setenv ab_reverted 2>/dev/null
+fi
 
 # Plugged in while off (androidboot.mode=charger from U-Boot, charge_mode = 1): a charging
 # screen with the battery level until the power key, then the launcher (charge-screen.sh
@@ -59,16 +67,13 @@ while ! grep -q ' /mnt/SDCARD ' /proc/mounts; do
     n=$((n + 1))
 done
 
-for pkg in /mnt/SDCARD/oakmoss-"$(cat /usr/magicx/device 2>/dev/null)"-*.omupd; do
-    [ -f "$pkg" ] || break
-    charge-screen.sh loading
-    if oakmoss-update.sh "$pkg"; then
-        sync
-        reboot
-        exit 0
-    fi
-    break
-done
+# Every update on the card goes to the installer, which picks the newest and shows its own frame.
+pkgs=$(ls /mnt/SDCARD/oakmoss-"$(cat /usr/magicx/device 2>/dev/null)"-*.omupd 2>/dev/null)
+if [ -n "$pkgs" ] && oakmoss-update.sh $pkgs; then
+    sync
+    reboot
+    exit 0
+fi
 
 MAGICX_PATH=/mnt/SDCARD/magicx/init.sh
 UPDATER_PATH=/mnt/SDCARD/.tmp_update/updater

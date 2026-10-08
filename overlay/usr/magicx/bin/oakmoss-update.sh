@@ -2,17 +2,24 @@
 # Install an oakMOSS update (.omupd, scripts/make-update.py) into the slot that is
 # not running, update boot0, the U-Boot package and boot-resource when they
 # differ, then point U-Boot at the new slot for a trial boot (docs/updates.md).
-# Exits 0 when the device should reboot. The package is removed on success and
-# renamed to .failed otherwise, so a bad one is not retried every boot.
+# Of several packages only the newest (BUILD) is installed. Exits 0 when the device
+# should reboot. The package is removed on success; one that is not newer than this
+# image is renamed .old, a bad one .failed, so neither is looked at again every boot.
+# Below MIN_BATTERY % with no charger nothing is written and the package waits.
 #
-#   oakmoss-update.sh <file.omupd>
+#   oakmoss-update.sh <file.omupd>...
 #
-# DEVICE, BYNAME, DISK and FIRST_SECTOR exist for testing against plain files.
+# DEVICE, BYNAME, DISK, FIRST_SECTOR, BUILD_FILE, BAT, USB and SHOW exist for testing
+# against plain files.
 
-PKG=$1
 BYNAME=${BYNAME:-/dev/by-name}
 DEVICE=${DEVICE:-$(cat /usr/magicx/device 2>/dev/null)}
 LOG=${LOG:-/mnt/UDISK/oakmoss-boot.log}
+BUILD_FILE=${BUILD_FILE:-/usr/magicx/build}
+BAT=${BAT:-/sys/class/power_supply/axp2202-battery/capacity}
+USB=${USB:-/sys/class/power_supply/axp2202-usb/online}
+MIN_BATTERY=${MIN_BATTERY:-30}
+SHOW=${SHOW:-charge-screen.sh updating}
 W=${TMPDIR:-/tmp}/omupd
 
 log() {
@@ -25,7 +32,36 @@ fail() {
     rm -rf "$W"
     exit 1
 }
+peek() { dd if="$1" bs=4096 count=1 2>/dev/null | tr -d '\000' | sed -n "s/^$2=//p" | head -n 1; }
+set_aside() { log "$3: ${1##*/} -> .$2"; mv -f "$1" "$1.$2" 2>/dev/null; }
 
+# The newest package for this board that is newer than the running image (BUILD = commit time).
+cur=$(cat "$BUILD_FILE" 2>/dev/null); case $cur in ''|*[!0-9]*) cur=0 ;; esac
+PKG= best=0
+for f in "$@"; do
+    [ -f "$f" ] || continue
+    if [ "$(peek "$f" FORMAT)" != omupd1 ] || [ "$(peek "$f" BOARD)" != "$DEVICE" ]; then
+        set_aside "$f" failed "not an oakMOSS update for the $DEVICE"; continue
+    fi
+    b=$(peek "$f" BUILD); case $b in ''|*[!0-9]*) b=0 ;; esac
+    if [ "$b" -le "$cur" ]; then
+        set_aside "$f" old "$(peek "$f" VERSION) is not newer than this image, $(cat /usr/magicx/version 2>/dev/null)"
+    elif [ "$b" -le "$best" ]; then
+        set_aside "$f" old "a newer update is on the card"
+    else
+        [ -n "$PKG" ] && set_aside "$PKG" old "a newer update is on the card"
+        PKG=$f best=$b
+    fi
+done
+[ -n "$PKG" ] || exit 1
+
+c=$(cat "$BAT" 2>/dev/null)
+if [ "$(cat "$USB" 2>/dev/null)" != 1 ] && [ "$c" -lt "$MIN_BATTERY" ] 2>/dev/null; then
+    log "$(peek "$PKG" VERSION) waits: battery at $c % with no charger (needs $MIN_BATTERY % or the charger)"
+    exit 1
+fi
+
+$SHOW
 rm -rf "$W"; mkdir -p "$W"
 dd if="$PKG" bs=4096 count=1 2>/dev/null | tr -d '\000' > "$W/manifest"
 m() { sed -n "s/^$1=//p" "$W/manifest" | head -n 1; }

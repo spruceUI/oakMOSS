@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Cut an oakMOSS update (.omupd) out of a finished SD1 image.
 
-    make-update.py <sd1.img> <board> <version> <out.omupd>
+    make-update.py <sd1.img> <board> <version> <out.omupd> [<build>]
 
 The update carries the kernel slot (boot), the root filesystem slot (rootfs),
 boot0, the U-Boot package and the boot-resource partition, each with the
 sha256 of the bytes that go on the card. The device installs it with
-/usr/magicx/bin/oakmoss-update.sh (docs/updates.md).
+/usr/magicx/bin/oakmoss-update.sh (docs/updates.md). <build> is the commit time
+(build.sh), which the device compares with /usr/magicx/build to install only newer updates.
 
 Format: a 4 KiB text manifest (KEY=VALUE lines, NUL padded), then each part
 at a 4 KiB-aligned offset. boot and bootres are gzipped whole partitions; the
@@ -50,9 +51,12 @@ def read_at(img, sector, length):
 
 
 def main():
-    if len(sys.argv) != 5:
+    if len(sys.argv) not in (5, 6):
         sys.exit(__doc__)
-    path, board, version, out = sys.argv[1:]
+    path, board, version, out = sys.argv[1:5]
+    build = sys.argv[5] if len(sys.argv) == 6 else '0'
+    if not build.isdigit():
+        sys.exit(f'build must be a number, not {build!r}')
     with open(path, 'rb') as img:
         parts, first_usable = gpt_partitions(img)
         for need in ('boot', 'rootfs', 'bootloader'):
@@ -95,7 +99,7 @@ def main():
         ('package', package, False),
         ('bootres', bootres, True),
     ]
-    lines = ['FORMAT=omupd1', f'BOARD={board}', f'VERSION={version}',
+    lines = ['FORMAT=omupd1', f'BOARD={board}', f'VERSION={version}', f'BUILD={build}',
              'PARTS=' + ' '.join(n for n, _, _ in items)]
     blobs = []
     offset = ALIGN

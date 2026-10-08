@@ -35,7 +35,8 @@ only way back.
   (`.tmp_update/updater`, or `magicx/init.sh`). With no card, or when the launcher exits,
   the board powers off (`overlay/usr/magicx/bin/runmagicx.sh`).
 - **Updates:** an `oakmoss-<board>-<version>.omupd` at the root of the launcher card is
-  installed into the second slot on the next boot. If the new slot does not start, the board
+  installed into the second slot on the next boot, with the charger in or the battery at
+  30 % or more. If the new slot does not start, the board
   goes back to the old one (`docs/updates.md`). Cards flashed before the two-slot layout
   need one full flash first.
 - **Plugged in while off:** the board comes up in charge mode. U-Boot shows a charging
