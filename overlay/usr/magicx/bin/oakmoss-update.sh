@@ -1,7 +1,7 @@
 #!/bin/sh
 # Install an oakMOSS update (.omupd, scripts/make-update.py) into the slot that is
-# not running, update boot0, the U-Boot package and boot-resource when they
-# differ, then point U-Boot at the new slot for a trial boot (docs/updates.md).
+# not running, update boot-resource (and with BOOTCHAIN=1 boot0 and the U-Boot package)
+# when they differ, then point U-Boot at the new slot for a trial boot (docs/updates.md).
 # Of several packages only the newest (BUILD) is installed. Exits 0 when the device
 # should reboot. The package is removed on success; one that is not newer than this
 # image is renamed .old, a bad one .failed, so neither is looked at again every boot.
@@ -124,19 +124,22 @@ done
 put boot "$BYNAME/$new_boot" 0
 put rootfs "$BYNAME/$new_root" 0
 
-# Second copy first: an interrupted write leaves the other copy whole.
-DISK=${DISK:-$(readlink -f "$BYNAME/boot" | sed 's/p[0-9]*$//')}
-FIRST_SECTOR=${FIRST_SECTOR:-$(cat "/sys/class/block/$(readlink -f "$BYNAME/bootloader" | sed 's|.*/||')/start" 2>/dev/null)}
-[ "$((256 * 512 + $(m boot0_SIZE)))" -le $((2048 * 512)) ] || fail "boot0 is too big for its second copy"
-[ "$((24576 * 512 + $(m package_SIZE)))" -le $((32800 * 512)) ] || fail "the U-Boot package is too big for its second copy"
-[ -n "$FIRST_SECTOR" ] && [ "$((32800 * 512 + $(m package_SIZE)))" -le $((FIRST_SECTOR * 512)) ] ||
-    fail "the U-Boot package runs into the partitions"
-for p in boot0:256:16 package:24576:32800; do
-    name=${p%%:*}; spare=${p#*:}; spare=${spare%:*}; main=${p##*:}
-    [ "$(on_card "$DISK" "$(m "${name}_SIZE")" "$main")" = "$(m "${name}_SHA256")" ] && continue
-    put "$name" "$DISK" "$spare"
-    put "$name" "$DISK" "$main"
-done
+# boot0 and the U-Boot package serve both slots, so no fallback covers them: only a
+# BOOTCHAIN=1 update writes them. Second copy first: an interrupted write leaves the other whole.
+if [ "$(m BOOTCHAIN)" = 1 ]; then
+    DISK=${DISK:-$(readlink -f "$BYNAME/boot" | sed 's/p[0-9]*$//')}
+    FIRST_SECTOR=${FIRST_SECTOR:-$(cat "/sys/class/block/$(readlink -f "$BYNAME/bootloader" | sed 's|.*/||')/start" 2>/dev/null)}
+    [ "$((256 * 512 + $(m boot0_SIZE)))" -le $((2048 * 512)) ] || fail "boot0 is too big for its second copy"
+    [ "$((24576 * 512 + $(m package_SIZE)))" -le $((32800 * 512)) ] || fail "the U-Boot package is too big for its second copy"
+    [ -n "$FIRST_SECTOR" ] && [ "$((32800 * 512 + $(m package_SIZE)))" -le $((FIRST_SECTOR * 512)) ] ||
+        fail "the U-Boot package runs into the partitions"
+    for p in boot0:256:16 package:24576:32800; do
+        name=${p%%:*}; spare=${p#*:}; spare=${spare%:*}; main=${p##*:}
+        [ "$(on_card "$DISK" "$(m "${name}_SIZE")" "$main")" = "$(m "${name}_SHA256")" ] && continue
+        put "$name" "$DISK" "$spare"
+        put "$name" "$DISK" "$main"
+    done
+fi
 if [ "$(on_card "$BYNAME/bootloader" "$(m bootres_SIZE)" 0)" != "$(m bootres_SHA256)" ]; then
     put bootres "$BYNAME/bootloader" 0
 fi

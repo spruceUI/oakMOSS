@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Cut an oakMOSS update (.omupd) out of a finished SD1 image.
 
-    make-update.py <sd1.img> <board> <version> <out.omupd> [<build>]
+    make-update.py [--bootchain] <sd1.img> <board> <version> <out.omupd> [<build>]
 
-The update carries the kernel slot (boot), the root filesystem slot (rootfs),
-boot0, the U-Boot package and the boot-resource partition, each with the
-sha256 of the bytes that go on the card. The device installs it with
+The update carries the kernel slot (boot), the root filesystem slot (rootfs)
+and the boot-resource partition, with --bootchain also boot0 and the U-Boot
+package (BOOTCHAIN=1), each with the sha256 of the bytes that go on the card. The device installs it with
 /usr/magicx/bin/oakmoss-update.sh (docs/updates.md). <build> is the commit time
 (build.sh), which the device compares with /usr/magicx/build to install only newer updates.
 
@@ -51,10 +51,13 @@ def read_at(img, sector, length):
 
 
 def main():
-    if len(sys.argv) not in (5, 6):
+    args = sys.argv[1:]
+    bootchain = '--bootchain' in args
+    args = [a for a in args if a != '--bootchain']
+    if len(args) not in (4, 5):
         sys.exit(__doc__)
-    path, board, version, out = sys.argv[1:5]
-    build = sys.argv[5] if len(sys.argv) == 6 else '0'
+    path, board, version, out = args[:4]
+    build = args[4] if len(args) == 5 else '0'
     if not build.isdigit():
         sys.exit(f'build must be a number, not {build!r}')
     with open(path, 'rb') as img:
@@ -92,15 +95,13 @@ def main():
         if PACKAGE_SECTOR * SECTOR + len(package) > first_usable * SECTOR:
             sys.exit('U-Boot package runs into the partitions')
 
-    items = [
-        ('boot', boot, True),
-        ('rootfs', rootfs, False),
-        ('boot0', boot0, False),
-        ('package', package, False),
-        ('bootres', bootres, True),
-    ]
+    # boot0 and the U-Boot package are shared by both slots: only a --bootchain update carries them.
+    items = [('boot', boot, True), ('rootfs', rootfs, False)]
+    if bootchain:
+        items += [('boot0', boot0, False), ('package', package, False)]
+    items.append(('bootres', bootres, True))
     lines = ['FORMAT=omupd1', f'BOARD={board}', f'VERSION={version}', f'BUILD={build}',
-             'PARTS=' + ' '.join(n for n, _, _ in items)]
+             f'BOOTCHAIN={int(bootchain)}', 'PARTS=' + ' '.join(n for n, _, _ in items)]
     blobs = []
     offset = ALIGN
     for name, data, gz in items:

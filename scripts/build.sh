@@ -429,7 +429,9 @@ case $STEP in
     fi
     "$OAKMOSS_ROOT/scripts/add-boot-backups.py" "$FINAL" || die "could not add the boot0 and U-Boot copies"
     UPDATE=$OUT/oakmoss-$BOARD-$(oakmoss_version).omupd
-    "$OAKMOSS_ROOT/scripts/make-update.py" "$FINAL" "$BOARD" "$(oakmoss_version)" "$UPDATE" "$(oakmoss_build)" ||
+    # OMUPD_BOOTCHAIN=1: the update also carries boot0 and the U-Boot package (docs/updates.md).
+    "$OAKMOSS_ROOT/scripts/make-update.py" $([ "${OMUPD_BOOTCHAIN:-0}" = 1 ] && echo --bootchain) \
+        "$FINAL" "$BOARD" "$(oakmoss_version)" "$UPDATE" "$(oakmoss_build)" ||
         die "could not make the update"
     ROOTFS=$SDK_DIR/out/a133-aw3/compile_dir/target/rootfs
     {
@@ -445,7 +447,7 @@ case $STEP in
       echo "board_dts=$([ -f "$OAKMOSS_ROOT/boards/$BOARD/board.dts" ] && echo "boards/$BOARD/board.dts $(md5_of "$OAKMOSS_ROOT/boards/$BOARD/board.dts")" || echo "the SDK a133-aw3 (Zero 28) tree")"
       echo "libc=$(strings "$ROOTFS/lib/libc.so.6" 2>/dev/null | grep -m1 'GNU C Library')"
       echo "libstdcxx=$(for f in "$ROOTFS"/usr/lib/libstdc++.so.6.0.*; do [ -e "$f" ] && basename "$f" && break; done)"
-      echo "outputs=$(basename "$FINAL") (raw GPT image: dd or Etcher to SD1, whole card); $(basename "$UPDATE") (update for cards with two slots, docs/updates.md); $(basename "$IMG") (Allwinner PhoenixSuit image); $(basename "$IMG").dump/rootfs.fex (rootfs squashfs, used by the hybrid and diag images)"
+      echo "outputs=$(basename "$FINAL") (raw GPT image: dd or Etcher to SD1, whole card); $(basename "$UPDATE") (update for cards with two slots, docs/updates.md; bootchain=${OMUPD_BOOTCHAIN:-0}); $(basename "$IMG") (Allwinner PhoenixSuit image); $(basename "$IMG").dump/rootfs.fex (rootfs squashfs, used by the hybrid and diag images)"
       if [ "${KDEBUG_IMAGE:-0}" = 1 ]; then
         echo "debug=public debug image: debug U-Boot (sdk-patches/debug/uboot-debug.patch), kernel KDEBUG_MARK + KDEBUG_FTRACE + KDEBUG_HANG, overlay-debug $(cd "$OAKMOSS_ROOT/overlay-debug" && find . -type f | sort | xargs md5sum | md5sum | cut -c1-32)"
       fi

@@ -46,10 +46,16 @@ A fallback (`ab_reverted=1`) is logged on the first boot after it, then cleared.
 ## The update file
 
 `build.sh image` writes `oakmoss-<board>-<version>.omupd` next to the image
-(`scripts/make-update.py`). It holds the kernel slot, the squashfs, boot0, the U-Boot package
-and boot-resource, each with the sha256 of what goes on the card. The first 4 KiB are a text
-manifest (`FORMAT=omupd1`, `BOARD`, `VERSION`, `BUILD`, `PARTS` and per part `_OFFSET`,
+(`scripts/make-update.py`). It holds the kernel slot, the squashfs and boot-resource, each
+with the sha256 of what goes on the card. The first 4 KiB are a text manifest
+(`FORMAT=omupd1`, `BOARD`, `VERSION`, `BUILD`, `BOOTCHAIN`, `PARTS` and per part `_OFFSET`,
 `_LENGTH`, `_GZIP`, `_SIZE`, `_SHA256`). Each part follows at a 4 KiB-aligned offset.
+
+boot0 and the U-Boot package serve both slots, so a bad one is not covered by the fallback.
+An update carries them only when it is built with `OMUPD_BOOTCHAIN=1` (`BOOTCHAIN=1`,
+`make-update.py --bootchain`). Build a release that way when its U-Boot, boot0, board device
+tree or `sys_config.fex` differ from the previous release's: pack puts the device tree and
+`sys_config` into the U-Boot package and boot0, not into the slot.
 `/usr/magicx/version` in the image carries the same version, and `/usr/magicx/build` the same
 `BUILD`: the commit time, which orders updates.
 
@@ -66,8 +72,8 @@ which:
 3. shows "Updating, do not power off" (`charge-screen.sh updating`) and checks the board and
    every part's sha256;
 4. writes the kernel and the squashfs into the slot that is not running, and reads them back;
-5. writes boot0, the U-Boot package and boot-resource when they differ from the card's, copy
-   first and main last, each read back;
+5. writes boot-resource when it differs from the card's and, only for a `BOOTCHAIN=1` update,
+   boot0 and the U-Boot package when they differ, copy first and main last, each read back;
 6. sets `boot_partition`, `root_partition`, the fallback, `ab_try=1` and
    `parts_clean=rootfs_data` in one `fw_setenv -s` write. Tina's preinit wipes the overlay
    on the next boot, so no file from the old slot hides one in the new.
@@ -78,7 +84,8 @@ On success the file is deleted and the board reboots. On any failure the file is
 
 ## Releasing
 
-Upload the `.omupd` of each board with the images, and list it in `SHA256SUMS`. The raw
+Upload the `.omupd` of each board with the images, and list it in `SHA256SUMS`. Use
+`OMUPD_BOOTCHAIN=1` when the boot chain changed (see above). The raw
 image now carries an empty slot B, about 440 MiB of zeros, so publish the compressed image
 (`COMPRESS=1`, `.img.xz`) rather than the raw one.
 
