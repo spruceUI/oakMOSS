@@ -67,6 +67,16 @@ while ! grep -q ' /mnt/SDCARD ' /proc/mounts; do
     n=$((n + 1))
 done
 
+# Debug records and kernel marks stay on unless SD1's partition can be read and holds no
+# oakmoss-debug file. The env carries it to U-Boot, so kernel marks follow from the next boot.
+SD1_ROOT=	# SD1's partition: none on this card layout yet
+debug=1
+[ -n "$SD1_ROOT" ] && grep -q " $SD1_ROOT " /proc/mounts && [ ! -e "$SD1_ROOT/oakmoss-debug" ] && debug=0
+if [ "$(fw_printenv -n oakmoss_debug 2>/dev/null)" != "$debug" ] && fw_setenv oakmoss_debug "$debug"; then
+    log "oakmoss_debug set to $debug"
+    [ "$debug" = 1 ] && [ ! -f /tmp/oakmoss-debug/n ] && /etc/init.d/oakmoss-debug start
+fi
+
 # Every update on the card goes to the installer, which picks the newest and shows its own frame.
 pkgs=$(ls /mnt/SDCARD/oakmoss-"$(cat /usr/magicx/device 2>/dev/null)"-*.omupd 2>/dev/null)
 if [ -n "$pkgs" ] && oakmoss-update.sh $pkgs; then

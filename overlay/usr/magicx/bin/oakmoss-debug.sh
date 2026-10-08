@@ -1,6 +1,6 @@
 #!/bin/sh
-# oakMOSS debug image: one record per boot of how it started and how the boot before ended.
-# Usage: oakmoss-debug.sh boot | late | shutdown   (run by /etc/init.d/oakmoss-debug)
+# oakMOSS debug records: one per boot of how it started and how the boot before ended.
+# Usage: oakmoss-debug.sh boot | late | shutdown   (run by /etc/init.d/oakmoss-debug; off with oakmoss_debug=0)
 D=/mnt/UDISK/oakmoss-debug		# small ring on the 3 MB overlay: boot.txt and a short shutdown.txt
 CARD=/mnt/SDCARD/oakmoss-debug		# the full records
 T=/tmp/oakmoss-debug			# this boot's record until the card is there
@@ -49,12 +49,12 @@ procs() {	# names only: command lines can carry settings
 
 mark_name() {	# a coarse name for an RTC GPR5 mark; scripts/kmark-pm-decode.py has the detail
 	case $1 in
-	""|none) echo "not passed: not a debug U-Boot" ;;
-	0x00000000) echo "empty: the RTC lost power, or the boot before was not a debug image" ;;
+	""|none) echo "not passed: a U-Boot without the oakMOSS boot arguments" ;;
+	0x00000000) echo "empty: the RTC lost power, or the boot before ran an older oakMOSS" ;;
 	0x0000000[1-5]) echo "kernel init hand-off stage ${1#0x0000000}: stopped before userland" ;;
 	0x00000006) echo "userland started and nothing was marked after: crash, hang or power loss there" ;;
 	0x75000001) echo "U-Boot stopped after board init, before booting the kernel" ;;
-	0x75000002) echo "U-Boot booted the kernel, which wrote no mark" ;;
+	0x75000002) echo "U-Boot booted the kernel, which wrote no mark (kernel marks off, or it stopped very early)" ;;
 	0x63*) echo "kernel panic" ;;
 	0x64*) echo "kernel oops (die)" ;;
 	0x65*) echo "SError or bad exception" ;;
@@ -93,6 +93,7 @@ prune() {	# prune <dir> <count>: keep the last <count> records
 }
 
 boot() {
+	[ "$(fw_printenv -n oakmoss_debug 2>/dev/null)" = 0 ] && return
 	mkdir -p $D $T || return
 	n=$(( $(cat $D/bootcount 2>/dev/null || echo 0) + 1 ))
 	echo $n > $D/bootcount; echo $n > $T/n

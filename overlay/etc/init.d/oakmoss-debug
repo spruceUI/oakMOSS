@@ -1,0 +1,15 @@
+#!/bin/sh /etc/rc.common
+# oakMOSS debug records: each boot and each orderly shutdown, by /usr/magicx/bin/oakmoss-debug.sh
+# (nothing while oakmoss_debug=0); the records are copied to the SD card's oakmoss-debug/.
+
+START=12
+STOP=01
+
+start() {
+	/usr/magicx/bin/oakmoss-debug.sh boot
+	[ -f /tmp/oakmoss-debug/n ] && /usr/magicx/bin/oakmoss-debug.sh late </dev/null >/dev/null 2>&1 &
+}
+
+stop() {
+	/usr/magicx/bin/oakmoss-debug.sh shutdown
+}

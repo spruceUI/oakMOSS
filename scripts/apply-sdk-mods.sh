@@ -19,13 +19,13 @@ cd "$SDK_DIR" || die "cannot enter $SDK_DIR"
 missing=0
 note() { printf '  %-8s %s\n' "$1" "$2" >&2; }
 
-# The debug patch (sdk-patches/debug/, build.sh KDEBUG_MARK=1) edits files some tree patches
-# also touch, so with it applied their checks read MISSING and a forced re-apply would stack
-# them twice. Checking only warns; changing the tree waits until it is reverted.
+# The kernel mark patch (sdk-patches/debug/, build.sh KDEBUG_MARK, on by default) edits files
+# some tree patches also touch, so with it applied their checks read MISSING and a forced
+# re-apply would stack them twice. Checking only warns; changing the tree waits until it is reverted.
 case $(kdebug_patch_state "$OAKMOSS_ROOT/sdk-patches/debug/kdebug-mark.patch") in
     absent) ;;
     applied) if [ "$CHECK" = 1 ]; then warn "the debug marker is applied: tree patches it overlaps may read MISSING"
-             else die "the debug marker is applied - revert it first (scripts/kdebug.sh revert, or any non-debug build.sh run)"; fi ;;
+             else die "the debug marker is applied - revert it first (scripts/kdebug.sh revert, or KDEBUG_MARK=0 scripts/build.sh overlay zero28)"; fi ;;
     *) die "the SDK tree carries debug edits the debug patch does not describe (scripts/kdebug.sh check)" ;;
 esac
 
@@ -189,6 +189,6 @@ done
 if [ "$CHECK" = 1 ]; then
     [ "$missing" = 0 ] && log "all SDK modifications are in place" || die "SDK modifications missing (run without --check)"
 else
-    { echo "oakmoss_mods_version=14"; echo "applied=$(date -u +%FT%TZ)"; echo "oakmoss=$(oakmoss_version)"; } > .oakmoss-mods
+    { echo "oakmoss_mods_version=15"; echo "applied=$(date -u +%FT%TZ)"; echo "oakmoss=$(oakmoss_version)"; } > .oakmoss-mods
     log "SDK modifications applied; ledger: docs/sdk-mods.md"
 fi

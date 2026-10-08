@@ -6,7 +6,7 @@ diff -ruN a/lichee/brandy-2.0/u-boot-2018/board/sunxi/board.c b/lichee/brandy-2.
  #if defined CONFIG_SUNXI_BMU && !defined CONFIG_AXP_LATE_INFO
  		gd->pmu_saved_status = bmu_get_poweron_source();
 +		{
-+			void oakmoss_debug_capture(void);	/* oakMOSS debug U-Boot */
++			void oakmoss_debug_capture(void);	/* oakMOSS boot arguments */
 +			oakmoss_debug_capture();
 +		}
  		gd->pmu_runtime_chgcur = axp_get_battery_status();
@@ -19,7 +19,7 @@ diff -ruN a/lichee/brandy-2.0/u-boot-2018/board/sunxi/power_manage.c b/lichee/br
  }
  
  
-+extern int oakmoss_axp_info_ran;	/* oakMOSS debug U-Boot: board/sunxi/sunxi_bootargs.c */
++extern int oakmoss_axp_info_ran;	/* oakMOSS boot arguments: board/sunxi/sunxi_bootargs.c */
  int sunxi_update_axp_info(void)
  {
  	int val = -1;
@@ -42,9 +42,9 @@ diff -ruN a/lichee/brandy-2.0/u-boot-2018/board/sunxi/sunxi_bootargs.c b/lichee/
  DECLARE_GLOBAL_DATA_PTR;
  
 +/*
-+ * oakMOSS debug U-Boot (sdk-patches/debug/uboot-debug.patch, debug images only): the PMIC
-+ * registers behind the boot-mode decision and the last mark the previous boot left in RTC
-+ * general-purpose register 5 go to Linux as oakmoss.* arguments; register 4 is never touched.
++ * oakMOSS (sdk-patches/tree/104): the PMIC registers behind the boot-mode decision and the
++ * last mark the previous boot left in RTC general-purpose register 5 go to Linux as oakmoss.*
++ * arguments; register 4 is never touched. oakmoss_debug=0 in the env turns kernel marks off.
 + */
 +#define OAKMOSS_MARK_REG	0x07000114
 +int oakmoss_pwron_raw = -1;	/* PWRON_STATUS (0x20) as bmu_axp2202_get_poweron_source() read it */
@@ -74,12 +74,12 @@ diff -ruN a/lichee/brandy-2.0/u-boot-2018/board/sunxi/sunxi_bootargs.c b/lichee/
  #ifdef CONFIG_SUNXI_USER_KEY
  char *IGNORE_ENV_VARIABLE[] = {
  	"console",    "root",    "init",	   "loglevel",
-@@ -319,6 +351,22 @@
+@@ -319,6 +351,26 @@
  		strcat(cmdline, tmpbuf);
  	}
  #endif
 +
-+	/* oakMOSS debug U-Boot: boot-mode inputs, the previous boot's last mark, marks on */
++	/* oakMOSS: boot-mode inputs, the previous boot's last mark, kernel marks unless debug is off */
 +	oakmoss_debug_capture();
 +	oakmoss_reg_arg(tmpbuf, "pwron", oakmoss_pwron_raw);
 +	strcat(cmdline, tmpbuf);
@@ -90,9 +90,13 @@ diff -ruN a/lichee/brandy-2.0/u-boot-2018/board/sunxi/sunxi_bootargs.c b/lichee/
 +	snprintf(tmpbuf, 128, " oakmoss.src=%d oakmoss.chg=%lu oakmoss.axpinfo=%d oakmoss.logo=%d",
 +		 gd->pmu_saved_status, gd->chargemode, oakmoss_axp_info_ran, gd->boot_logo_addr ? 1 : 0);
 +	strcat(cmdline, tmpbuf);
-+	snprintf(tmpbuf, 128, " oakmoss.prev_mark=0x%08x oakmoss_mark=0x%08x",
-+		 oakmoss_prev_mark, OAKMOSS_MARK_REG);
++	snprintf(tmpbuf, 128, " oakmoss.prev_mark=0x%08x", oakmoss_prev_mark);
 +	strcat(cmdline, tmpbuf);
++	str = env_get("oakmoss_debug");
++	if (!str || strcmp(str, "0")) {
++		snprintf(tmpbuf, 128, " oakmoss_mark=0x%08x", OAKMOSS_MARK_REG);
++		strcat(cmdline, tmpbuf);
++	}
 +	writel(0x75000002, (void *)(uintptr_t)OAKMOSS_MARK_REG);	/* U-Boot: booting the kernel */
  
  	str = env_get("aw-ubi-spinand.ubootblks");
@@ -104,7 +108,7 @@ diff -ruN a/lichee/brandy-2.0/u-boot-2018/drivers/sunxi_power/bmu_axp2202.c b/li
  	charge		BIT3		charge to 3.3v		AXP_BOOT_SOURCE_CHARGER
  	battery		BIT4		battary in		AXP_BOOT_SOURCE_BATTERY
  */
-+extern int oakmoss_pwron_raw;	/* oakMOSS debug U-Boot: board/sunxi/sunxi_bootargs.c */
++extern int oakmoss_pwron_raw;	/* oakMOSS boot arguments: board/sunxi/sunxi_bootargs.c */
  int bmu_axp2202_get_poweron_source(void)
  {
  	uchar reg_value;

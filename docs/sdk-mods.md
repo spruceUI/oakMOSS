@@ -345,3 +345,16 @@ CVE-2023-0286).
 | `boards/<board>/sys_partition.fex` | `rootfs` 600 -> 512 MiB; `boot_b` (15 MiB) and `rootfs_b` (512 MiB) added after it | a second slot for updates (`docs/updates.md`) |
 | `scripts/add-boot-backups.py` | the finished image | second copies of boot0 (sector 256) and the U-Boot package (24576) |
 | `scripts/make-update.py` | `builds/<stamp>-<board>/` | `oakmoss-<board>-<version>.omupd` from the finished image |
+
+## Round 21 (2026-10-08): debug records in every image
+
+| what | where | why |
+|---|---|---|
+| `104-uboot-oakmoss-boot-args.patch` | `lichee/brandy-2.0/u-boot-2018/board/sunxi/{board.c,power_manage.c,sunxi_bootargs.c}`, `drivers/sunxi_power/bmu_axp2202.c` | Passes Linux the PMIC registers behind the boot-mode decision (`oakmoss.pwron`, `pwroff`, `f0`, `src`, `chg`, `axpinfo`, `logo`) and the mark the boot before left in RTC general-purpose register 5 (`oakmoss.prev_mark`), and writes U-Boot's own two marks there. It adds `oakmoss_mark=`, which turns the kernel marks on, unless the env holds `oakmoss_debug=0`. Until now a debug-only U-Boot (`sdk-patches/debug/uboot-debug.patch`) swapped in for debug images. |
+
+`build.sh` now builds every image with KDEBUG_MARK and KDEBUG_HANG, adds `oakmoss_debug=1` to
+the env and installs the boot and shutdown records (`docs/building.md`, "Diagnostics and debug
+records"). Since the kernel marker is applied after a build, run `scripts/kdebug.sh revert`
+before `apply-sdk-mods.sh`.
+
+`mods_version` 14 -> 15.

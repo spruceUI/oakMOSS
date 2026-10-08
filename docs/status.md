@@ -69,7 +69,7 @@ and restarts the kernel when the check fails. The XU20 runs with the Zero 40's o
 - A USB-TTL UART adapter on PB9 (TX) / PB10 (RX), 115200 8N1.
 - The diagnostic image's colour ladder (`scripts/make-diag-image.sh`).
 - Debug kernels whose marks survive a reset in an RTC register (`docs/building.md`,
-  "Diagnostic and debug images").
+  "Diagnostics and debug records").
 
 ## Known gaps
 

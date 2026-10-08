@@ -92,7 +92,7 @@ Without `DIAG=0` those images carry the diagnostic hand-off; the script's header
   the image's `System.map`; `build.sh image` reconfigures the kernel only when that merged
   configuration changes.
 
-## Diagnostic and debug images
+## Diagnostics and debug records
 
 - `scripts/make-diag-image.sh` turns any image into a colour-staged diagnostic boot that
   leaves a full hardware snapshot on the card (`docs/hardware-notes.md`).
@@ -104,17 +104,20 @@ Without `DIAG=0` those images carry the diagnostic hand-off; the script's header
   patch. `scripts/kmark-env.py`, `scripts/kmark-pm-decode.py` and `scripts/kmark-ring.py`
   read what such a kernel leaves behind; `docs/hardware-notes.md` ("Sleep on the SDK chain")
   shows them in use.
-- `scripts/build.sh debug [board ...]` builds the public debug images (`*-debug-sd1.img`, all
-  three boards by default):
-  - a U-Boot (`sdk-patches/debug/uboot-debug.patch`, built by `build.sh uboot-debug` and
-    swapped in for the pack only) that passes Linux the PMIC registers behind the boot-mode
-    decision and the last mark of the boot before as `oakmoss.*` arguments, and turns the
-    kernel marks on without changing `bootcmd`;
-  - the KDEBUG_MARK and KDEBUG_FTRACE kernel, plus KDEBUG_HANG (`kdebug-hang.config`: lockup and
-    hung-task detectors, a 5 s panic timeout);
-  - `overlay-debug/`, which records every boot and every orderly shutdown in
+- Every image carries the debug records:
+  - U-Boot passes Linux the PMIC registers behind the boot-mode decision and the last mark of
+    the boot before as `oakmoss.*` arguments (`sdk-patches/tree/104`). It adds `oakmoss_mark=`,
+    which turns the kernel marks on, unless the env holds `oakmoss_debug=0`; `bootcmd` is not
+    changed.
+  - The kernel is built with KDEBUG_MARK and KDEBUG_HANG (`kdebug-hang.config`: lockup and
+    hung-task detectors, a 5 s panic timeout); `KDEBUG_MARK=0` or `KDEBUG_HANG=0` leaves them
+    out. KDEBUG_FTRACE stays off unless asked for.
+  - `oakmoss-debug.sh` records every boot and every orderly shutdown in
     `/mnt/UDISK/oakmoss-debug` and copies the records to the SD card's `oakmoss-debug/`, with a
     summary in `Saves/spruce/oakmoss-debug.log`, which spruce's Bug report task packs and sends.
+  - `runmagicx.sh` sets `oakmoss_debug`: 0 when SD1's spruce partition can be read and holds no
+    `oakmoss-debug` file at its root, 1 otherwise. The records follow at once, the kernel marks
+    from the next boot. Cards without that partition always keep them on.
 
   RAM cannot carry a log across a reset here (boot0 overwrites DRAM), and the SD controller has
   no panic-safe writer, so the RTC mark and these records stand in for pstore.

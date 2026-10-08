@@ -1,8 +1,9 @@
-oakMOSS debug image: what this folder holds
+oakMOSS debug records: what this folder holds
 
-Each boot of a debug image writes a record here (boot-NNNN), and each orderly shutdown
-or reboot adds shutdown.txt to it. To report a problem: make it happen, start the device
-once more, wait a minute, then send this whole folder.
+Each boot writes a record here (boot-NNNN), and each orderly shutdown or reboot adds
+shutdown.txt to it. To report a problem: make it happen, start the device once more,
+wait a minute, then send this whole folder. The records are kept while a file named
+oakmoss-debug is at the root of SD1's spruce partition, and always on cards without one.
 
   boot.txt      how the boot started (power-on source, the charge-mode decision) and how
                 the boot before it ended (its last kernel mark, shutdown recorded or not)
