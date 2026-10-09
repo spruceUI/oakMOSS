@@ -101,7 +101,7 @@ MGR_TAKEOVER = {0x0: 'entered', 0x1: 'registers synced', 0x2: 'IOMMU enabled', 0
 LCD_TAKEOVER = {0x0: 'entered', 0x1: 'manager taken over', 0x2: 'LCD clocks on', 0x3: 'power rails on',
                 0x4: 'GPIOs claimed with their DTS values (the Zero 40 power LED, PB2, goes off)',
                 0x5: 'pins powered', 0x6: 'backlight enable pin done', 0x7: 'PWM state set',
-                0xf: 'returned (LCD marked enabled)', 0xe2: 'FAILED: LCD clocks'}
+                0x8: 'oakmoss.disp_delay pause over', 0xf: 'returned (LCD marked enabled)', 0xe2: 'FAILED: LCD clocks'}
 
 
 def decode_disptrace(v):
