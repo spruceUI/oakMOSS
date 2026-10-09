@@ -380,3 +380,19 @@ resets the lists, so the queue still counted it as running and never started a `
 | `sdk-patches/package-patches/procd/900-shutdown-scripts-in-order.patch` | `package/system/procd/patches/` | `rcS("K", "shutdown")` gets a runqueue of its own with one slot, so the `K` scripts run one at a time in their order. |
 
 `mods_version` 15 -> 16.
+
+## Round 23 (2026-10-09): `tr` character classes
+
+spruce strips whitespace with `tr -d '[:space:]'`, in its update check and OTA downloader among
+other places. Without `FEATURE_TR_CLASSES`, BusyBox's `tr` reads `[:space:]` as the letters
+`[ : s p a c e ]`, so the installed nightly's commit lost every `a`, `c` and `e`, never matched
+the feed's, and the update check reported the same build as rebuilt (Zero 28, 2026-10-09).
+`tr '[:upper:]' '[:lower:]'` changed nothing.
+
+| what | where | why |
+|---|---|---|
+| `configs/ext-armgnu13.config` | `CONFIG_BUSYBOX_CONFIG_FEATURE_TR_CLASSES=y` | `[:space:]`, `[:upper:]`, `[:alpha:]` and the other classes in `tr`. |
+
+The file is the SDK's defconfig (`install_config`): the `ext` step installs it, or copy it over
+`target/allwinner/a133-aw3/defconfig`. BusyBox's build stamp hashes every `CONFIG_BUSYBOX_` line,
+so the next `image` rebuilds it. `mods_version` stays 16 (`apply-sdk-mods.sh` does not touch configs).
