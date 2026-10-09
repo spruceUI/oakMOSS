@@ -29,6 +29,8 @@ TOUCH_PANEL_FRAME = {"xu20": (1, 1)}
 # niche case it should be. Riders (linux,code2: 353 on A, and on the XU20 158 on B and 256 on
 # MENU) are dropped: the driver sends them with the same press, for MagicX's Android launcher's
 # own confirm/back handling, and in Linux they only made one press read as two keys.
+# LCD GPIOs whose stock default (output 0) becomes 1, per board (see the lcd0 step).
+LCD_GPIO_HIGH = {"zero40": ["lcd_gpio_1"]}
 FACE_CODE_SWAP = {"BTNA": (0x130, 0x131), "BTNB": (0x131, 0x130),
                   "BTNX": (0x133, 0x134), "BTNY": (0x134, 0x133)}
 
@@ -145,6 +147,11 @@ def main(stock_path, aw3_path, out_path, board):
     # the curve is decided purely by this polarity against the panel's LED driver. With
     # 0 both boards ran inverted, and MagicX's own firmware ships 1 on both panels.
     props = [re.sub(r"lcd_backlight = <\d+>;", "lcd_backlight = <128>;", p) for p in props]
+    # The Zero 40's lcd_gpio_1 (PB2) is the blue half of the case LED, lit while the pin is low.
+    # U-Boot's panel power-on drives it high; the kernel's smooth takeover claims the LCD GPIOs
+    # with these values, so the stock 0 lit the blue for good. Off while running (user, 2026-10-09).
+    for name in LCD_GPIO_HIGH.get(board, []):
+        props = [re.sub(rf"^({name} = <&pio P[A-M] \d+ 1 \d+ \d+) 0>;$", r"\1 1>;", p) for p in props]
     i = next(k for k, l in enumerate(aw3) if l.strip().startswith("lcd0: lcd0@01c0c000 {"))
     j = i
     d = 0

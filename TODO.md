@@ -154,7 +154,8 @@ because the base does not.
       22058c9, sdk-mods round 24). The kernel copies U-Boot's picture into fb0 before showing fb0,
       and patch 100's unrotated copy moved the source one pixel per row instead of one row, so fb0
       held the picture's black top rows. Confirmed on hardware: the Zero 40 boots with no blank.
-      The power LED (`lcd_gpio_1`, PB2) still goes off when the kernel claims the LCD GPIOs.
+      The case LED's blue half (`lcd_gpio_1`, PB2, lit while low) now stays off while running:
+      the Zero 40 tree claims it high (user, 2026-10-09; `docs/hardware-notes.md`).
 
 - [ ] **Zero 40: suspend waits ~4 s for an SDIO rescan of the empty WiFi slot.** Real sleep
       unloads `xradio_wlan` (loaded and associated it refuses the suspend); the MMC core then

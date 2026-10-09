@@ -436,6 +436,11 @@ main-zero40's tree:
 - **Sticks are read over UART3** (`uart_path = "/dev/ttyS3"`, `joysticks = <1>`,
   `joystick1_invert_x`, `joystick1_swap`, ADC baselines 0x834, range 0x20d): a
   pad MCU, not the SoC's ADC. `uart@05000c00` is `okay` for that reason.
+- **The case LED** (measured 2026-10-09): red is the charge light, and the blue half follows
+  `lcd_gpio_1` (PB2), lit while the pin is low, so stock shows blue while running and purple
+  while also charging. U-Boot's panel power-on drives PB2 high. Our tree's default for it is 1
+  (`make-board-dts.py`), so the kernel's smooth takeover keeps the blue off; the stock 0 lit it
+  for good. Off while running is the user's choice, not stock.
 - **Slot rule, confirmed on hardware 2026-09-16 (XU20):** the system card MUST sit in the sdc2 slot and the user card in the sdc0 slot. The boot ROM tries card0 (sdc0) before card2, so a system card in the sdc0 slot boots too, but then U-Boot enables only sdc0 and the user card in the sdc2 slot stays invisible: colours to red, power-off. Swapping the two cards took the same image to blue.
 - **Slots**, corrected 2026-09-16 13:15: the SYSTEM card sits on sdc2 (the
   eMMC-class controller, `non-removable`, described by `card2_boot_para`),
