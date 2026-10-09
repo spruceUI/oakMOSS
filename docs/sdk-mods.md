@@ -414,3 +414,20 @@ display marks and `oakmoss.disp_smooth=0`, which blanked the same way.
 An SDK tree with the old patch 100 applied gets the line by hand: in `dev_fb.c` the last
 `src_addr = tmp_src + src_bpp / 8;` becomes `src_addr = tmp_src + src_stride;` (revert the debug
 marker first). `mods_version` 16 -> 17.
+
+## Round 25 (2026-10-09): the case LED's blue half off while running, on all three boards
+
+`lcd_gpio_1` (PB2) lights the blue half of the MagicX case LED while it is low; red is the charge
+light. The kernel's smooth takeover claims the LCD GPIOs with the device tree's values, and the
+trees had 0, so the blue stayed lit while running; stock does the same. The user wants it off.
+The Zero 40 and XU20 panel drivers (070, 103) already drive PB2 high at power-on and power-off;
+the Zero 28's, the SDK's own h028b23, drives it low at power-on, in the kernel and in U-Boot.
+
+| what | where | why |
+|---|---|---|
+| `boards/{zero40,xu20,zero28}/board.dts`, `scripts/make-board-dts.py` (`LCD_GPIO_HIGH`) | `lcd_gpio_1` | default 1, so the takeover keeps PB2 high |
+| `071-lcd-h028b23-led-off.patch` | `lichee/linux-4.9/.../lcd/h028b23.c` | power-on leaves PB2 high, so a resume does not light it |
+| `105-uboot-lcd-h028b23-led-off.patch` | `lichee/brandy-2.0/u-boot-2018/.../lcd/h028b23.c` | the same during U-Boot's boot picture; needs `build.sh uboot` |
+
+The device tree and U-Boot sit in the U-Boot package, which an update carries only with
+`OMUPD_BOOTCHAIN=1`; otherwise write the card image. `mods_version` 17 -> 18.

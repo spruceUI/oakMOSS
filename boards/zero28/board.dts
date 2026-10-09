@@ -1389,7 +1389,7 @@ pull up or pull down(default 0), driver level(default 1), data>
 			lcd_power1 = "cldo4";
 
 			lcd_gpio_0 = <&pio PD 22 1 0 3 1>;	/*LCD-RST*/
-			lcd_gpio_1 = <&pio PB 2 1 0 3 0>; //LED_CTRL
+			lcd_gpio_1 = <&pio PB 2 1 0 3 1>; //LED_CTRL
 
 			pinctrl-0 = <&dsi4lane_pins_a>;
 			pinctrl-1 = <&dsi4lane_pins_b>;

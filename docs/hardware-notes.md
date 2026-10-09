@@ -440,7 +440,9 @@ main-zero40's tree:
   `lcd_gpio_1` (PB2), lit while the pin is low, so stock shows blue while running and purple
   while also charging. U-Boot's panel power-on drives PB2 high. Our tree's default for it is 1
   (`make-board-dts.py`), so the kernel's smooth takeover keeps the blue off; the stock 0 lit it
-  for good. Off while running is the user's choice, not stock.
+  for good. Off while running is the user's choice, not stock. The XU20 and Zero 28 have the same
+  pin; the Zero 28's SDK panel driver drove it low at power-on and is patched (`docs/sdk-mods.md`
+  round 25).
 - **Slot rule, confirmed on hardware 2026-09-16 (XU20):** the system card MUST sit in the sdc2 slot and the user card in the sdc0 slot. The boot ROM tries card0 (sdc0) before card2, so a system card in the sdc0 slot boots too, but then U-Boot enables only sdc0 and the user card in the sdc2 slot stays invisible: colours to red, power-off. Swapping the two cards took the same image to blue.
 - **Slots**, corrected 2026-09-16 13:15: the SYSTEM card sits on sdc2 (the
   eMMC-class controller, `non-removable`, described by `card2_boot_para`),

@@ -1,0 +1,18 @@
+The Zero 28's case LED off while the panel is on.
+
+The SDK's h028b23 panel driver drives lcd_gpio_1 (PB2, LED_CTRL) low at the end of its
+power-on and high at power-off. PB2 lights the blue half of the MagicX case LED while low
+(measured on the Zero 40, 2026-10-09); the user wants it off while running, the red staying
+the charge light. The power-on runs again at every resume, so the device tree's default
+alone would light it there.
+--- a/lichee/linux-4.9/drivers/video/fbdev/sunxi/disp2/disp/lcd/h028b23.c
++++ b/lichee/linux-4.9/drivers/video/fbdev/sunxi/disp2/disp/lcd/h028b23.c
+@@ -117,7 +117,7 @@
+ 	sunxi_lcd_delay_ms(100);
+ 	panel_reset(sel, 1);
+ 	sunxi_lcd_delay_ms(100);
+-	LED_SET(sel, 0);
++	LED_SET(sel, 1);
+ }
+ 
+ static void lcd_power_off(u32 sel)

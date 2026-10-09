@@ -1,0 +1,13 @@
+The Zero 28's case LED off during U-Boot's boot picture: the same line in U-Boot's copy of
+the h028b23 panel driver (see 071).
+--- a/lichee/brandy-2.0/u-boot-2018/drivers/video/sunxi/disp2/disp/lcd/h028b23.c
++++ b/lichee/brandy-2.0/u-boot-2018/drivers/video/sunxi/disp2/disp/lcd/h028b23.c
+@@ -117,7 +117,7 @@
+ 	sunxi_lcd_delay_ms(100);
+ 	panel_reset(sel, 1);
+ 	sunxi_lcd_delay_ms(100);
+-	LED_SET(sel, 0);
++	LED_SET(sel, 1);
+ }
+ 
+ static void lcd_power_off(u32 sel)
