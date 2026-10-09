@@ -1,0 +1,15 @@
+Allwinner's 005-boot-init-scripts-parrallel.patch runs up to 10 rc scripts at once, at
+shutdown too: K99umount's umount -a then ran beside the other K scripts and took /proc
+and the cards from under them (oakMOSS, Zero 28, 2026-10-09). Shutdown runs them one at a
+time, in order; boot keeps the parallel queue.
+--- a/rcS.c
++++ b/rcS.c
+@@ -242,7 +242,7 @@ int rcS(char *pattern, char *param, void (*q_empty)(struct runqueue *))
+ {
+ 	runqueue_init(&q);
+ 	q.empty_cb = q_empty;
+-	q.max_running_tasks = 10;
++	q.max_running_tasks = strcmp(param, "shutdown") ? 10 : 1;
+ 
+ 	return _rc(&q, "/etc/rc.d", pattern, "*", param);
+ }

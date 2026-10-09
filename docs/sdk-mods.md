@@ -360,3 +360,18 @@ records"). Since the kernel marker is applied after a build, run `scripts/kdebug
 before `apply-sdk-mods.sh`.
 
 `mods_version` 14 -> 15.
+
+## Round 22 (2026-10-09): shutdown scripts in order
+
+On the Zero 28 the debug records never wrote a shutdown record at a reboot. Allwinner's
+`005-boot-init-scripts-parrallel.patch` gives procd's rc queue 10 slots, for boot and shutdown
+alike, so every `K` script started at once. `K99umount` (`umount -a -d -r`) ran beside
+`K01oakmoss-debug`, which found no `/proc`, no `/mnt/UDISK` and no card. The same race can
+leave a card mounted when the board goes down. Boot keeps the parallel queue, where
+Allwinner tracks the dependencies.
+
+| what | where | why |
+|---|---|---|
+| `sdk-patches/package-patches/procd/900-shutdown-scripts-in-order.patch` | `package/system/procd/patches/` | `rcS()` takes one slot for `shutdown`, so the `K` scripts run one at a time in their order. |
+
+`mods_version` 15 -> 16.

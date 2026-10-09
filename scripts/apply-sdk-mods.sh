@@ -125,6 +125,7 @@ package/utils/e2fsprogs e2fsprogs
 package/libs/libubox libubox
 package/allwinner/stress-ng stress-ng
 package/multimedia/bluez-alsa bluez-alsa
+package/system/procd procd
 EOF
 
 # 3. ncurses 5.9 -> 6.2 (OpenWrt 21.02 port). The old directory must leave
@@ -189,6 +190,6 @@ done
 if [ "$CHECK" = 1 ]; then
     [ "$missing" = 0 ] && log "all SDK modifications are in place" || die "SDK modifications missing (run without --check)"
 else
-    { echo "oakmoss_mods_version=15"; echo "applied=$(date -u +%FT%TZ)"; echo "oakmoss=$(oakmoss_version)"; } > .oakmoss-mods
+    { echo "oakmoss_mods_version=16"; echo "applied=$(date -u +%FT%TZ)"; echo "oakmoss=$(oakmoss_version)"; } > .oakmoss-mods
     log "SDK modifications applied; ledger: docs/sdk-mods.md"
 fi

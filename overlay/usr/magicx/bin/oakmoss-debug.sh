@@ -172,8 +172,11 @@ to_card() {	# this boot's record and the short ones the base card kept, onto the
 	card_up && mkdir -p $CARD || return
 	cp /usr/magicx/share/oakmoss-debug-README.txt $CARD/README.txt
 	mask < /mnt/UDISK/oakmoss-boot.log > $CARD/oakmoss-boot.log 2>/dev/null
-	for r in $D/boot-*; do		# a record the card does not have yet (no card at that boot)
-		[ -d "$r" ] && [ ! -d "$CARD/${r##*/}" ] && cp -r "$r" $CARD/
+	for r in $D/boot-*; do		# what the card lacks: a record (no card at that boot) or its shutdown
+		[ -d "$r" ] || continue
+		if [ ! -d "$CARD/${r##*/}" ]; then cp -r "$r" $CARD/
+		elif [ -f "$r/shutdown.txt" ] && [ ! -f "$CARD/${r##*/}/shutdown.txt" ]; then cp "$r/shutdown.txt" "$CARD/${r##*/}/"
+		fi
 	done
 	cp -r $T/boot-* $CARD/
 	prune $CARD $KEEP
