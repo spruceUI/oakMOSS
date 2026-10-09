@@ -103,7 +103,7 @@ GPT is not at the end of the card, so Windows may rewrite the table over boot0.
 
 ## Debug records
 
-The debug records and kernel marks (`docs/building.md`) follow a flag on SD1's partition. They
+The debug records and kernel marks (`docs/debugging.md`) follow a flag on SD1's partition. They
 stay on unless that partition can be read and holds no `oakmoss-debug` file at its root, so
 on a card with SD1 installs they are off until that file is created. `runmagicx.sh` writes the
 answer to the env as `oakmoss_debug`. The records follow at once, and the kernel marks from

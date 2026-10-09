@@ -47,6 +47,9 @@ cards carry spruce, SD2's runs; SD1's runs when SD2 has none.
   30 % or more. If the new slot does not start, the board
   goes back to the old one (`docs/updates.md`). Cards flashed before the two-slot layout
   need one full flash first.
+- **Debug mode:** an `oakmoss-debug` file at the root of SD1's `SPRUCEOS` partition makes the
+  board record each boot and shutdown on the card, with the kernel's progress marks
+  (`docs/debugging.md`). Without the file it records nothing.
 - **Plugged in while off:** the board comes up in charge mode. U-Boot shows a charging
   picture, then a screen with the battery level. The screen goes dark after 30 seconds, and
   any button brings it back. Power while it is lit starts the launcher. Unplugging the

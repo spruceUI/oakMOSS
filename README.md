@@ -33,6 +33,7 @@ and known gaps: [docs/status.md](docs/status.md).
 |---|---|
 | [docs/using.md](docs/using.md) | flashing, and what the board does on boot, on the charger and in sleep |
 | [docs/status.md](docs/status.md) | what has been tested on which board, and the known gaps |
+| [docs/debugging.md](docs/debugging.md) | debug mode: boot and shutdown records, kernel marks, debug switches |
 | [docs/building.md](docs/building.md) | building the images yourself, and the repository layout |
 | [docs/hardware-notes.md](docs/hardware-notes.md) | what the boards turned out to be, and how problems were found |
 | [docs/sdk-mods.md](docs/sdk-mods.md) | every change made to the vendor SDK, with the reason |
