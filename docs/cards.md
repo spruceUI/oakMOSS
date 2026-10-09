@@ -7,21 +7,23 @@ copied onto it.
 
 ## Mounts
 
-The base mounts the cards itself at every boot (`overlay/usr/magicx/bin/oakmoss-cards.sh`), each
-card once, under a name for the physical card:
+The base mounts the cards itself at every boot (`overlay/usr/magicx/bin/oakmoss-cards.sh`). It
+uses the layout spruce's Flip payload (`miyoo355/app/my355/payload/runmiyoo.sh`) leaves on the
+Miyoo Flip:
 
 | path | what |
 |---|---|
-| `/mnt/sd1` | SD1's `SPRUCEOS` partition |
-| `/mnt/sd2` | SD2 |
-| `/mnt/SDCARD` | a bind mount of the host card, the one whose launcher runs |
-| `/media/sdcard1` | a bind mount of the other card, while both are in |
+| `/mnt/SDCARD` | the host card, the one whose launcher runs |
+| `/media/sdcard1` | the other card, while both are in |
 
-A bind mount shows the real device in `/proc/mounts`, so the device behind `/mnt/SDCARD` can be
-read from there. spruce's power-off already unmounts "other mounts of the same device" (it was
-written for the Flip's `/userdata`). `/media/sdcard1` is where spruce's PyUI looks for a second
-`Roms` folder (the Miyoo Flip's layout; the MagicX device classes inherit it). Games on the
-other card are listed next to the host's without a spruce change.
+Each card is mounted once. spruce's tools expect one mount per card:
+- `repairSD.sh` unmounts by device once and then runs fsck. A second mount would leave the
+  card mounted under fsck.
+- The power-off and USB storage mode find the card by its device.
+
+`/media/sdcard1` is where spruce's PyUI looks for a second `Roms` folder; the MagicX device
+classes inherit that from the TrimUI ones. Games on the other card are listed next to the
+host's without a spruce change.
 
 ## Which card hosts
 
@@ -52,9 +54,8 @@ frontend. The same wait applies where the kernel shows no single `cd` line.
 
 The SDK's `fstab` entries that mounted SD2 at `/mnt/SDCARD` are dropped at build time. A card
 inserted after the election is handled by `/etc/hotplug.d/block/20-oakmoss-cards`:
-- It is mounted at `/mnt/sd2`, and at `/media/sdcard1` when SD1 hosts. It never lands on
-  `/mnt/SDCARD`.
-- Pulling it out unmounts both.
+- While SD1 hosts, it is mounted at `/media/sdcard1`. It never lands on `/mnt/SDCARD`.
+- Pulling it out unmounts it.
 - Pulling the host card is left alone: the launcher runs from it.
 
 ## No frontend
@@ -68,9 +69,9 @@ When no card has a launcher, the base looks for updates first, then:
 
 ## Updates
 
-`oakmoss-<board>-*.omupd` files are read from the root of both cards (`/mnt/sd1`, `/mnt/sd2`).
-This happens before any frontend or the no-frontend screen, so a base update works even with
-no spruce on either card (`docs/updates.md`).
+`oakmoss-<board>-*.omupd` files are read from the root of both cards (`/mnt/SDCARD`,
+`/media/sdcard1`). This happens before any frontend or the no-frontend screen, so a base update
+works even with no spruce on either card (`docs/updates.md`).
 
 ## The SPRUCEOS partition
 
@@ -110,7 +111,7 @@ the next boot.
 
 ## What spruce has to handle
 
-spruce owns these; the base does not change them. Both matter only when SD1 hosts.
+spruce owns these; the base does not change them. They matter only when SD1 hosts.
 
 - **`SD_DEV`.** `Zero28.cfg`, `Zero40.cfg` and `XU20.cfg` set `SD_DEV="/dev/mmcblk1p1" # need to
   verify this`. That is SD2.
@@ -119,11 +120,10 @@ spruce owns these; the base does not change them. Both matter only when SD1 host
   - **Read-only check:** `read_only_check` logs SD2's mount line; that is only a log.
   - **The fix:** one line per file, as `dArkMossCommon.cfg` already does it:
     `export SD_DEV="$(awk '$2=="/mnt/SDCARD"{print $1; exit}' /proc/mounts 2>/dev/null)"`.
-- **USB storage mode** (`App/USBStorageMode/usb_gadget.sh`) exports a fixed `/dev/mmcblk1p1`
-  on these boards. When SD1 hosts, it would hand SD2 to the PC while the base still has it
-  mounted at `/mnt/sd2`, and a card mounted on both sides can be corrupted.
-  - **The fix:** take `STORAGE_DEVICE` from the `/mnt/SDCARD` mount.
-  - **Until then:** do not use USB storage mode while SD1 hosts.
+- **USB storage mode** (`App/USBStorageMode/usb_gadget.sh`) exports a fixed `/dev/mmcblk1p1` on
+  these boards. It unmounts every mount of that device first, so nothing is exported while
+  mounted, but when SD1 hosts the PC gets SD2 instead of spruce's card. The fix is to take
+  `STORAGE_DEVICE` from the `/mnt/SDCARD` mount.
 - `repairSD.sh` already takes the device from the mount.
 
 ## Tested on hardware
