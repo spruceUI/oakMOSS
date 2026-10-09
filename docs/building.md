@@ -112,6 +112,11 @@ Without `DIAG=0` those images carry the diagnostic hand-off; the script's header
   - The kernel is built with KDEBUG_MARK and KDEBUG_HANG (`kdebug-hang.config`: lockup and
     hung-task detectors, a 5 s panic timeout); `KDEBUG_MARK=0` or `KDEBUG_HANG=0` leaves them
     out. KDEBUG_FTRACE stays off unless asked for.
+  - KDEBUG_MARK also traces the display (`0x71` marks): fb open, blank and pan, layer changes,
+    U-Boot's display taken over, skipped updates, the IOMMU, brightness and GPU power; marks
+    sent at every frame stop after 120 s. Read them with `scripts/kmark-ring.py`.
+  - `oakmoss.disp_smooth=0` on the kernel command line makes the kernel power the panel up
+    itself instead of taking U-Boot's display over (the Zero 40 boot blank, `TODO.md`).
   - `oakmoss-debug.sh` records every boot and every orderly shutdown in
     `/mnt/UDISK/oakmoss-debug` and copies the records to the SD card's `oakmoss-debug/`, with a
     summary in `Saves/spruce/oakmoss-debug.log`, which spruce's Bug report task packs and sends.

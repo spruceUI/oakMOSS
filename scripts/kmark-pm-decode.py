@@ -19,6 +19,8 @@ what the boot before left in RTC GPR5).
   0x5B0000nn   a point no device or stage mark covers (SUBS below)
   0x5C......   display resume (dev_disp.c disp_resume, disp_lcd.c enable, the XU20
                panel's DSI init table): see decode_disp()
+  0x71......   display trace (dev_fb.c, disp_manager.c, disp_lcd.c, the GPU's runtime PM;
+               per-frame marks only in the first 120 s): see decode_disptrace()
 """
 import bisect
 import os
@@ -92,6 +94,61 @@ DISP = {
     0x5C000401: 'disp_resume: disp_resume_cb() returned', 0x5C0FFF00: 'panel init: before sunxi_lcd_dsi_clk_enable',
 }
 OPEN_FLOW = ['lcd_power_on', 'lcd_panel_init (DSI init table)', 'sunxi_lcd_tcon_enable', 'lcd_bl_open']
+
+
+MGR_TAKEOVER = {0x0: 'entered', 0x1: 'registers synced', 0x2: 'IOMMU enabled', 0x3: 'layer address flushed',
+                0x4: '50 ms waited', 0x5: 'applied, registers updated', 0xf: 'returned'}
+LCD_TAKEOVER = {0x0: 'entered', 0x1: 'manager taken over', 0x2: 'LCD clocks on', 0x3: 'power rails on',
+                0x4: 'GPIOs claimed with their DTS values (the Zero 40 power LED, PB2, goes off)',
+                0x5: 'pins powered', 0x6: 'backlight enable pin done', 0x7: 'PWM state set',
+                0xf: 'returned (LCD marked enabled)', 0xe2: 'FAILED: LCD clocks'}
+
+
+def decode_disptrace(v):
+    ev, arg = (v >> 16) & 0xff, v & 0xffff
+    if ev == 0x01:
+        return f'fb open by pid {arg & 0x7fff}: LCD {"enabled" if arg >> 15 else "NOT enabled"}'
+    if ev == 0x02:
+        return f'fb open by pid {arg}: re-enabling the LCD (power sequence + layer config)'
+    if ev == 0x03:
+        return f'fb release by pid {arg}'
+    if ev == 0x04:
+        mode = {0: 'unblank', 1: 'normal', 4: 'POWERDOWN'}.get(arg >> 12, str(arg >> 12))
+        return f'fb blank ({mode}) by pid {arg & 0xfff}'
+    if ev == 0x05:
+        return f'fb pan to buffer {arg >> 12} by pid {arg & 0xfff}'
+    if ev == 0x10:
+        return f'manager smooth takeover: {MGR_TAKEOVER.get((arg >> 4) & 0xf, "?")}'
+    if ev in (0x12, 0x13):
+        return (f'layer set {"enabled" if ev == 0x13 else "DISABLED"}: channel {(arg >> 12) & 0xf}, '
+                f'buffer {(arg >> 8) & 0xf}, address {arg & 0xff:#04x}xxxxxx')
+    if ev == 0x14:
+        return f'manager IOMMU {"on" if arg & 0x10 else "off"}{" (changed)" if arg & 1 else " (unchanged)"}'
+    if ev == 0x15:
+        return f'display update SKIPPED (register queue not done within a frame): skip count {arg}'
+    if ev == 0x16:
+        return f'display sync outside the safe period: error count {arg}'
+    if ev == 0x17:
+        return f'manager {"enable" if arg & 1 else "disable"}'
+    if ev == 0x18:
+        return f'manager {"BLANK" if arg & 1 else "unblank"}'
+    if ev == 0x20:
+        return f'LCD smooth takeover: {LCD_TAKEOVER.get(arg if arg >= 0xe0 else arg & 0xf, "?")}'
+    if ev == 0x21:
+        return f'LCD brightness {arg >> 8} requested (dimming {(arg & 0xff) * 2}/256)'
+    if ev == 0x22:
+        return f'LCD backlight {"enable" if arg & 1 else "disable"}'
+    if ev == 0x23:
+        return f'LCD PWM {"enable" if arg & 1 else "disable"}'
+    if ev == 0x24:
+        return 'LCD disable (close flow)'
+    if ev == 0x30:
+        return f'GPU {"powered up (runtime active)" if arg & 1 else "powered down (runtime suspended)"}'
+    if ev == 0x40:
+        smooth, typ = arg >> 8, arg & 0xff
+        return (f'display probe: oakmoss.disp_smooth={smooth}, U-Boot output type {typ} '
+                f'({"smooth takeover" if smooth and typ else "full kernel init"})')
+    return 'unknown display-trace mark'
 
 
 def decode_disp(v):
@@ -218,6 +275,8 @@ def describe(v, names):
               5: 'START failed', 6: 'bus busy (9-pulse recovery failed)'}
         return (f's_twi (i2c-6, PMIC bus) transfer (images before 20260929-2007: to address {(v >> 8) & 0xff:#04x}; '
               f'later: by pid ...{(v >> 8) & 0xff:#04x}): {ph.get(v & 0xff, "?")}')
+    elif v >> 24 == 0x71:
+        return decode_disptrace(v)
     elif v >> 24 == 0x5C:
         return (f'{decode_disp(v)}')
     elif v >> 8 == 0x5B0000:
