@@ -642,8 +642,9 @@ place the sun50i boot ROM looks, which no table rewrite reaches.
 - XR829 26 MHz vs 40 MHz crystal unverified (26 assumed, as Knulli ships); moot
   on boards with the Realtek radio.
 - No `harbourmaster` (PortMaster) device profile for either board yet.
-- The Zero 40 blanks its boot picture for 1-2 s when the GPU driver loads, and its
-  suspend waits ~4 s for an SDIO rescan of the empty WiFi slot (both in `TODO.md`).
+- The Zero 40's suspend waits ~4 s for an SDIO rescan of the empty WiFi slot (`TODO.md`).
+  Its boot picture no longer blanks when the kernel takes the display over (fixed 2026-10-09,
+  `docs/sdk-mods.md` round 24).
 
 ## Backlight polarity (2026-09-17/18)
 

@@ -74,7 +74,6 @@ and restarts the kernel when the check fails. The XU20 runs with the Zero 40's o
 ## Known gaps
 
 - The fixes for newer board revisions in main-zero40 v20260202-1 are not in our inputs.
-- The Zero 40 blanks its boot picture for 1-2 s when the GPU driver loads (`TODO.md`).
 - The Zero 40 takes ~4 s longer to go to sleep: after its radio module is unloaded, the
   kernel rescans the empty WiFi slot (`TODO.md`).
 - Kernel 4.9 has no exFAT: large user cards must be formatted FAT32.
