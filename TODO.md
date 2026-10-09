@@ -150,17 +150,22 @@ because the base does not.
       the SDIO bus and knocks the Zero 28's Realtek off it); the launcher loads
       the board's driver by name.
 
-- [ ] **Zero 40: the boot picture blanks when the GPU driver loads (~4.2 s).** On every Zero 40
-      boot on the SDK chain (charger or battery), U-Boot's picture goes dark as `pvrsrvkm`'s
-      display class (`dc_sunxi`) calls `sunxi_fb_open()`, which re-runs the panel's enable
-      (power sequence + layer config) when the LCD device reports not enabled, although the
-      kernel took the display over smoothly ("smooth display screen:0 type:1 mode:4"); the
-      purple power LED lights at the same moment. The picture returns only on an unblank.
-      Today `/etc/init.d/chargeframe` (charger boots) unblanks and draws at ~5.2 s, leaving a
-      1-2 s gap; the Zero 28 and XU20 (rotated, a G2D copy on screen) show none. Next: log
-      `is_enabled()` in `sunxi_fb_open` and the return of `disp_lcd_sw_enable` on a Zero 40
-      boot, then mark the smoothly taken-over LCD enabled (or skip the enable there).
-      Trace tool: `touch /mnt/UDISK/charge-debug` (charge-screen display trace).
+- [ ] **Zero 40: the startup picture blanks a second or two after it is drawn.** User,
+      2026-10-09: each new picture during startup shows for 1-2 s and then blanks; in charge
+      mode it comes back when the battery frame is drawn; the power LED goes off at the blank.
+      The Zero 28 and XU20 (rotated, a G2D copy on screen) show none. What is known:
+      - The LED is `lcd_gpio_1` (PB2, `<&pio PB 2 1 0 3 0>`): U-Boot's panel power-on drives it
+        high, and the kernel's smooth takeover (`disp_lcd_sw_enable`, ~1.1 s) claims the LCD
+        GPIOs with their DTS values, so it goes low there.
+      - The old explanation (the GPU driver's `fb_open` re-running the panel enable at ~4.2 s)
+        does not hold: the 2026-10-09 mark ring has no LCD enable in the whole boot.
+      - The picture returns on an unblank (`sunxi_fb_blank` re-sends the fb layer enabled);
+        a pan keeps the layer's state. 16 display updates were skipped during startup
+        (`err:1 skip:16` in `/sys/class/disp/disp/attr/sys`), 2 in the next 48 minutes.
+      Tools (19cc540, c3ec2a6): `0x71` display-trace marks (`scripts/kmark-ring.py`), and on the
+      kernel command line `oakmoss.disp_smooth=0` (no smooth takeover) and
+      `oakmoss.disp_delay=<ms>` (a pause between the manager and LCD halves of the takeover).
+      Trace tool for charge mode: `touch /mnt/UDISK/charge-debug` (charge-screen display trace).
 
 - [ ] **Zero 40: suspend waits ~4 s for an SDIO rescan of the empty WiFi slot.** Real sleep
       unloads `xradio_wlan` (loaded and associated it refuses the suspend); the MMC core then
