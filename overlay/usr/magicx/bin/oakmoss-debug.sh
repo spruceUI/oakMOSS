@@ -170,6 +170,14 @@ spruce_log() {	# a compact summary where spruce's Bug report task packs logs fro
 
 to_card() {	# this boot's record and the short ones the base card kept, onto the SD card
 	card_up && mkdir -p $CARD || return
+	# A wiped overlay (an update, a re-flash) restarts the count: go on after the card's last record.
+	n=$(cat $T/n); h=$(ls -d $CARD/boot-* 2>/dev/null | sed 's/.*boot-0*//' | sort -n | tail -n 1)
+	if [ -n "$h" ] && [ "$h" -ge "$n" ] && ! cmp -s "$T/$(name $n)/boot.txt" "$CARD/$(name $n)/boot.txt"; then
+		m=$((h + 1))
+		mv "$T/$(name $n)" "$T/$(name $m)"
+		[ -d "$D/$(name $n)" ] && mv "$D/$(name $n)" "$D/$(name $m)"
+		echo $m > $T/n; echo $m > $D/bootcount
+	fi
 	cp /usr/magicx/share/oakmoss-debug-README.txt $CARD/README.txt
 	mask < /mnt/UDISK/oakmoss-boot.log > $CARD/oakmoss-boot.log 2>/dev/null
 	for r in $D/boot-*; do		# what the card lacks: a record (no card at that boot) or its shutdown
