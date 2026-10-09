@@ -95,11 +95,16 @@ spruce owns these; the base does not change them.
   at `/mnt/SDCARD`), or from `SD1_DEV`/`SD2_DEV` and `HOST` in `/tmp/oakmoss-cards`.
 - `SDCARD_INT` and `SDCARD_EXT` are new mount points. spruce does not use them yet.
 
-## Still to prove on hardware
+## Tested on hardware
 
-- A first boot on a card larger than the image: the partition added, formatted and mounted.
-- After that first boot, the card in Windows and macOS: the partition visible, and the card
-  still booting afterwards.
-- A re-flash of a set-up card: the partition reattached and its files kept.
-- The election with spruce on both cards, and the no-frontend screens with and without the
-  charger.
+On the Zero 28, 2026-10-09, with a 31.3 GB card:
+- **First boot:** the partition was added and formatted (27,801 MiB, about 3 s).
+- **macOS:** with the card in a Mac after that boot, SPRUCEOS mounted, and the card booted
+  afterwards.
+- **Re-flash:** the partition was reattached with its files.
+- **Election:** SD2 hosted when SD1 had no spruce, and SD1 hosted on a tie.
+- **No frontend:** the charging screen appeared after the charge-mode power key, and the board
+  powered off when the charger was pulled. Without the charger it showed the 10 s power-off.
+- **Debug flag:** both ways.
+
+Still to prove: the card in Windows after its first boot, and the other boards.

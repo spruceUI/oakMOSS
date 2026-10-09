@@ -97,5 +97,10 @@ image now carries an empty slot B, about 440 MiB of zeros, so publish the compre
   (`drivers/sunxi_flash/mmc/sdmmc.c`, `UBOOT_BACKUP_START_SECTOR_IN_SDMMC`), but boot0 is a
   prebuilt binary, so that it reads them is not visible in the SDK. Zero the main package on
   a test card and see it still boot.
-- A whole update, and a fallback: install one, then break `boot_b` on a test card and see the
-  board return to slot A with `ab_reverted=1`.
+
+Proven on the Zero 28 (2026-10-09):
+- **Updates:** two whole updates from the card (BOOTCHAIN=0). Each wrote the other slot,
+  booted it on trial and confirmed it, and `parts_clean` wiped the overlay.
+- **Fallback:** a trial whose root could not be mounted panicked, and U-Boot went back by
+  itself, with `ab_reverted` logged and cleared. It was staged in the env
+  (`root_partition=private`).
