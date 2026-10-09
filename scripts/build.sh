@@ -146,10 +146,11 @@ apply_overlay() {
     # boot of an updated slot and goes back to the previous slot when one never confirmed.
     # This U-Boot has no hush parser, so the branch is the variable's name, not an if.
     local env=$SDK_DIR/device/config/chips/a133/configs/aw3/linux/env-4.9.cfg
-    # Rebuilt from the SDK's own copy every time, like sys_config and sys_partition above.
+    # Edited in place, not rebuilt from env-4.9.cfg.orig: that copy predates patch 110 (loglevel 4),
+    # and rebuilding from it undid 110 in every image from 2026-10-08 on. Our lines go, then come back.
     [ -f "$env.orig" ] || cp -a "$env" "$env.orig"
-    cp -a "$env.orig" "$env"
-    sed -i -e '/^ab_\(check\|1\|2\)\?=/d' \
+    grep -qx 'loglevel=4' "$env" || die "$env: patch 110 is not on it (run scripts/apply-sdk-mods.sh)"
+    sed -i -e '/^ab_\(check\|1\|2\)\?=/d' -e '/^oakmoss_debug=/d' \
         -e 's|^boot_normal=\(run ab_[^;]*;\)*sunxi_flash read|boot_normal=run ab_${ab_try};sunxi_flash read|' "$env"
     grep -qxF 'boot_normal=run ab_${ab_try};sunxi_flash read 45000000 ${boot_partition};bootm 45000000' "$env" ||
         die "$env: boot_normal is not the one the slot check was written for"

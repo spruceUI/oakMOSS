@@ -52,7 +52,7 @@ found while porting the tree to GCC 13 / glibc 2.38.
 | `package/add-rootfs-demo/usr/magicx/tina_config.gz` | gzip of the build's `.config` | Moss's `install.sh` ships it in the image | Moss |
 | `package/add-rootfs-demo/usr/magicx/version` | `git describe` of the build | what the launcher compares with the latest release (`docs/updates.md`) | oakMOSS |
 | `package/add-rootfs-demo/usr/magicx/build` | the commit time of the build | an update is installed only when its `BUILD` is higher (`docs/updates.md`) | oakMOSS |
-| `device/config/chips/a133/configs/aw3/linux/env-4.9.cfg` | rebuilt from `env-4.9.cfg.orig` on every build: `boot_normal` runs `ab_${ab_try}` first; `ab_`, `ab_1`, `ab_2` added | trial boot and fallback for the second slot (`docs/updates.md`) | oakMOSS |
+| `device/config/chips/a133/configs/aw3/linux/env-4.9.cfg` | edited in place on every build (its earlier lines removed first; patch 110 must be on it): `boot_normal` runs `ab_${ab_try}` first; `ab_`, `ab_1`, `ab_2` and `oakmoss_debug=1` added. Builds from 2026-10-08 to 2026-10-09 rebuilt it from `env-4.9.cfg.orig` instead, which dropped 110 (`loglevel=8` again) | trial boot and fallback for the second slot (`docs/updates.md`); the debug switch | oakMOSS |
 | `lichee/linux-4.9/drivers/char/sunxi_encrypt/encrypt` | Zero 28: the SDK's object; Zero 40: MagicX's object from `Zero40-lichee.zip` (329272 B, 2025-09-22, md5 `33a0a6d7…`). The kernel's OpenWrt stamp does not track the prebuilt object, so `build.sh` records the linked md5 (`.linked-md5`) and forces a kernel relink when it changes | the Zero 40 kernel needs its own object | MagicX |
 
 ## Config-level choices (`configs/ext-armgnu13.config` vs Moss's `phase1.config`)

@@ -24,8 +24,8 @@ the kernel's `root=` follows the env. The device tree is U-Boot's own, from the 
 package: the boot image is header version 0 and carries none.
 
 This U-Boot has no hush parser, so there is no `if`. `build.sh` puts `run ab_${ab_try}` at the
-front of `boot_normal` and adds three scripts, starting each build from the SDK's own copy of
-the env file (`env-4.9.cfg.orig`):
+front of `boot_normal` and adds three scripts. Each build removes its own lines from the env file
+and adds them again, so the SDK mods to that file (patch 110) stay:
 
 - `ab_` (no `ab_try`): a normal boot.
 - `ab_1`: an update has just been installed. Sets `ab_try=2`, saves and boots it.
