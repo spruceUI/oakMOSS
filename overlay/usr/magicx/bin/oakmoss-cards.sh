@@ -1,7 +1,7 @@
 #!/bin/sh
 # The spruce cards (docs/cards.md), laid out the way spruce's Flip payload (runmiyoo.sh) leaves
-# them: the host at /mnt/SDCARD and the other card at /media/sdcard1, one mount each. The host is
-# the card whose spruce is newer, SD1 on a tie; with no frontend on either, SD2 if it is in. The
+# them: the host at /mnt/SDCARD and the other card at /media/sdcard1, one mount each. SD2 hosts
+# whenever it holds a frontend, SD1 otherwise; with no frontend on either, SD2 if it is in. The
 # outcome goes to /tmp/oakmoss-cards: HOST (sd1, sd2, none), SD1_DEV, SD1_ROOT, SD2_DEV, SD2_ROOT.
 #
 #   oakmoss-cards.sh mount     prepare SD1's partition, mount the cards, elect (runmagicx.sh)
@@ -24,16 +24,12 @@ mounted() { grep -q " $1 " /proc/mounts; }
 
 frontend() { [ -f "$1/magicx/init.sh" ] || [ -f "$1/.tmp_update/updater" ]; }
 
-# x.y.z from spruce/spruce, then BUILD_UNIX from spruce/build; a card without them counts as oldest.
+# For the log: x.y.z from spruce/spruce, then BUILD_UNIX from spruce/build (0.0.0 0 without them).
 version() {
     v=$(head -n 1 "$1/spruce/spruce" 2>/dev/null | tr -d '\r ')
     b=$(sed -n 's/^BUILD_UNIX=//p' "$1/spruce/build" 2>/dev/null | head -n 1 | tr -d '\r"')
     case $b in ''|*[!0-9]*) b=0 ;; esac
     echo "${v:-0.0.0} $b"
-}
-newer() {	# newer A B: the spruce at A is newer than the one at B
-    { version "$1"; version "$2"; } | awk 'NR == 1 { split($1, a, "."); ab = $2 } NR == 2 { split($1, b, "."); bb = $2 }
-        END { for (i = 1; i <= 3; i++) if (a[i] + 0 != b[i] + 0) exit !(a[i] + 0 > b[i] + 0); exit !(ab + 0 > bb + 0) }'
 }
 
 mount_card() {	# mount_card <device> <dir>: as the SDK's fstab mounted SD2 (rw,async), NTFS through ntfs-3g
@@ -114,15 +110,12 @@ cards_mount() {
     # A look at both cards first; the winner and the other then get one mount each where they belong.
     d1=$(sd1) && { mount_card "$d1" "$T/sd1" || { log "SD1: $d1 did not mount"; d1=; }; }
     f1=; [ -n "$d1" ] && frontend "$T/sd1" && f1=yes
-    # SD2 may enumerate late: wait for it 10 s, or 3 s when SD1 can start a frontend anyway.
-    w=10; [ -n "$f1" ] && w=3
-    d2=$(sd2 "$w") && { mount_card "$d2" "$T/sd2" || { log "SD2: $d2 did not mount"; d2=; }; }
+    # SD2 may enumerate late, and it wins whenever it holds a frontend: a card in its slot gets 10 s.
+    d2=$(sd2 10) && { mount_card "$d2" "$T/sd2" || { log "SD2: $d2 did not mount"; d2=; }; }
     f2=; [ -n "$d2" ] && frontend "$T/sd2" && f2=yes
 
-    if [ -n "$f1" ] && [ -n "$f2" ]; then
-        if newer "$T/sd2" "$T/sd1"; then host=sd2; else host=sd1; fi
+    if [ -n "$f2" ]; then host=sd2
     elif [ -n "$f1" ]; then host=sd1
-    elif [ -n "$f2" ]; then host=sd2
     elif [ -n "$d2" ]; then host=sd2
     elif [ -n "$d1" ]; then host=sd1
     else host=none

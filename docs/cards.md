@@ -27,10 +27,10 @@ host's without a spruce change.
 
 ## Which card hosts
 
-Only a card with a frontend (`magicx/init.sh` or `.tmp_update/updater`) can host. Between two
-such cards, the newer spruce wins: the version in `spruce/spruce` (x.y.z) first, then
-`BUILD_UNIX` from `spruce/build` where a card has one. A card without either counts as oldest.
-A tie goes to SD1. Older spruce versions are never turned away.
+Only a card with a frontend (`magicx/init.sh` or `.tmp_update/updater`) can host. SD2 always
+wins: it hosts whenever it holds a frontend, whatever spruce version either card carries, and SD1
+hosts only when SD2 has none (user, 2026-10-09; until then the newer spruce won and SD1 took a
+tie). The log line still names each card's spruce version.
 
 | cards | `/mnt/SDCARD` | `/media/sdcard1` | what runs |
 |---|---|---|---|
@@ -38,7 +38,7 @@ A tie goes to SD1. Older spruce versions are never turned away.
 | no SD2, spruce on SD1 | SD1 | - | spruce from SD1 |
 | spruce on SD1, SD2 without spruce | SD1 | SD2 | spruce from SD1 |
 | no spruce on SD1, spruce on SD2 | SD2 | SD1 | spruce from SD2 |
-| spruce on both | the newer (SD1 on a tie) | the other one | the newer spruce |
+| spruce on both | SD2 | SD1 | spruce from SD2 |
 | SD2 in, no spruce on either | SD2 | SD1 | the no-frontend screen |
 
 The outcome is in `/tmp/oakmoss-cards` (`HOST`, `SD1_DEV`, `SD1_ROOT`, `SD2_DEV`, `SD2_ROOT`) and
@@ -49,8 +49,8 @@ in `/mnt/UDISK/oakmoss-boot.log`.
 SD2 can take a moment to appear after power-on. The base reads the slot's card-detect switch
 from the kernel's GPIO list (debugfs, mounted if needed): one line labelled `cd`, `hi` with no
 card. That is PF6 on these boards, pulled up, and a card pulls it low. An empty slot ends the
-wait at once. Otherwise the base waits for the card up to 10 s, or 3 s when SD1 already has a
-frontend. The same wait applies where the kernel shows no single `cd` line.
+wait at once. Otherwise the base waits for the card up to 10 s, also when SD1 has a frontend,
+since SD2 would win. The same wait applies where the kernel shows no single `cd` line.
 
 The SDK's `fstab` entries that mounted SD2 at `/mnt/SDCARD` are dropped at build time. A card
 inserted after the election is handled by `/etc/hotplug.d/block/20-oakmoss-cards`:
@@ -133,7 +133,8 @@ On the Zero 28, 2026-10-09, with a 31.3 GB card:
 - **macOS:** with the card in a Mac after that boot, SPRUCEOS mounted, and the card booted
   afterwards.
 - **Re-flash:** the partition was reattached with its files.
-- **Election:** SD2 hosted when SD1 had no spruce, and SD1 hosted on a tie.
+- **Election** (the earlier newer-wins rule): SD2 hosted when SD1 had no spruce, and SD1 hosted
+  on a tie.
 - **No frontend:** the charging screen appeared after the charge-mode power key, and the board
   powered off when the charger was pulled. Without the charger it showed the 10 s power-off.
 - **Debug flag:** both ways.

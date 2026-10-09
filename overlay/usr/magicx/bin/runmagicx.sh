@@ -5,7 +5,7 @@
 # hook, mirrored from what TrimUI and Miyoo do on their Tina builds): the user card at
 # /mnt/SDCARD, run /mnt/SDCARD/magicx/init.sh if present, otherwise
 # /mnt/SDCARD/.tmp_update/updater. Differences: the card can be SD1's own SPRUCEOS
-# partition or SD2, whichever carries the newer spruce (oakmoss-cards.sh, docs/cards.md);
+# partition or SD2, SD2 whenever it carries a launcher (oakmoss-cards.sh, docs/cards.md);
 # with no launcher on either the board shows a no-frontend screen; and the device powers
 # off if the hand-off returns without a shutdown of the launcher's own under way, so a
 # crashed launcher never leaves the base OS idling behind the boot logo.
