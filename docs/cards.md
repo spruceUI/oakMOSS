@@ -135,6 +135,8 @@ On the Zero 28, 2026-10-09, with a 31.3 GB card:
 - **Re-flash:** the partition was reattached with its files.
 - **Election** (the earlier newer-wins rule): SD2 hosted when SD1 had no spruce, and SD1 hosted
   on a tie.
+- **SD2 first** (1e94b27, 2026-10-09): with spruce 4.5.3 and a launcher on both cards, SD2
+  hosted at `/mnt/SDCARD` and SD1 went to `/media/sdcard1`.
 - **No frontend:** the charging screen appeared after the charge-mode power key, and the board
   powered off when the charger was pulled. Without the charger it showed the 10 s power-off.
 - **Debug flag:** both ways.
