@@ -138,4 +138,12 @@ On the Zero 28, 2026-10-09, with a 31.3 GB card:
   powered off when the charger was pulled. Without the charger it showed the 10 s power-off.
 - **Debug flag:** both ways.
 
+With this layout (Zero 28, 2026-10-09):
+- **Mounts:** SD1 hosted at `/mnt/SDCARD` and SD2 sat at `/media/sdcard1`, each mounted once.
+- **Games:** spruce, running from SD1 with empty `Roms` folders, listed SD2's games.
+- **Hotplug:** SD2 pulled while running was unmounted within 0.2 s; put back, it was mounted at
+  `/media/sdcard1` within 1.6 s.
+- **Card detect:** with the slot empty, card detect read `hi` and the hand-off started at 7.1 s,
+  without the wait.
+
 Still to prove: the card in Windows after its first boot, and the other boards.
