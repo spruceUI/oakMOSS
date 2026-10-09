@@ -101,7 +101,7 @@ MGR_TAKEOVER = {0x0: 'entered', 0x1: 'registers synced', 0x2: 'IOMMU enabled', 0
 LCD_TAKEOVER = {0x0: 'entered', 0x1: 'manager taken over', 0x2: 'LCD clocks on', 0x3: 'power rails on',
                 0x4: 'GPIOs claimed with their DTS values (the Zero 40 power LED, PB2, goes off)',
                 0x5: 'pins powered', 0x6: 'backlight enable pin done', 0x7: 'PWM state set',
-                0x8: 'oakmoss.disp_delay pause over', 0xf: 'returned (LCD marked enabled)', 0xe2: 'FAILED: LCD clocks'}
+                0xf: 'returned (LCD marked enabled)', 0xe2: 'FAILED: LCD clocks'}
 
 
 def decode_disptrace(v):
@@ -123,7 +123,7 @@ def decode_disptrace(v):
         return (f'layer set {"enabled" if ev == 0x13 else "DISABLED"}: channel {(arg >> 12) & 0xf}, '
                 f'buffer {(arg >> 8) & 0xf}, address {arg & 0xff:#04x}xxxxxx')
     if ev == 0x14:
-        return f'manager IOMMU {"on" if arg & 0x10 else "off"}{" (changed)" if arg & 1 else " (unchanged)"}'
+        return f'the display\'s IOMMU switched {"on" if arg & 0x10 else "off"}' + ('' if arg & 1 else ' (unchanged; images before 2026-10-09 22058c9)')
     if ev == 0x15:
         return f'display update SKIPPED (register queue not done within a frame): skip count {arg}'
     if ev == 0x16:

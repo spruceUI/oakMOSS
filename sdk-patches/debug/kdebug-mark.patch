@@ -899,7 +899,7 @@
   Close:
 --- a/lichee/linux-4.9/drivers/video/fbdev/sunxi/disp2/disp/dev_disp.c
 +++ b/lichee/linux-4.9/drivers/video/fbdev/sunxi/disp2/disp/dev_disp.c
-@@ -2140,6 +2140,29 @@
+@@ -2140,6 +2140,17 @@
  	return -1;
  }
  
@@ -914,22 +914,10 @@
 +}
 +__setup("oakmoss.disp_smooth=", oakmoss_disp_smooth_setup);
 +
-+/* oakmoss.disp_delay=<ms>: a pause in the LCD takeover between the manager's part and the LCD's
-+ * (disp_lcd.c), to tell by eye which half blanks the boot picture. */
-+unsigned int oakmoss_disp_delay_ms;
-+static int __init oakmoss_disp_delay_setup(char *s)
-+{
-+	oakmoss_disp_delay_ms = simple_strtoul(s, NULL, 0);
-+	if (oakmoss_disp_delay_ms > 10000)
-+		oakmoss_disp_delay_ms = 10000;
-+	return 1;
-+}
-+__setup("oakmoss.disp_delay=", oakmoss_disp_delay_setup);
-+
  static s32 disp_init(struct platform_device *pdev)
  {
  	struct disp_bsp_init_para *para;
-@@ -2181,6 +2204,10 @@
+@@ -2181,6 +2192,10 @@
  	value = disp_boot_para_parse("boot_disp");
  	value1 = disp_boot_para_parse("boot_disp1");
  	value2 = disp_boot_para_parse("boot_disp2");
@@ -940,7 +928,7 @@
  	output_type = (value >> 8) & 0xff;
  	output_mode = (value) & 0xff;
  
-@@ -3076,6 +3103,12 @@
+@@ -3076,6 +3091,12 @@
  	return 0;
  }
  
@@ -953,7 +941,7 @@
  int disp_resume(struct device *dev)
  {
  	u32 screen_id = 0;
-@@ -3144,8 +3177,10 @@
+@@ -3144,8 +3165,10 @@
  	memset(&config, 0, sizeof(struct disp_device_config));
  	disp_list = disp_device_get_list_head();
  	list_for_each_entry(dispdev, disp_list, list) {
@@ -964,7 +952,7 @@
  	}
  
  	for (screen_id = 0; screen_id < num_screens; screen_id++) {
-@@ -3154,6 +3189,7 @@
+@@ -3154,6 +3177,7 @@
  			continue;
  
  		if (suspend_output_type[screen_id] != DISP_OUTPUT_TYPE_NONE) {
@@ -972,7 +960,7 @@
  			if (mgr->device->set_static_config &&
  					mgr->device->get_static_config) {
  				mgr->device->get_static_config(mgr->device,
-@@ -3162,10 +3198,14 @@
+@@ -3162,10 +3186,14 @@
  				mgr->device->set_static_config(mgr->device,
  								&config);
  			}
@@ -1020,18 +1008,17 @@
  		      name);
 --- a/lichee/linux-4.9/drivers/video/fbdev/sunxi/disp2/disp/de/disp_lcd.c
 +++ b/lichee/linux-4.9/drivers/video/fbdev/sunxi/disp2/disp/de/disp_lcd.c
-@@ -9,6 +9,10 @@
+@@ -9,6 +9,9 @@
   */
  
  #include "disp_lcd.h"
 +
 +/* oakMOSS KDEBUG_MARK display trace (0x7120-0x7124, scripts/kmark-pm-decode.py). */
 +extern void oakmoss_mark(u32 v);
-+extern unsigned int oakmoss_disp_delay_ms;	/* oakmoss.disp_delay=, dev_disp.c */
  extern void lcd_set_panel_funs(void);
  #define DISP_LCD_MODE_DIRTY_MASK 0x80000000
  
-@@ -1043,6 +1047,7 @@
+@@ -1043,6 +1046,7 @@
  	unsigned long reg = 0;
  	unsigned long val = 0;
  
@@ -1039,7 +1026,7 @@
  	if ((lcd == NULL) || (lcdp == NULL)) {
  		DE_WRN("NULL hdl!\n");
  		return DIS_FAIL;
-@@ -1069,6 +1074,7 @@
+@@ -1069,6 +1073,7 @@
  	unsigned long reg = 0;
  	unsigned long val = 0;
  
@@ -1047,7 +1034,7 @@
  	if ((lcd == NULL) || (lcdp == NULL)) {
  		DE_WRN("NULL hdl!\n");
  		return DIS_FAIL;
-@@ -1094,6 +1100,7 @@
+@@ -1094,6 +1099,7 @@
  {
  	struct disp_lcd_private_data *lcdp = disp_lcd_get_priv(lcd);
  
@@ -1055,7 +1042,7 @@
  	if ((lcd == NULL) || (lcdp == NULL)) {
  		DE_WRN("NULL hdl!\n");
  		return DIS_FAIL;
-@@ -1116,6 +1123,7 @@
+@@ -1116,6 +1122,7 @@
  	s32 ret = -1;
  	struct pwm_device *pwm_dev;
  
@@ -1063,7 +1050,7 @@
  	if ((lcd == NULL) || (lcdp == NULL)) {
  		DE_WRN("NULL hdl!\n");
  		return DIS_FAIL;
-@@ -1148,6 +1156,7 @@
+@@ -1148,6 +1155,7 @@
  	struct disp_lcd_private_data *lcdp = disp_lcd_get_priv(lcd);
  	unsigned long flags;
  
@@ -1071,7 +1058,7 @@
  	if ((lcd == NULL) || (lcdp == NULL)) {
  		DE_WRN("NULL hdl!\n");
  		return DIS_FAIL;
-@@ -1193,6 +1202,7 @@
+@@ -1193,6 +1201,7 @@
  	struct disp_lcd_private_data *lcdp = disp_lcd_get_priv(lcd);
  	unsigned long flags;
  
@@ -1079,7 +1066,7 @@
  	if ((lcd == NULL) || (lcdp == NULL)) {
  		DE_WRN("NULL hdl!\n");
  		return DIS_FAIL;
-@@ -1395,6 +1405,8 @@
+@@ -1395,6 +1404,8 @@
  		return DIS_FAIL;
  	}
  	smbl = mgr->smbl;
@@ -1088,7 +1075,7 @@
  
  	spin_lock_irqsave(&lcd_data_lock, flags);
  	backlight_bright = (backlight_bright > 255) ? 255 : backlight_bright;
-@@ -1889,6 +1901,7 @@
+@@ -1889,6 +1900,7 @@
  	struct disp_manager *mgr = NULL;
  	int i;
  
@@ -1096,7 +1083,7 @@
  	if ((lcd == NULL) || (lcdp == NULL)) {
  		DE_WRN("NULL hdl!\n");
  		return DIS_FAIL;
-@@ -1933,6 +1946,8 @@
+@@ -1933,6 +1945,8 @@
  }
  
  #else
@@ -1105,7 +1092,7 @@
  static s32 disp_lcd_enable(struct disp_device *lcd)
  {
  	unsigned long flags;
-@@ -2028,15 +2043,19 @@
+@@ -2028,15 +2042,19 @@
  	if (lcdp->panel_info.lcd_gsensor_detect == 0)
  		skip_open_backlight = 0;
  
@@ -1125,7 +1112,7 @@
  	skip_open_backlight = 0; /*only skip one time*/
  
  	spin_lock_irqsave(&lcd_data_lock, flags);
-@@ -2059,6 +2078,7 @@
+@@ -2059,6 +2077,7 @@
  	struct disp_manager *mgr = NULL;
  	int i;
  
@@ -1133,7 +1120,7 @@
  	if ((lcd == NULL) || (lcdp == NULL)) {
  		DE_WRN("NULL hdl!\n");
  		return DIS_FAIL;
-@@ -2140,6 +2160,7 @@
+@@ -2140,6 +2159,7 @@
  	struct disp_gpio_set_t gpio_info[1];
  	struct pwm_device *pwm_dev;
  
@@ -1141,15 +1128,11 @@
  	if ((lcd == NULL) || (lcdp == NULL)) {
  		DE_WRN("NULL hdl!\n");
  		return DIS_FAIL;
-@@ -2154,11 +2175,19 @@
+@@ -2154,11 +2174,15 @@
  	lcd_calc_judge_line(lcd);
  	if (mgr->sw_enable)
  		mgr->sw_enable(mgr);
 +	oakmoss_mark(0x71200001);
-+	if (oakmoss_disp_delay_ms) {
-+		msleep(oakmoss_disp_delay_ms);
-+		oakmoss_mark(0x71200008);
-+	}
  
  #if !defined(CONFIG_COMMON_CLK_ENABLE_SYNCBOOT)
 -	if (lcd_clk_enable(lcd) != 0)
@@ -1162,7 +1145,7 @@
  	ret = cal_real_frame_period(lcd);
  	if (ret)
  		DE_WRN("cal_real_frame_period fail:%d\n", ret);
-@@ -2183,6 +2212,7 @@
+@@ -2183,6 +2207,7 @@
  			disp_sys_power_enable(lcdp->lcd_cfg.lcd_gpio_power[i]);
  	}
  
@@ -1170,7 +1153,7 @@
  	for (i = 0; i < LCD_GPIO_NUM; i++) {
  		lcdp->lcd_cfg.gpio_hdl[i] = 0;
  
-@@ -2194,6 +2224,7 @@
+@@ -2194,6 +2219,7 @@
  		}
  	}
  
@@ -1178,7 +1161,7 @@
  	/* init lcd pin */
  	for (i = 0; i < LCD_GPIO_REGU_NUM; i++) {
  		if (!
-@@ -2202,6 +2233,7 @@
+@@ -2202,6 +2228,7 @@
  			disp_sys_power_enable(lcdp->lcd_cfg.lcd_pin_power[i]);
  	}
  
@@ -1186,7 +1169,7 @@
  	/* init bl */
  	if (lcdp->lcd_cfg.lcd_bl_en_used) {
  		/* io-pad */
-@@ -2213,6 +2245,7 @@
+@@ -2213,6 +2240,7 @@
  		    disp_sys_gpio_request(&lcdp->lcd_cfg.lcd_bl_en, 1);
  	}
  
@@ -1194,7 +1177,7 @@
  	if (lcdp->panel_info.lcd_pwm_used && lcdp->pwm_info.dev) {
  		pwm_dev = (struct pwm_device *)lcdp->pwm_info.dev;
  		pwm_dev->state.period = lcdp->pwm_info.period_ns;
-@@ -2222,6 +2255,7 @@
+@@ -2222,6 +2250,7 @@
  		pwm_dev->state.enabled = true;
  	}
  
@@ -1202,7 +1185,7 @@
  	spin_lock_irqsave(&lcd_data_lock, flags);
  	lcdp->enabled = 1;
  	lcdp->enabling = 0;
-@@ -2266,6 +2300,7 @@
+@@ -2266,6 +2295,7 @@
  	disp_al_lcd_enable_irq(lcd->hwdev_index, LCD_IRQ_TCON0_VBLK,
  			       &lcdp->panel_info);
  
@@ -1866,14 +1849,18 @@
  	mgrp->cfg->flag |= MANAGER_BLANK_DIRTY;
  	mgr->apply(mgr);
  	mutex_unlock(&mgr_mlock);
-@@ -2856,6 +2878,7 @@
+@@ -2856,8 +2878,10 @@
  #if defined(CONFIG_SUNXI_IOMMU)
  	struct disp_manager_private_data *mgrp = disp_mgr_get_priv(mgr);
  
-+	oakmoss_mark(0x71140000 | ((en ? 1 : 0) << 4) | (mgrp->iommu_en_flag != en));	/* 0x711400ec: iommu en, c = changed */
- 	if (mgrp->iommu_en_flag != en)
+-	if (mgrp->iommu_en_flag != en)
++	if (mgrp->iommu_en_flag != en) {
++		oakmoss_mark(0x71140001 | ((en ? 1 : 0) << 4));	/* 0x711400e1: the display's IOMMU on (e = 1) or off */
  		sunxi_enable_device_iommu(mgrp->iommu_master_id, en);
++	}
  	mgrp->iommu_en_flag = en;
+ #endif
+ 	return 0;
 --- a/lichee/linux-4.9/drivers/video/fbdev/sunxi/disp2/disp/dev_fb.c
 +++ b/lichee/linux-4.9/drivers/video/fbdev/sunxi/disp2/disp/dev_fb.c
 @@ -570,6 +570,13 @@
