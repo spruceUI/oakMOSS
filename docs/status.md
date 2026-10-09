@@ -6,6 +6,14 @@ below that is not marked as tested as untested.
 
 ## Releases and spruceOS
 
+v0.5.0-beta.1 (2026-10-09) is the first release with two system slots, so it is written once
+and then updated in place (`docs/updates.md`). It adds spruceOS on the system card (a
+`SPRUCEOS` partition made at the first boot; SD2's spruce wins when both cards carry one,
+`docs/cards.md`), the no-frontend screens, debug mode (`docs/debugging.md`), the Zero 40's
+boot picture kept until the menu, the case LED's blue light off while running, shutdown
+scripts in order, and BusyBox `tr` character classes. Tested on all three boards. It pairs
+with spruceOS v4.5.0 or a newer nightly.
+
 v0.4.2-beta.1 (2026-10-04) lets the kernel mount squashfs images compressed with gzip, LZ4 and
 zstd as well as XZ and LZO: most PortMaster runtimes are gzip, and the 32-bit Godot 4.5 runtime
 is zstd. Until then the kernel mounted only XZ and LZO, whatever its config said (`134`,
