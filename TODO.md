@@ -156,7 +156,7 @@ because the base does not.
       held the picture's black top rows. Confirmed on hardware: the Zero 40 boots with no blank.
       The case LED's blue half (`lcd_gpio_1`, PB2, lit while low) now stays off while running:
       the trees claim it high on all three boards, and the Zero 28's panel driver keeps it high
-      (user, 2026-10-09; sdk-mods round 25; confirmed on the Zero 40 and Zero 28, off from power-on).
+      (user, 2026-10-09; sdk-mods round 25; confirmed on all three, off from power-on).
 
 - [ ] **Zero 40: suspend waits ~4 s for an SDIO rescan of the empty WiFi slot.** Real sleep
       unloads `xradio_wlan` (loaded and associated it refuses the suspend); the MMC core then

@@ -137,6 +137,9 @@ On the Zero 28, 2026-10-09, with a 31.3 GB card:
   on a tie.
 - **SD2 first** (1e94b27, 2026-10-09): with spruce 4.5.3 and a launcher on both cards, SD2
   hosted at `/mnt/SDCARD` and SD1 went to `/media/sdcard1`.
+
+On the XU20, 2026-10-09 (1e94b27): the first boot added and formatted SD1's partition
+(27,801 MiB, about 3 s), and SD2 hosted with spruce 4.5.3.
 - **No frontend:** the charging screen appeared after the charge-mode power key, and the board
   powered off when the charger was pulled. Without the charger it showed the 10 s power-off.
 - **Debug flag:** both ways.
