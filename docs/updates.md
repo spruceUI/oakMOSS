@@ -81,7 +81,8 @@ other mounted card (`/mnt/SDCARD_INT` or `/mnt/SDCARD_EXT`, `docs/cards.md`) to
 
 On success the file is deleted and the board reboots. On any failure the file is renamed
 `.failed` and the board boots the launcher as usual. Everything is logged to
-`/mnt/UDISK/oakmoss-boot.log`.
+`/mnt/UDISK/oakmoss-boot.log`, and to `oakmoss-update.log` beside the update on the card: the
+update's `parts_clean` wipes `/mnt/UDISK` on the next boot.
 
 ## Releasing
 
