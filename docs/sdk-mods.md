@@ -370,8 +370,13 @@ alike, so every `K` script started at once. `K99umount` (`umount -a -d -r`) ran 
 leave a card mounted when the board goes down. Boot keeps the parallel queue, where
 Allwinner tracks the dependencies.
 
+A first version only gave the boot queue one slot for `shutdown`, and every shutdown then hung:
+`S95done` (rc.local, which runs the launcher) never ends, and libubox's `runqueue_init()` only
+resets the lists, so the queue still counted it as running and never started a `K` script
+(Zero 28, 2026-10-09; recovered with `reboot -f`).
+
 | what | where | why |
 |---|---|---|
-| `sdk-patches/package-patches/procd/900-shutdown-scripts-in-order.patch` | `package/system/procd/patches/` | `rcS()` takes one slot for `shutdown`, so the `K` scripts run one at a time in their order. |
+| `sdk-patches/package-patches/procd/900-shutdown-scripts-in-order.patch` | `package/system/procd/patches/` | `rcS("K", "shutdown")` gets a runqueue of its own with one slot, so the `K` scripts run one at a time in their order. |
 
 `mods_version` 15 -> 16.

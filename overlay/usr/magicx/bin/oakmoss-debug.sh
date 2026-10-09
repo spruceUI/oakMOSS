@@ -196,15 +196,15 @@ late() {
 	sleep 60
 	R=$T/$(name "$(cat $T/n)")
 	dmesg | mask > "$R/dmesg.txt"
-	m=$(arg oakmoss.prev_mark)
-	echo "$(up) debug: ${R##*/} recorded, last mark $m ($(mark_name "$m"))" >> /mnt/UDISK/oakmoss-boot.log
 	i=0
-	until card_up; do
-		i=$((i + 1)); [ $i -gt 60 ] && return
+	until card_up || [ $i -gt 60 ]; do
+		i=$((i + 1))
 		sleep 5
 	done
-	to_card
-	spruce_log
+	card_up && { to_card; spruce_log; }
+	# Logged after to_card, which can renumber the record.
+	m=$(arg oakmoss.prev_mark)
+	echo "$(up) debug: $(name "$(cat $T/n)") recorded, last mark $m ($(mark_name "$m"))" >> /mnt/UDISK/oakmoss-boot.log
 	sync
 }
 

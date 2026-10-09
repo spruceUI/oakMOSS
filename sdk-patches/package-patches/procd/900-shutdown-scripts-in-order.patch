@@ -1,15 +1,26 @@
 Allwinner's 005-boot-init-scripts-parrallel.patch runs up to 10 rc scripts at once, at
 shutdown too: K99umount's umount -a then ran beside the other K scripts and took /proc
-and the cards from under them (oakMOSS, Zero 28, 2026-10-09). Shutdown runs them one at a
-time, in order; boot keeps the parallel queue.
+and the cards from under them (oakMOSS, Zero 28, 2026-10-09). Shutdown gets a queue of its
+own that runs them one at a time, in order. Not the boot queue with one slot: S95done (rc.local,
+the launcher) never ends, runqueue_init() keeps its running count, and shutdown hung for good.
 --- a/rcS.c
 +++ b/rcS.c
-@@ -242,7 +242,7 @@ int rcS(char *pattern, char *param, void (*q_empty)(struct runqueue *))
- {
- 	runqueue_init(&q);
- 	q.empty_cb = q_empty;
--	q.max_running_tasks = 10;
-+	q.max_running_tasks = strcmp(param, "shutdown") ? 10 : 1;
+@@ -240,11 +240,14 @@
  
- 	return _rc(&q, "/etc/rc.d", pattern, "*", param);
+ int rcS(char *pattern, char *param, void (*q_empty)(struct runqueue *))
+ {
+-	runqueue_init(&q);
+-	q.empty_cb = q_empty;
+-	q.max_running_tasks = 10;
++	static struct runqueue shutdown_q;
++	struct runqueue *rq = strcmp(param, "shutdown") ? &q : &shutdown_q;
+ 
+-	return _rc(&q, "/etc/rc.d", pattern, "*", param);
++	runqueue_init(rq);
++	rq->empty_cb = q_empty;
++	rq->max_running_tasks = rq == &q ? 10 : 1;
++
++	return _rc(rq, "/etc/rc.d", pattern, "*", param);
  }
+ 
+ int rc(const char *file, char *param)
