@@ -88,8 +88,9 @@ and restarts the kernel when the check fails. The XU20 runs with the Zero 40's o
 - BusyBox 1.27 has no `bc`.
 - The XR829's crystal is assumed to be 26 MHz.
 - An XU20 revision with the RTP36HD029A panel would be dark on this image (`TODO.md`).
-- Two slots and updates (`docs/updates.md`) and SD1 installs (`docs/cards.md`) are tested on
-  the Zero 28 only. U-Boot's fallback to its boot0 and package copies is not tested.
+- Updates are tested on the Zero 28 and the Zero 40, the boot chain on the Zero 40 only
+  (`docs/updates.md`). spruce from SD1 is tested on the Zero 28 only (`docs/cards.md`).
+  U-Boot's fallback to its boot0 and package copies is not tested.
 - With spruce on SD1, spruce's `SD_DEV` and its USB storage app's device (`/dev/mmcblk1p1`) name
   SD2, until spruce takes them from the mounts. The power-off then leaves the host to the base's
   final unmount, and USB storage mode exports SD2 (`docs/cards.md`).

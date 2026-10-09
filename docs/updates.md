@@ -103,3 +103,9 @@ Proven on the Zero 28 (2026-10-09):
 - **Fallback:** a trial whose root could not be mounted panicked, and U-Boot went back by
   itself, with `ab_reverted` logged and cleared. It was staged in the env
   (`root_partition=private`).
+
+Proven on the Zero 40 (2026-10-09):
+- **Boot chain:** the v0.5.0-beta.1 update (`BOOTCHAIN=1`) wrote the U-Boot package, copy first
+  (sector 24576) and main last (32800), each read back, and the board booted the new slot
+  through it and confirmed it. boot0 and boot-resource already matched and were left alone.
+- **Updates:** two `BOOTCHAIN=0` updates before it, each into the other slot.
