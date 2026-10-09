@@ -4,7 +4,8 @@ The SDK's h028b23 panel driver drives lcd_gpio_1 (PB2, LED_CTRL) low at the end 
 power-on and high at power-off. PB2 lights the blue half of the MagicX case LED while low
 (measured on the Zero 40, 2026-10-09); the user wants it off while running, the red staying
 the charge light. The power-on runs again at every resume, so the device tree's default
-alone would light it there.
+alone would light it there. The changed line carries a comment so that apply-sdk-mods.sh
+does not take power-off's identical line for this one already in place.
 --- a/lichee/linux-4.9/drivers/video/fbdev/sunxi/disp2/disp/lcd/h028b23.c
 +++ b/lichee/linux-4.9/drivers/video/fbdev/sunxi/disp2/disp/lcd/h028b23.c
 @@ -117,7 +117,7 @@
@@ -12,7 +13,7 @@ alone would light it there.
  	panel_reset(sel, 1);
  	sunxi_lcd_delay_ms(100);
 -	LED_SET(sel, 0);
-+	LED_SET(sel, 1);
++	LED_SET(sel, 1);	/* oakMOSS: the case LED's blue half stays off */
  }
  
  static void lcd_power_off(u32 sel)

@@ -7,7 +7,7 @@ the h028b23 panel driver (see 071).
  	panel_reset(sel, 1);
  	sunxi_lcd_delay_ms(100);
 -	LED_SET(sel, 0);
-+	LED_SET(sel, 1);
++	LED_SET(sel, 1);	/* oakMOSS: the case LED's blue half stays off */
  }
  
  static void lcd_power_off(u32 sel)
