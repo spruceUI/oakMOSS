@@ -396,3 +396,21 @@ the feed's, and the update check reported the same build as rebuilt (Zero 28, 20
 The file is the SDK's defconfig (`install_config`): the `ext` step installs it, or copy it over
 `target/allwinner/a133-aw3/defconfig`. BusyBox's build stamp hashes every `CONFIG_BUSYBOX_` line,
 so the next `image` rebuilds it. `mods_version` stays 16 (`apply-sdk-mods.sh` does not touch configs).
+
+## Round 24 (2026-10-09): the Zero 40 keeps its boot picture
+
+The Zero 40's boot picture went dark a second or two after it appeared, when the kernel took
+U-Boot's display over, and stayed dark until spruce or the charge screen drew. The kernel copies
+U-Boot's picture into fb0 before it shows fb0. With `CONFIG_SUNXI_DISP2_FB_HW_ROTATION_SUPPORT`
+(set for every board) that copy runs patch 100's code, whose unrotated branch moved the source
+one pixel per row instead of one row, so fb0 got the picture's black top rows. The rotated
+branches were right, which is why the Zero 28 and XU20 never showed it. Found with the `0x71`
+display marks and `oakmoss.disp_smooth=0`, which blanked the same way.
+
+| what | where | why |
+|---|---|---|
+| `100-disp2-fb-g2d-rotation.patch` | `Fb_copy_boot_fb` in `dev_fb.c` | the unrotated copy advances the source by `src_stride`; folded into patch 100, which adds the line |
+
+An SDK tree with the old patch 100 applied gets the line by hand: in `dev_fb.c` the last
+`src_addr = tmp_src + src_bpp / 8;` becomes `src_addr = tmp_src + src_stride;` (revert the debug
+marker first). `mods_version` 16 -> 17.

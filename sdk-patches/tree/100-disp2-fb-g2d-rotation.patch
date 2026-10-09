@@ -13,10 +13,13 @@ moves to subsys_initcall on our SoC - the SDK already does that for sun8iw11p1 -
 so it is up before disp needs it, and Fb_copy_boot_fb rotates the framebuffer
 U-Boot hands over.
 
-The three folded fixes, all reachable only at 90/270 (the Zero 28's case):
+The folded fixes; the first three are reachable only at 90/270 (the Zero 28's case):
   * fb_g2d_set_degree crossed the destination clip rectangle's width and height.
   * fb_g2d_rot_create validated the degree with && where || was meant.
   * Fb_copy_boot_fb did not swap the destination's width and height.
+  * Fb_copy_boot_fb's unrotated copy moved the source one pixel per row, not one row:
+    an unrotated board (the Zero 40) got the logo's black top rows, and the boot picture
+    went dark when the kernel took U-Boot's display over (2026-10-09).
 
 These boards present through fbdev (measured 2026-09-19 on the Zero 28: fb0's pan
 offset alternates 0,0 <-> 0,640 while the UI runs, and dc_sunxi sits at refcount 0),
@@ -133,7 +136,7 @@ so this path carries everything on screen, not just the console.
 +				dst_addr += dst_bpp / 8;
 +			}
 +			dst_addr = tmp_dst + dst_stride;
-+			src_addr = tmp_src + src_bpp / 8;
++			src_addr = tmp_src + src_stride;
 +		}
 +	}
 +
