@@ -5,34 +5,57 @@ smaller than any card it goes on. On the first boot the base adds a FAT32 partit
 `SPRUCEOS` in the free space of SD1. A PC sees it as an ordinary drive, so spruce can be
 copied onto it.
 
-## Which card runs
+## Mounts
 
-The base mounts the cards itself at every boot (`overlay/usr/magicx/bin/oakmoss-cards.sh`):
+The base mounts the cards itself at every boot (`overlay/usr/magicx/bin/oakmoss-cards.sh`), each
+card once, under a name for the physical card:
 
-- `/mnt/SDCARD` is always the host, the card whose launcher runs.
-- `/mnt/SDCARD_INT` is SD1's `SPRUCEOS` partition, mounted only while SD2 is in and hosting.
-- `/mnt/SDCARD_EXT` is SD2, mounted only while SD1 hosts and SD2 is in.
+| path | what |
+|---|---|
+| `/mnt/sd1` | SD1's `SPRUCEOS` partition |
+| `/mnt/sd2` | SD2 |
+| `/mnt/SDCARD` | a bind mount of the host card, the one whose launcher runs |
+| `/media/sdcard1` | a bind mount of the other card, while both are in |
+
+A bind mount shows the real device in `/proc/mounts`, so the device behind `/mnt/SDCARD` can be
+read from there. spruce's power-off already unmounts "other mounts of the same device" (it was
+written for the Flip's `/userdata`). `/media/sdcard1` is where spruce's PyUI looks for a second
+`Roms` folder (the Miyoo Flip's layout; the MagicX device classes inherit it). Games on the
+other card are listed next to the host's without a spruce change.
+
+## Which card hosts
 
 Only a card with a frontend (`magicx/init.sh` or `.tmp_update/updater`) can host. Between two
 such cards, the newer spruce wins: the version in `spruce/spruce` (x.y.z) first, then
 `BUILD_UNIX` from `spruce/build` where a card has one. A card without either counts as oldest.
 A tie goes to SD1. Older spruce versions are never turned away.
 
-| cards | `/mnt/SDCARD` | other card | what runs |
+| cards | `/mnt/SDCARD` | `/media/sdcard1` | what runs |
 |---|---|---|---|
 | no SD2, no spruce on SD1 | SD1 | - | the no-frontend screen |
 | no SD2, spruce on SD1 | SD1 | - | spruce from SD1 |
-| spruce on SD1, SD2 without spruce | SD1 | SD2 at `SDCARD_EXT` | spruce from SD1 |
-| no spruce on SD1, spruce on SD2 | SD2 | SD1 at `SDCARD_INT` | spruce from SD2 |
+| spruce on SD1, SD2 without spruce | SD1 | SD2 | spruce from SD1 |
+| no spruce on SD1, spruce on SD2 | SD2 | SD1 | spruce from SD2 |
 | spruce on both | the newer (SD1 on a tie) | the other one | the newer spruce |
-| SD2 in, no spruce on either | SD2 | SD1 at `SDCARD_INT` | the no-frontend screen |
+| SD2 in, no spruce on either | SD2 | SD1 | the no-frontend screen |
 
 The outcome is in `/tmp/oakmoss-cards` (`HOST`, `SD1_DEV`, `SD1_ROOT`, `SD2_DEV`, `SD2_ROOT`) and
 in `/mnt/UDISK/oakmoss-boot.log`.
 
-SD2 can take a moment to appear after power-on. The base waits for it up to 10 s, or 3 s
-when SD1 already has a frontend. The SDK's `fstab` entries that mounted SD2 at `/mnt/SDCARD`
-are dropped at build time, so a card inserted later is never mounted on top of the host.
+## Finding SD2
+
+SD2 can take a moment to appear after power-on. The base reads the slot's card-detect switch
+from the kernel's GPIO list (debugfs, mounted if needed): one line labelled `cd`, `hi` with no
+card. That is PF6 on these boards, pulled up, and a card pulls it low. An empty slot ends the
+wait at once. Otherwise the base waits for the card up to 10 s, or 3 s when SD1 already has a
+frontend. The same wait applies where the kernel shows no single `cd` line.
+
+The SDK's `fstab` entries that mounted SD2 at `/mnt/SDCARD` are dropped at build time. A card
+inserted after the election is handled by `/etc/hotplug.d/block/20-oakmoss-cards`:
+- It is mounted at `/mnt/sd2`, and at `/media/sdcard1` when SD1 hosts. It never lands on
+  `/mnt/SDCARD`.
+- Pulling it out unmounts both.
+- Pulling the host card is left alone: the launcher runs from it.
 
 ## No frontend
 
@@ -45,9 +68,9 @@ When no card has a launcher, the base looks for updates first, then:
 
 ## Updates
 
-`oakmoss-<board>-*.omupd` files are read from the root of `/mnt/SDCARD` and of whichever of
-`SDCARD_INT` and `SDCARD_EXT` is mounted. This happens before any frontend or the no-frontend
-screen, so a base update works even with no spruce on either card (`docs/updates.md`).
+`oakmoss-<board>-*.omupd` files are read from the root of both cards (`/mnt/sd1`, `/mnt/sd2`).
+This happens before any frontend or the no-frontend screen, so a base update works even with
+no spruce on either card (`docs/updates.md`).
 
 ## The SPRUCEOS partition
 
@@ -87,13 +110,21 @@ the next boot.
 
 ## What spruce has to handle
 
-spruce owns these; the base does not change them.
+spruce owns these; the base does not change them. Both matter only when SD1 hosts.
 
-- The MagicX platform files set `SD_DEV=/dev/mmcblk1p1`. When SD1 hosts, that is SD2 (or
-  nothing), so anything spruce does with `SD_DEV` touches the wrong card: card repair and USB
-  storage mode among them. spruce should take the host device from `/proc/mounts` (the device
-  at `/mnt/SDCARD`), or from `SD1_DEV`/`SD2_DEV` and `HOST` in `/tmp/oakmoss-cards`.
-- `SDCARD_INT` and `SDCARD_EXT` are new mount points. spruce does not use them yet.
+- **`SD_DEV`.** `Zero28.cfg`, `Zero40.cfg` and `XU20.cfg` set `SD_DEV="/dev/mmcblk1p1" # need to
+  verify this`. That is SD2.
+  - **Power-off:** `save_poweroff_stage2.sh` finds the card it must unmount cleanly from
+    `SD_DEV`. With SD2 in, it unmounts SD2 and leaves the host to the base's final `umount -a`.
+  - **Read-only check:** `read_only_check` logs SD2's mount line; that is only a log.
+  - **The fix:** one line per file, as `dArkMossCommon.cfg` already does it:
+    `export SD_DEV="$(awk '$2=="/mnt/SDCARD"{print $1; exit}' /proc/mounts 2>/dev/null)"`.
+- **USB storage mode** (`App/USBStorageMode/usb_gadget.sh`) exports a fixed `/dev/mmcblk1p1`
+  on these boards. When SD1 hosts, it would hand SD2 to the PC while the base still has it
+  mounted at `/mnt/sd2`, and a card mounted on both sides can be corrupted.
+  - **The fix:** take `STORAGE_DEVICE` from the `/mnt/SDCARD` mount.
+  - **Until then:** do not use USB storage mode while SD1 hosts.
+- `repairSD.sh` already takes the device from the mount.
 
 ## Tested on hardware
 

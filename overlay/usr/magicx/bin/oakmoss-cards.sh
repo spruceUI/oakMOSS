@@ -1,22 +1,26 @@
 #!/bin/sh
-# The spruce cards (docs/cards.md). /mnt/SDCARD is the host: the card whose spruce is newer,
-# SD1 on a tie; with no frontend on either, SD2 if it is in. The other card is mounted at
-# /mnt/SDCARD_INT (SD1's SPRUCEOS partition, when SD2 hosts) or /mnt/SDCARD_EXT (SD2, when SD1
-# hosts). The outcome goes to /tmp/oakmoss-cards: HOST (sd1, sd2, none), SD1_DEV, SD1_ROOT,
-# SD2_DEV, SD2_ROOT.
+# The spruce cards (docs/cards.md). Each card is mounted once under its own name: SD1's SPRUCEOS
+# partition at /mnt/sd1, SD2 at /mnt/sd2. /mnt/SDCARD is a bind mount of the host: the card whose
+# spruce is newer, SD1 on a tie; with no frontend on either, SD2 if it is in. The other card is also
+# bound at /media/sdcard1, where spruce's PyUI looks for a second Roms folder (the Flip's layout).
+# The outcome goes to /tmp/oakmoss-cards: HOST (sd1, sd2, none), SD1_DEV, SD1_ROOT, SD2_DEV, SD2_ROOT.
 #
 #   oakmoss-cards.sh mount     prepare SD1's partition, mount the cards, elect (runmagicx.sh)
 #   oakmoss-cards.sh umount    take them down again, before a re-check
+#   oakmoss-cards.sh hotplug   SD2 inserted or pulled later (/etc/hotplug.d/block, ACTION + DEVNAME)
 #
-# MNT, SD1_DISK and SD2_GLOB exist for testing with loop devices.
+# MNT, MEDIA, SD1_DISK, SD2_GLOB, DEV_GLOB and CD_FILE exist for testing with loop devices.
 
 export PATH=/usr/magicx/bin:$PATH
 STATE=/tmp/oakmoss-cards
-T=/tmp/oakmoss-cards.d
 LOG=${LOG:-/mnt/UDISK/oakmoss-boot.log}
 MNT=${MNT:-/mnt}
+MEDIA=${MEDIA:-/media}
 SD2_GLOB=${SD2_GLOB:-/sys/block/mmcblk*}
+DEV_GLOB=${DEV_GLOB:-mmcblk*}
+CD_FILE=${CD_FILE:-/sys/kernel/debug/gpio}
 log() { echo "$(cut -d' ' -f1 /proc/uptime) cards: $*" >> "$LOG" 2>/dev/null; }
+mounted() { grep -q " $1 " /proc/mounts; }
 
 frontend() { [ -f "$1/magicx/init.sh" ] || [ -f "$1/.tmp_update/updater" ]; }
 
@@ -39,10 +43,11 @@ mount_card() {	# mount_card <device> <dir>: as the SDK's fstab mounted SD2 (rw,a
 }
 
 magic() {	# the filesystem a partition starts with: fat32, exfat, ntfs, none, or unread
-    dd if="$1" of="$T/bs" bs=512 count=1 2>/dev/null
-    [ "$(wc -c < "$T/bs" 2>/dev/null)" = 512 ] || { echo unread; return; }
-    [ "$(dd if="$T/bs" bs=1 skip=82 count=8 2>/dev/null)" = "FAT32   " ] && { echo fat32; return; }
-    case $(dd if="$T/bs" bs=1 skip=3 count=8 2>/dev/null) in
+    rm -f /tmp/oakmoss-cards.bs		# a failed read must not find an earlier sample
+    dd if="$1" of=/tmp/oakmoss-cards.bs bs=512 count=1 2>/dev/null
+    [ "$(wc -c < /tmp/oakmoss-cards.bs 2>/dev/null)" = 512 ] || { echo unread; return; }
+    [ "$(dd if=/tmp/oakmoss-cards.bs bs=1 skip=82 count=8 2>/dev/null)" = "FAT32   " ] && { echo fat32; return; }
+    case $(dd if=/tmp/oakmoss-cards.bs bs=1 skip=3 count=8 2>/dev/null) in
         "EXFAT   ") echo exfat ;; "NTFS    ") echo ntfs ;; *) echo none ;;
     esac
 }
@@ -62,13 +67,21 @@ sd1() {
     dev=${SD1_DISK}p$2; n=0
     while [ ! -b "$dev" ] && [ "$n" -lt 20 ]; do sleep 0.1; n=$((n + 1)); done
     [ "$1" = present ] || log "SD1: SPRUCEOS partition $1 (${dev##*/})"
-    fs=$(magic "$dev")
+    fs=$(magic "$dev"); n=0
+    while [ "$fs" = unread ] && [ "$n" -lt 10 ]; do sleep 0.2; fs=$(magic "$dev"); n=$((n + 1)); done
     [ "$fs" = unread ] && { log "SD1: ${dev##*/} cannot be read"; return 1; }
     if [ "$fs" = none ]; then
         mkfs.vfat -n SPRUCEOS "$dev" >/dev/null 2>&1 || { log "SD1: formatting ${dev##*/} failed"; return 1; }
         log "SD1: ${dev##*/} formatted FAT32, $(( $(cat "/sys/class/block/${dev##*/}/size") / 2048 )) MiB"
     fi
     echo "$dev"
+}
+
+# The SD2 slot's card-detect switch, where debugfs lists it: one "cd" line, "hi" with no card (PF6
+# on these boards is pulled up and a card pulls it low). Without exactly one such line: unknown.
+slot_empty() {
+    [ -e "$CD_FILE" ] || mount -t debugfs none "${CD_FILE%/*}" 2>/dev/null
+    [ "$(grep -c '|cd ' "$CD_FILE" 2>/dev/null)" = 1 ] && grep '|cd ' "$CD_FILE" | grep -q ' in *hi'
 }
 
 sd2() {		# sd2 <wait s>: SD2, the other MMC card (its first partition, or the whole card)
@@ -82,56 +95,86 @@ sd2() {		# sd2 <wait s>: SD2, the other MMC card (its first partition, or the wh
             if [ -b "/dev/${d##*/}p1" ]; then echo "/dev/${d##*/}p1"; else echo "/dev/${d##*/}"; fi
             return 0
         done
+        # A card can enumerate late; an empty slot cannot fill itself.
+        slot_empty && { log "SD2: slot empty (card detect)"; return 1; }
         [ "$n" -ge $(($1 * 4)) ] && return 1
         sleep 0.25; n=$((n + 1))
     done
 }
 
+second() {	# second <sd1|sd2>: the card that does not host, also at /media/sdcard1
+    mkdir -p "$MEDIA/sdcard1" && mount --bind "$MNT/$1" "$MEDIA/sdcard1" ||
+        log "the bind of $MNT/$1 on $MEDIA/sdcard1 failed"
+}
+
 cards_umount() {
-    for m in $MNT/SDCARD_INT $MNT/SDCARD_EXT $MNT/SDCARD "$T/sd1" "$T/sd2"; do
-        grep -q " $m " /proc/mounts && { umount "$m" 2>/dev/null || umount -l "$m"; }
+    for m in $MEDIA/sdcard1 $MNT/SDCARD $MNT/sd1 $MNT/sd2; do
+        mounted "$m" && { umount "$m" 2>/dev/null || umount -l "$m"; }
     done
     rm -f "$STATE"
 }
 
 cards_mount() {
     cards_umount
-    mkdir -p "$T"
-    d1=$(sd1) && mount_card "$d1" "$T/sd1" || d1=
-    f1=; [ -n "$d1" ] && frontend "$T/sd1" && f1=yes
+    d1=$(sd1) && { mount_card "$d1" "$MNT/sd1" || { log "SD1: $d1 did not mount"; d1=; }; }
+    f1=; [ -n "$d1" ] && frontend "$MNT/sd1" && f1=yes
     # SD2 may enumerate late: wait for it 10 s, or 3 s when SD1 can start a frontend anyway.
     w=10; [ -n "$f1" ] && w=3
-    d2=$(sd2 "$w") && mount_card "$d2" "$T/sd2" || d2=
-    f2=; [ -n "$d2" ] && frontend "$T/sd2" && f2=yes
+    d2=$(sd2 "$w") && { mount_card "$d2" "$MNT/sd2" || { log "SD2: $d2 did not mount"; d2=; }; }
+    f2=; [ -n "$d2" ] && frontend "$MNT/sd2" && f2=yes
 
     if [ -n "$f1" ] && [ -n "$f2" ]; then
-        if newer "$T/sd2" "$T/sd1"; then host=sd2; else host=sd1; fi
+        if newer "$MNT/sd2" "$MNT/sd1"; then host=sd2; else host=sd1; fi
     elif [ -n "$f1" ]; then host=sd1
     elif [ -n "$f2" ]; then host=sd2
     elif [ -n "$d2" ]; then host=sd2
     elif [ -n "$d1" ]; then host=sd1
     else host=none
     fi
-    v1=$(version "$T/sd1"); v2=$(version "$T/sd2")
+    if [ "$host" != none ]; then
+        mkdir -p "$MNT/SDCARD"
+        mount --bind "$MNT/$host" "$MNT/SDCARD" || { log "the bind of $MNT/$host on $MNT/SDCARD failed"; host=none; }
+    fi
+    case $host in sd1) [ -n "$d2" ] && second sd2 ;; sd2) [ -n "$d1" ] && second sd1 ;; esac
 
-    # Each card goes where its role says: unmounted from the peek, mounted again there.
-    r1=; r2=
-    case $host in
-        sd1) r1=$MNT/SDCARD; [ -n "$d2" ] && r2=$MNT/SDCARD_EXT ;;
-        sd2) r2=$MNT/SDCARD; [ -n "$d1" ] && r1=$MNT/SDCARD_INT ;;
+    printf '%s\n' "HOST=$host" "SD1_DEV=$d1" "SD1_ROOT=${d1:+$MNT/sd1}" "SD2_DEV=$d2" "SD2_ROOT=${d2:+$MNT/sd2}" > "$STATE"
+    v1=$(version "$MNT/sd1"); v2=$(version "$MNT/sd2")
+    log "host $host; SD1 ${d1:-none}${d1:+ (spruce ${v1% *}, frontend ${f1:-no})};" \
+        "SD2 ${d2:-none}${d2:+ (spruce ${v2% *}, frontend ${f2:-no})}"
+}
+
+# After the election only (before it, cards_mount does the mounting): SD2 goes to /mnt/sd2 and
+# never onto /mnt/SDCARD. Pulling the host card is left alone: the launcher is running from it.
+cards_hotplug() {
+    [ -f "$STATE" ] || return 0
+    case $DEVNAME in $DEV_GLOB) ;; *) return 0 ;; esac
+    case /dev/$DEVNAME in "$SD1_DISK"*) return 0 ;; esac
+    case $ACTION in
+    add)
+        case $DEVNAME in
+            *p1) ;;
+            *p[0-9]*) return 0 ;;
+            *) sleep 1; [ -b "/dev/${DEVNAME}p1" ] && return 0 ;;	# a whole-card filesystem only
+        esac
+        mounted "$MNT/sd2" && return 0
+        mount_card "/dev/$DEVNAME" "$MNT/sd2" || { log "SD2: /dev/$DEVNAME inserted, did not mount"; return 0; }
+        sed -i -e "s|^SD2_DEV=.*|SD2_DEV=/dev/$DEVNAME|" -e "s|^SD2_ROOT=.*|SD2_ROOT=$MNT/sd2|" "$STATE"
+        [ "$(sed -n 's/^HOST=//p' "$STATE")" = sd1 ] && ! mounted "$MEDIA/sdcard1" && second sd2
+        log "SD2: /dev/$DEVNAME inserted, mounted at $MNT/sd2" ;;
+    remove)
+        [ "$(sed -n 's/^SD2_DEV=//p' "$STATE")" = "/dev/$DEVNAME" ] || return 0
+        if [ "$(sed -n 's/^HOST=//p' "$STATE")" = sd2 ]; then log "SD2, the host card, was pulled out"; return 0; fi
+        for m in $MEDIA/sdcard1 $MNT/sd2; do
+            mounted "$m" && { umount "$m" 2>/dev/null || umount -l "$m"; }
+        done
+        sed -i -e 's|^SD2_DEV=.*|SD2_DEV=|' -e 's|^SD2_ROOT=.*|SD2_ROOT=|' "$STATE"
+        log "SD2: /dev/$DEVNAME pulled out, $MNT/sd2 unmounted" ;;
     esac
-    [ -n "$d1" ] && umount "$T/sd1"
-    [ -n "$d2" ] && umount "$T/sd2"
-    [ -n "$r1" ] && { mount_card "$d1" "$r1" || { log "SD1: ${d1##*/} did not mount at $r1"; r1=; }; }
-    [ -n "$r2" ] && { mount_card "$d2" "$r2" || { log "SD2: ${d2##*/} did not mount at $r2"; r2=; }; }
-
-    printf '%s\n' "HOST=$host" "SD1_DEV=$d1" "SD1_ROOT=$r1" "SD2_DEV=$d2" "SD2_ROOT=$r2" > "$STATE"
-    log "host $host; SD1 ${d1:-none}${d1:+ (spruce ${v1% *}, frontend ${f1:-no})} at ${r1:--};" \
-        "SD2 ${d2:-none}${d2:+ (spruce ${v2% *}, frontend ${f2:-no})} at ${r2:--}"
 }
 
 case $1 in
     mount) cards_mount ;;
     umount) cards_umount ;;
-    *) echo "usage: $0 mount|umount" >&2; exit 2 ;;
+    hotplug) cards_hotplug ;;
+    *) echo "usage: $0 mount|umount|hotplug" >&2; exit 2 ;;
 esac

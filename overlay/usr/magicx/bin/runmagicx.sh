@@ -63,7 +63,7 @@ fi
 MAGICX_PATH=/mnt/SDCARD/magicx/init.sh
 UPDATER_PATH=/mnt/SDCARD/.tmp_update/updater
 while :; do
-    # The cards: the host at /mnt/SDCARD, the other at /mnt/SDCARD_INT or /mnt/SDCARD_EXT.
+    # The cards: SD1's partition at /mnt/sd1, SD2 at /mnt/sd2, and the host bound on /mnt/SDCARD.
     oakmoss-cards.sh mount
     HOST=none SD1_ROOT= SD2_ROOT=
     [ -f /tmp/oakmoss-cards ] && . /tmp/oakmoss-cards
@@ -79,8 +79,7 @@ while :; do
 
     # Updates from both cards go to the installer, which picks the newest and shows its own frame.
     dev=$(cat /usr/magicx/device 2>/dev/null)
-    pkgs=$(ls /mnt/SDCARD/oakmoss-"$dev"-*.omupd /mnt/SDCARD_INT/oakmoss-"$dev"-*.omupd \
-        /mnt/SDCARD_EXT/oakmoss-"$dev"-*.omupd 2>/dev/null)
+    pkgs=$(ls /mnt/sd1/oakmoss-"$dev"-*.omupd /mnt/sd2/oakmoss-"$dev"-*.omupd 2>/dev/null)
     if [ -n "$pkgs" ] && oakmoss-update.sh $pkgs; then
         sync
         reboot

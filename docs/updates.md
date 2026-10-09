@@ -62,9 +62,8 @@ tree or `sys_config.fex` differ from the previous release's: pack puts the devic
 ## Installing
 
 The launcher downloads the file for its board to the root of the card and reboots. On the next
-boot `runmagicx.sh` passes every `oakmoss-<board>-*.omupd` at the root of `/mnt/SDCARD` and of the
-other mounted card (`/mnt/SDCARD_INT` or `/mnt/SDCARD_EXT`, `docs/cards.md`) to
-`oakmoss-update.sh`, which:
+boot `runmagicx.sh` passes every `oakmoss-<board>-*.omupd` at the root of either card (`/mnt/sd1`,
+`/mnt/sd2`, `docs/cards.md`) to `oakmoss-update.sh`, which:
 
 1. keeps the newest package whose `BUILD` is above this image's and renames the others `.old`,
    so an older file is never installed and is not looked at again;
