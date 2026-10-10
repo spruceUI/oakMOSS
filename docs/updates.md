@@ -108,4 +108,5 @@ Proven on the Zero 40 (2026-10-09):
 - **Boot chain:** the v0.5.0-beta.1 update (`BOOTCHAIN=1`) wrote the U-Boot package, copy first
   (sector 24576) and main last (32800), each read back, and the board booted the new slot
   through it and confirmed it. boot0 and boot-resource already matched and were left alone.
+  The boot picture stayed up until the menu, and the case LED's blue half stayed off.
 - **Updates:** two `BOOTCHAIN=0` updates before it, each into the other slot.

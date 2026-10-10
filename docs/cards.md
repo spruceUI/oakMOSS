@@ -111,19 +111,19 @@ the next boot.
 
 ## What spruce has to handle
 
-spruce owns these; the base does not change them. They matter only when SD1 hosts.
+spruce owns these; the base does not change them. They matter only when SD1 hosts, and spruceOS
+PR #1804 (merged 2026-10-09) fixed both. spruce nightlies newer than 4.5.3-20261009.3 carry it.
 
-- **`SD_DEV`.** `Zero28.cfg`, `Zero40.cfg` and `XU20.cfg` set `SD_DEV="/dev/mmcblk1p1" # need to
-  verify this`. That is SD2.
+- **`SD_DEV`.** Before #1804, `Zero28.cfg`, `Zero40.cfg` and `XU20.cfg` set it to
+  `/dev/mmcblk1p1`, which is SD2. They now take it from the `/mnt/SDCARD` mount, as
+  `dArkMossCommon.cfg` does.
   - **Power-off:** `save_poweroff_stage2.sh` finds the card it must unmount cleanly from
-    `SD_DEV`. With SD2 in, it unmounts SD2 and leaves the host to the base's final `umount -a`.
-  - **Read-only check:** `read_only_check` logs SD2's mount line; that is only a log.
-  - **The fix:** one line per file, as `dArkMossCommon.cfg` already does it:
-    `export SD_DEV="$(awk '$2=="/mnt/SDCARD"{print $1; exit}' /proc/mounts 2>/dev/null)"`.
-- **USB storage mode** (`App/USBStorageMode/usb_gadget.sh`) exports a fixed `/dev/mmcblk1p1` on
-  these boards. It unmounts every mount of that device first, so nothing is exported while
-  mounted, but when SD1 hosts the PC gets SD2 instead of spruce's card. The fix is to take
-  `STORAGE_DEVICE` from the `/mnt/SDCARD` mount.
+    `SD_DEV`. With the old value and SD2 in, it unmounted SD2 and left the host to the base's
+    final `umount -a`.
+  - **Read-only check:** `read_only_check` logs the card's mount line; that is only a log.
+- **USB storage mode** (`App/USBStorageMode/usb_gadget.sh`) exported a fixed `/dev/mmcblk1p1` on
+  these boards, so when SD1 hosted the PC got SD2 instead of spruce's card. Since #1804 it
+  exports `SD_DEV`.
 - `repairSD.sh` already takes the device from the mount.
 
 ## Tested on hardware
@@ -151,5 +151,11 @@ With this layout (Zero 28, 2026-10-09):
   `/media/sdcard1` within 1.6 s.
 - **Card detect:** with the slot empty, card detect read `hi` and the hand-off started at 7.1 s,
   without the wait.
+
+With spruceOS #1804 (Zero 28, 2026-10-09, SD1 hosting):
+- **SD2 out:** every running spruce process had `SD_DEV=/dev/mmcblk0p12`, and USB storage mode
+  shared SD1's partition with the computer.
+- **A games-only SD2 in** (no launcher, at `/media/sdcard1`): a power-off from the menu
+  unmounted `/mnt/SDCARD` cleanly, and both cards mounted clean on the next boot.
 
 Still to prove: the card in Windows after its first boot, and the other boards.

@@ -91,9 +91,9 @@ and restarts the kernel when the check fails. The XU20 runs with the Zero 40's o
 - Updates are tested on the Zero 28 and the Zero 40, the boot chain on the Zero 40 only
   (`docs/updates.md`). spruce from SD1 is tested on the Zero 28 only (`docs/cards.md`).
   U-Boot's fallback to its boot0 and package copies is not tested.
-- With spruce on SD1, spruce's `SD_DEV` and its USB storage app's device (`/dev/mmcblk1p1`) name
-  SD2, until spruce takes them from the mounts. The power-off then leaves the host to the base's
-  final unmount, and USB storage mode exports SD2 (`docs/cards.md`).
+- With spruce on SD1, spruce before spruceOS PR #1804 (nightlies up to 4.5.3-20261009.3) takes
+  SD2 for its card: the power-off leaves the host to the base's final unmount, and USB storage
+  mode exports SD2. #1804, merged 2026-10-09, takes the card from the mounts (`docs/cards.md`).
 
 The spruceOS side (platform files, PyUI device classes, the card builder) lives in
 [spruceOS](https://github.com/spruceUI/spruceOS), not here.
