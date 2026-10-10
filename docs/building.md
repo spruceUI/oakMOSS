@@ -118,8 +118,9 @@ Without `DIAG=0` those images carry the diagnostic hand-off; the script's header
   - `oakmoss.disp_smooth=0` on the kernel command line makes the kernel power the panel up
     itself instead of taking U-Boot's display over (the Zero 40 boot blank, `TODO.md`).
   - `oakmoss-debug.sh` records every boot and every orderly shutdown in
-    `/mnt/UDISK/oakmoss-debug` and copies the records to the SD card's `oakmoss-debug/`, with a
-    summary in `Saves/spruce/oakmoss-debug.log`, which spruce's Bug report task packs and sends.
+    `/mnt/UDISK/oakmoss-debug` and copies the records to the SD card's
+    `oakmoss-debug-records/`, with a summary in `Saves/spruce/oakmoss-debug.log`, which spruce's
+    Bug report task packs and sends.
   - `runmagicx.sh` sets `oakmoss_debug`: 0 when SD1's spruce partition can be read and holds no
     `oakmoss-debug` file at its root, 1 otherwise. The records follow at once, the kernel marks
     from the next boot. Cards without that partition always keep them on.

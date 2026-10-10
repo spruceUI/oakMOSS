@@ -2,7 +2,7 @@
 # oakMOSS debug records: one per boot of how it started and how the boot before ended.
 # Usage: oakmoss-debug.sh boot | late | shutdown   (run by /etc/init.d/oakmoss-debug; off with oakmoss_debug=0)
 D=/mnt/UDISK/oakmoss-debug		# small ring on the 3 MB overlay: boot.txt and a short shutdown.txt
-CARD=/mnt/SDCARD/oakmoss-debug		# the full records
+CARD=/mnt/SDCARD/oakmoss-debug-records	# the full records; not oakmoss-debug/, SD1's switch file when SD1 hosts
 T=/tmp/oakmoss-debug			# this boot's record until the card is there
 KEEP=30
 KEEP_UDISK=6
@@ -140,7 +140,7 @@ spruce_log() {	# a compact summary where spruce's Bug report task packs logs fro
 	n=$(cat $T/n); r=$CARD/$(name "$n"); s=$r/shutdown.txt
 	[ -f "$s" ] || s=$CARD/$(name $((n - 1)))/shutdown.txt
 	{
-		echo "oakMOSS debug summary, written $(now) at uptime $(up) s; full records: oakmoss-debug/ on this card"
+		echo "oakMOSS debug summary, written $(now) at uptime $(up) s; full records: oakmoss-debug-records/ on this card"
 		cat /etc/oakmoss-debug 2>/dev/null
 		echo
 		echo "== The last 10 boots, newest first"

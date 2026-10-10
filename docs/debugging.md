@@ -20,8 +20,9 @@ the setting from the env (`oakmoss_debug`), where `runmagicx.sh` writes it at ev
 
 ## What it records
 
-Each boot gets a record, `oakmoss-debug/boot-NNNN/`, on the card spruce runs from (the last 30
-are kept):
+Each boot gets a record, `oakmoss-debug-records/boot-NNNN/`, on the card spruce runs from (the
+last 30 are kept). v0.5.0-beta.1 wrote them to `oakmoss-debug/`, which is the switch file itself
+when SD1 hosts, so it wrote no records there:
 
 - **`boot.txt`:** how this boot started (the PMIC's power-on source and U-Boot's decision), how
   the boot before ended (its last kernel mark and whether it wrote a shutdown record), the kernel
