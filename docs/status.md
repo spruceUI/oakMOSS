@@ -90,7 +90,8 @@ and restarts the kernel when the check fails. The XU20 runs with the Zero 40's o
 - An XU20 revision with the RTP36HD029A panel would be dark on this image (`TODO.md`).
 - Updates are tested on the Zero 28 and the Zero 40, the boot chain on the Zero 40 only
   (`docs/updates.md`). spruce from SD1 is tested on the Zero 28 only (`docs/cards.md`).
-  U-Boot's fallback to its boot0 and package copies is not tested.
+  boot0 falls back to the U-Boot package's spare copy (tested on the Zero 40); the spare copy
+  of boot0 itself is not tested.
 - With spruce on SD1, spruce before spruceOS PR #1804 (nightlies up to 4.5.3-20261009.3) takes
   SD2 for its card: the power-off leaves the host to the base's final unmount, and USB storage
   mode exports SD2. #1804, merged 2026-10-09, takes the card from the mounts (`docs/cards.md`).

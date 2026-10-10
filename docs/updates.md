@@ -92,10 +92,10 @@ image now carries an empty slot B, about 440 MiB of zeros, so publish the compre
 
 ## Still to prove on hardware
 
-- The fallback copies: Allwinner's own writer puts boot0 at 256 and the package at 24576
-  (`drivers/sunxi_flash/mmc/sdmmc.c`, `UBOOT_BACKUP_START_SECTOR_IN_SDMMC`), but boot0 is a
-  prebuilt binary, so that it reads them is not visible in the SDK. Zero the main package on
-  a test card and see it still boot.
+- boot0's own copy: Allwinner's own writer puts boot0 at 256 and the package at 24576
+  (`drivers/sunxi_flash/mmc/sdmmc.c`, `UBOOT_BACKUP_START_SECTOR_IN_SDMMC`). The package copy is
+  proven (below). That the boot ROM reads boot0 from 256 is not: zero sector 16's boot0 on a
+  test card and see it still boot.
 
 Proven on the Zero 28 (2026-10-09):
 - **Updates:** two whole updates from the card (BOOTCHAIN=0). Each wrote the other slot,
@@ -110,3 +110,5 @@ Proven on the Zero 40 (2026-10-09):
   through it and confirmed it. boot0 and boot-resource already matched and were left alone.
   The boot picture stayed up until the menu, and the case LED's blue half stayed off.
 - **Updates:** two `BOOTCHAIN=0` updates before it, each into the other slot.
+- **Package copy:** with the main U-Boot package (sector 32800) zeroed, boot0 loaded the copy at
+  24576 and the board booted v0.5.0-beta.1. The main copy was then restored from it.
