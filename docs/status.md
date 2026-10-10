@@ -6,6 +6,12 @@ below that is not marked as tested as untested.
 
 ## Releases and spruceOS
 
+v0.5.0-beta.2 (2026-10-09) fixes debug mode with spruce on the system card: the full records
+now go to `oakmoss-debug-records/` on the card spruce runs from. v0.5.0-beta.1 wrote them to
+`oakmoss-debug/`, which is the switch file itself when SD1 hosts, so it kept none there
+(`docs/debugging.md`). Tested on the Zero 28. Its updates install over v0.5.0-beta.1 and leave
+the bootloader, unchanged since then, alone. It pairs with spruceOS v4.5.0 or a newer nightly.
+
 v0.5.0-beta.1 (2026-10-09) is the first release with two system slots, so it is written once
 and then updated in place (`docs/updates.md`). It adds spruceOS on the system card (a
 `SPRUCEOS` partition made at the first boot; SD2's spruce wins when both cards carry one,
