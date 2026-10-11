@@ -22,6 +22,7 @@ found while porting the tree to GCC 13 / glibc 2.38.
 | patch | path | change | reason | source |
 |---|---|---|---|---|
 | `010-rules-mk-external-toolchain-override` | `rules.mk` | env-driven external-toolchain block (`TINA_EXT_TOOLCHAIN_{ROOT,PREFIX,TARGET_NAME,SYSROOT}`, `TINA_EXT_KERNEL_CROSS`), `CONFIG_TOOLCHAIN_BIN_PATH="./wrap ./bin"`, glibc >= 2.34 file specs, keeping the `gomp` (libgomp) the SDK's own libc spec ships; the libc spec is set a second time after the SDK's late reassignment | docs/toolchain.md | oakMOSS |
+| `011-rules-mk-kernel-cc-absolute` | `rules.mk` | `KERNEL_CC:=$(TOOLCHAIN_DIR)/bin/$(TARGET_CROSS)gcc` while `TINA_EXT_TOOLCHAIN_ROOT` is set: OpenWrt's toolchain wrapper by absolute path | the kernel's `CC=` was a bare name resolved on PATH; the same wrapper, no lookup (round 27) | oakMOSS |
 | `020-kernel-config-4.9` | `device/config/chips/a133/configs/aw3/linux/config-4.9` | `NLS_UTF8=y`, FAT iocharset `utf8`, `VIDEO_SUNXI_VIN` off (Moss "changes not present in configs"); `BLK_DEV_LOOP=y` (MIN_COUNT 8), `INPUT_UINPUT=y`, `INPUT_JOYDEV=y`, `INPUT_FF_MEMLESS=y`, `SND_USB_AUDIO=m`, `XR829_WLAN=m`, `SQUASHFS_LZ4/LZO=y` (deps §7), `SQUASHFS_ZLIB/ZSTD=y` (round 17; LZ4 and gzip took effect only with 134); the 21 `XRADIO*`/`XRMAC*`/`NF_LOG_COMMON`/`IPV6_FOU*`/`BT_XR_BLUEDROID_SUPPORT` symbols `olddefconfig` resolved once XR829 was on (the build's non-interactive `silentoldconfig` aborts on new prompts) | PortMaster loop mounts, gptokeyb uinput, joystick nodes, rumble, USB audio, onboard radio | Moss, deps, oakMOSS |
 | `030-toolchain-gcc-7.5.0-option` | `toolchain/gcc/{Config.version,Config.in,common.mk}` | new menu option `GCC_USE_VERSION_7_5_0` (vanilla GNU gcc-7.5.0.tar.xz, md5 recorded, `HOST_BUILD_DIR` set) | releases.linaro.org no longer serves `gcc-linaro-7.4-2019.02.tar.xz`; fallback toolchain only | oakMOSS |
 | `040-gpu-km-kernel-cross` | `package/kernel/gpu-km/Makefile` | `CROSS_COMPILE=$(KERNEL_CROSS)` instead of `$(TARGET_CROSS)` | the PowerVR rogue_km build keys its compiler config on the prefix and has no `aarch64-none-linux-gnu.mk`; the module belongs with the kernel's compiler | oakMOSS |
@@ -462,3 +463,22 @@ wants `inputs/Linux_SDK.zip` even when the SDK is unpacked), `scripts/kdebug.sh 
 `scripts/apply-sdk-mods.sh` (010 reports `upgraded`, and so do 020 and 100 on a tree from before
 rounds 17 and 24), then `scripts/prepare-toolchain.sh`, with `--force` where libgomp was copied
 into the sysroot by hand. `mods_version` 18 -> 19.
+
+## Round 27 (2026-10-11): the kernel's compiler by absolute path
+
+The kernel has been compiled with the Arm GNU 13.3 gcc since the external toolchain went in, not
+with the vendor's GCC 6.4 these docs said: OpenWrt passes `KERNEL_CC` as `CC=` beside
+`CROSS_COMPILE="$(KERNEL_CROSS)"`, so the vendor toolchain only linked it. `KERNEL_CC` defaulted to
+`TARGET_CC`, the bare `aarch64-none-linux-gnu-gcc`, which PATH resolved to OpenWrt's wrapper in
+`staging_dir/toolchain/bin`. 011 names that wrapper by absolute path: the same compile, one route.
+`KERNEL_CC` is a plain make variable, so the GE8300 module (040) keeps the vendor GCC 6.4.
+
+| what | where | why |
+|---|---|---|
+| `011-rules-mk-kernel-cc-absolute.patch` | `rules.mk`, after the ccache block, clear of 010's hunks (a line inside one would stop 010 reading as applied) | `KERNEL_CC` by absolute path while the external toolchain is in use |
+| `scripts/lib.sh` `OAKMOSS_MODS_VERSION` | `build.sh` | refuses a tree without 011 |
+| `docs/toolchain.md`, `docs/DEPENDENCIES.md`, `ATTRIBUTION.md`, `run-in-sdk.sh`, BUILD-INFO (`build.sh`) | | they said the kernel was built with GCC 6.4 |
+
+On an existing tree: `scripts/kdebug.sh revert`, then `scripts/apply-sdk-mods.sh` (011 reports
+`patched`). The stamp moves, which wipes the kernel build tree, so the next `ext` or `image`
+recompiles every kernel object. `mods_version` 19 -> 20.

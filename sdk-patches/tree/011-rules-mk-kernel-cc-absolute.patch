@@ -1,0 +1,16 @@
+--- a/rules.mk
++++ b/rules.mk
+@@ -419,6 +419,13 @@
+   HOSTCXX:= ccache $(HOSTCXX)
+ endif
+ 
++# oakMOSS: the kernel's compiler by absolute path instead of a PATH lookup: the same OpenWrt wrapper
++# (its target flags, then ./wrap, then the toolchain's gcc). KERNEL_CROSS (010) still gives the kernel
++# the vendor binutils, and the GE8300 module (040) the vendor GCC 6.4.
++ifneq ($(TINA_EXT_TOOLCHAIN_ROOT),)
++  KERNEL_CC:=$(TOOLCHAIN_DIR)/bin/$(TARGET_CROSS)gcc
++endif
++
+ TARGET_CONFIGURE_OPTS = \
+   AR="$(TARGET_AR)" \
+   AS="$(TARGET_CC) -c $(TARGET_ASFLAGS)" \

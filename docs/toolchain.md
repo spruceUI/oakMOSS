@@ -31,9 +31,21 @@ environment variables (`TINA_EXT_TOOLCHAIN_ROOT`, `_PREFIX`, `_TARGET_NAME`,
 
 - Userland: Arm GNU Toolchain 13.3.Rel1 `aarch64-none-linux-gnu` (glibc 2.38,
   `GLIBCXX_3.4.32`, glibc's minimum kernel 3.7.0, so fine on 4.9.191).
-- Kernel and the PowerVR GE8300 kernel module: the SDK's own GCC 6.4 through
-  `KERNEL_CROSS` (`sdk-patches/tree/040-gpu-km-kernel-cross.patch` makes the
-  module use it too; the rogue_km build keys its compiler config on the prefix).
+- Kernel: the same Arm GNU 13.3 gcc, with the SDK's own binutils for its links
+  through `KERNEL_CROSS`. OpenWrt passes `KERNEL_CC` as `CC=` beside
+  `CROSS_COMPILE`; it used to default to the bare `aarch64-none-linux-gnu-gcc`,
+  which PATH resolved to OpenWrt's toolchain wrapper in
+  `staging_dir/toolchain/bin` (it adds `CONFIG_TARGET_OPTIMIZATION` and `-mglibc`,
+  then runs `./wrap`'s, then the real gcc).
+  `sdk-patches/tree/011-rules-mk-kernel-cc-absolute.patch` names that same wrapper by
+  absolute path, so the compile is unchanged and no PATH order can swap the
+  compiler. The kernel has been compiled with 13.3 since the external toolchain went
+  in; objects no build had recompiled since earlier toolchains kept those compilers
+  until mods 20's kernel-tree wipe. These docs said GCC 6.4 until 2026-10-11.
+- PowerVR GE8300 kernel module: the SDK's own GCC 6.4 through `KERNEL_CROSS`
+  (`sdk-patches/tree/040-gpu-km-kernel-cross.patch`; the rogue_km build keys its
+  compiler config on the prefix). `KERNEL_CC` is a plain make variable, so its
+  build never sees it.
 - `tina-sysroot/`: the SDK's `CONFIG_LIBC_FILE_SPEC` globs expect glibc under
   `./lib` and libstdc++/libgcc_s/libatomic under `./usr/lib`; Arm keeps them in
   `lib64/`. `scripts/prepare-toolchain.sh` copies them into that shape, and libgomp

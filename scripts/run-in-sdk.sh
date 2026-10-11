@@ -11,9 +11,9 @@
 #   $OAKMOSS_ROOT      -> /home/builder/oakmoss       (ro)
 #   $BUILDS_DIR        -> /home/builder/builds        (rw)
 #   $TOOLCHAINS_DIR    -> /home/builder/toolchains    (ro)
-# TOOLCHAIN=armgnu13 (default) exports the Tina external-toolchain override
-# variables (docs/toolchain.md); the kernel keeps the vendor GCC 6.4 through
-# KERNEL_CROSS. TOOLCHAIN=vendor runs the SDK exactly as shipped (phase1/phase2).
+# TOOLCHAIN=armgnu13 (default) exports the Tina external-toolchain variables (docs/toolchain.md):
+# the kernel compiles with the 13.3 gcc (patch 011), and links and builds the GE8300 module with
+# the vendor toolchain (KERNEL_CROSS). TOOLCHAIN=vendor runs the SDK exactly as shipped (phase1/phase2).
 . "$(dirname "$0")/lib.sh"
 need_sdk
 mkdir -p "$CCACHE_HOST_DIR" "$BUILDS_DIR" "$TOOLCHAINS_DIR"
