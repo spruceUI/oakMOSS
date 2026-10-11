@@ -173,14 +173,15 @@ ship_lib() {  # ship_lib <soname> ... : copy from the staging prefix, keep the s
         [ -f "$real" ] || die "not staged: $so"
         # a recipe's failed build step does not stop it (errexit is off here); an older staged copy must not ship
         if [ "$PORTS_SET" = flip ] && [ ! "$real" -nt "$WORK/.package-start" ]; then die "$so was not rebuilt by $p"; fi
-        cp -f "$real" "$OUT/lib/$so"
+        # owner-writable: some installs leave 0555 (tcl), and strip and set_rpath rewrite the copy
+        cp -f "$real" "$OUT/lib/$so" && chmod u+w "$OUT/lib/$so"
         "$STRIP" --strip-unneeded "$OUT/lib/$so"
         set_rpath "$LIB_RPATH" "$OUT/lib/$so"
     done
 }
 
 ship_bin() {  # ship_bin <path> <name>
-    cp -f "$1" "$OUT/bin/$2"
+    cp -f "$1" "$OUT/bin/$2" && chmod u+w "$OUT/bin/$2"
     "$STRIP" --strip-unneeded "$OUT/bin/$2"
     set_rpath "$BIN_RPATH" "$OUT/bin/$2"
 }
