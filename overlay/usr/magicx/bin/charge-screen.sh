@@ -3,9 +3,9 @@
 # (androidboot.mode=charger: plugged in while off, charge_mode = 1 in the board's
 # sys_config.fex). The muOS model (script/device/charge.sh + muxcharge on the H700
 # boards): stay up at the lowest clock showing a charging screen with the battery level.
-# The panel goes dark after BLANK_AFTER seconds; any press (pad or power) while it is dark
-# only wakes it, and a power press while it is lit starts the launcher (returns 0). Powers
-# the board off if the charger goes away first. It never powers
+# The panel and its backlight go off after BLANK_AFTER seconds; any press (pad or power)
+# while it is dark only wakes it, and a power press while it is lit starts the launcher
+# (returns 0). Powers the board off if the charger goes away first. It never powers
 # off with the charger attached: the PMIC powers these boards straight back on while
 # USB is present (a Zero 28 looped that way, 2026-09-26).
 #
@@ -95,6 +95,13 @@ echo powersave > "$GOV" 2>/dev/null
 echo 0 > "$FBSYS/blank" 2>/dev/null
 frame=$(level_frame); show "$frame"
 
+# The fb blank only hides the layer, so the backlight goes off with it: to 0, or to 255 on the
+# boards whose PWM runs inverted (spruce mirrors their level too; docs/hardware-notes.md).
+BL_OFF=0; case "$(cat /usr/magicx/device 2>/dev/null)" in zero40|xu20) BL_OFF=255 ;; esac
+BL=$(oakmoss-backlight 2>/dev/null)                 # the value a wake restores
+case "$BL" in ''|*[!0-9]*|"$BL_OFF") BL="" ;; esac   # no helper, or already off: left alone
+backlight() { [ -n "$BL" ] && oakmoss-backlight "$1" 2>/dev/null; }
+
 # The pad is a module (simplepad) and registers late - 5.9 s into a Zero 28 boot, with
 # this script already up at 6.7 s - so wait up to 10 s for both nodes.
 pek=""; pad=""; n=0
@@ -111,7 +118,7 @@ while :; do
 done
 
 [ -f /tmp/chargeframe.log ] && while read -r _l; do log "early: $_l"; done < /tmp/chargeframe.log
-log "charging at $(cat "$BAT" 2>/dev/null)% (governor $gov -> powersave), keys pek=${pek:-none} pad=${pad:-none}"
+log "charging at $(cat "$BAT" 2>/dev/null)% (governor $gov -> powersave), keys pek=${pek:-none} pad=${pad:-none}, backlight ${BL:-not controlled}"
 
 # Every event from the power key and the pad, read continuously (a reader per node appends
 # the raw 24-byte input_events to a file), so a press is told from its release: a release
@@ -167,6 +174,7 @@ while :; do
         if [ "$lit" -eq 0 ]; then
             echo 0 > "$FBSYS/blank" 2>/dev/null
             frame=$(level_frame); show "$frame"
+            backlight "$BL"
             log "woken at $(cat "$BAT" 2>/dev/null)%"
         fi
         lit=$TICKS
@@ -175,7 +183,7 @@ while :; do
         new=$(level_frame)
         [ "$new" != "$frame" ] && { frame=$new; show "$frame"; }
         lit=$((lit - 1))
-        [ "$lit" -eq 0 ] && echo 4 > "$FBSYS/blank" 2>/dev/null
+        [ "$lit" -eq 0 ] && { backlight "$BL_OFF"; echo 4 > "$FBSYS/blank" 2>/dev/null; }
     fi
     sleep 0.25
 done

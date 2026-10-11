@@ -90,7 +90,8 @@ because the base does not.
       power-key sleeps of about a minute (2026-09-29/30); `docs/hardware-notes.md`, "Sleep
       on the SDK chain".
 - [ ] **Backlight polarity**: 0 and 1 have each been read as inverted on the XU20/Zero 40
-      (HN "Backlight polarity"); spruce mirrors the level on those two boards meanwhile.
+      (HN "Backlight polarity"); spruce mirrors the level on those two boards meanwhile, and the
+      charge screen's off value (255 there, 0 on the Zero 28) follows the same reading.
 - [ ] **Zero 40 on its own stock chain** (2026-09-16, `scripts/make-hybrid-stock.sh zero40`,
       one-slot image 1240 BOOTS; two-slot 1255 carries the repaired boot package
       checksum, untested). Once a two-slot image boots, spruce's `Zero40.cfg` needs `WIFI_ONBOARD_MODULE=xr829` and no

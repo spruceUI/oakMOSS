@@ -686,6 +686,15 @@ the platform file sets `MAGICX_BACKLIGHT_REVERSED=1`); PyUI only asks the shell 
 level (spruceOS branch `feat/magicx-fixes-20260928`). This reading and the 0-is-inverted one above
 cannot both describe the same hardware; which polarity is physically right is open.
 
+**A blanked framebuffer keeps its backlight (2026-10-11).** The display driver's fb blank
+(`sunxi_fb_blank`) only disables the layer: the panel and the backlight stay as they were, so
+the charge screen glowed black while "dark". It now also sets the backlight to its off value
+(`oakmoss-backlight`, `src/backlight.c`, through `DISP_LCD_SET_BRIGHTNESS`): 0 on the Zero 28,
+and 255 on the Zero 40 and the XU20 by the reading above, which still leaves 1/256 of each PWM
+period on. None of the three panel drivers hooks brightness, so the PWM duty is all there is.
+The driver's `DISP_LCD_BACKLIGHT_DISABLE` is not used: it frees the PWM with its polarity
+flipped, and `DISP_LCD_BACKLIGHT_ENABLE` does not set the polarity back.
+
 ## Sleep on the SDK chain (2026-09-29/30)
 
 Real suspend-to-RAM works on all three boards. Getting there took two fixes.

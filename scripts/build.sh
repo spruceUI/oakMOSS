@@ -128,12 +128,15 @@ apply_overlay() {
     if [ -x "$cc" ]; then
         "$cc" -static -Os -s -Wall -Wextra -Werror -o "$SDK_DIR/package/add-rootfs-demo/usr/magicx/bin/oakmoss-sd1part" \
             "$OAKMOSS_ROOT/src/sd1part.c" || die "oakmoss-sd1part did not build"
+        # The charge screen's backlight switch (src/backlight.c), the same way
+        "$cc" -static -Os -s -Wall -Wextra -Werror -o "$SDK_DIR/package/add-rootfs-demo/usr/magicx/bin/oakmoss-backlight" \
+            "$OAKMOSS_ROOT/src/backlight.c" || die "oakmoss-backlight did not build"
         # BatteryPlus (docs/batteryplus.md), started by /etc/init.d/batteryplus; its hook directories ship empty,
         # so it never has to create them on a read-only root
         cp -f "$(batteryplus_bin)" "$SDK_DIR/package/add-rootfs-demo/usr/magicx/bin/batteryplus" || die "no BatteryPlus"
         mkdir -p "$SDK_DIR/package/add-rootfs-demo/etc/batteryplus/"{charging.d,discharging.d,state.d}
     else
-        warn "no Arm toolchain at $ARMGNU_DIR: the image gets no oakmoss-sd1part (no SD1 installs) and no BatteryPlus"
+        warn "no Arm toolchain at $ARMGNU_DIR: the image gets no oakmoss-sd1part (no SD1 installs), no oakmoss-backlight (the charge screen's backlight stays on while dark) and no BatteryPlus"
     fi
     printf '%s\n' "$DEVICE_MARKER" > "$SDK_DIR/package/add-rootfs-demo/usr/magicx/device"
     oakmoss_version > "$SDK_DIR/package/add-rootfs-demo/usr/magicx/version"

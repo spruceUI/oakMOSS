@@ -51,9 +51,9 @@ cards carry spruce, SD2's runs; SD1's runs when SD2 has none.
   board record each boot and shutdown on the card, with the kernel's progress marks
   (`docs/debugging.md`). Without the file it records nothing.
 - **Plugged in while off:** the board comes up in charge mode. U-Boot shows a charging
-  picture, then a screen with the battery level. The screen goes dark after 30 seconds, and
-  any button brings it back. Power while it is lit starts the launcher. Unplugging the
-  charger switches the board off.
+  picture, then a screen with the battery level. The screen and its backlight go off after
+  30 seconds, and any button brings them back. Power while it is lit starts the launcher.
+  Unplugging the charger switches the board off.
 - **Battery too low:** plugged in, the board charges up to a safe level before it goes on;
   without a charger it shows a low-battery picture and switches off.
 - **Sleep:** a short press of the power key puts the board to sleep, and the power key
