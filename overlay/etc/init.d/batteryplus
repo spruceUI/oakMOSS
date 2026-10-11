@@ -1,0 +1,14 @@
+#!/bin/sh /etc/rc.common
+# BatteryPlus (docs/batteryplus.md): battery percent from voltage into /tmp/battery.percent, restarted by procd if
+# it exits. Started once /mnt/UDISK is mounted; stopped (SIGTERM, which saves its state) before the K99 unmount.
+
+START=13
+STOP=50
+USE_PROCD=1
+
+start_service() {
+	procd_open_instance
+	procd_set_param command /usr/magicx/bin/batteryplus
+	procd_set_param respawn
+	procd_close_instance
+}

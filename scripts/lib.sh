@@ -71,6 +71,12 @@ ZLIB_SHA256=9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23
 OPENSSL_TARBALL=openssl-1.1.1w.tar.gz
 OPENSSL_URL=https://www.openssl.org/source/old/1.1.1/$OPENSSL_TARBALL
 OPENSSL_SHA256=cf3098950cb4d853ad95c0841f1f9c6d3dc102dccfcacd521d93925208b76ac8
+# BatteryPlus (docs/batteryplus.md): Mikhailzrick's knubat.components at the last commit to BatteryPlus/,
+# GitHub's archive of that commit (GPL-2.0).
+BATTERYPLUS_COMMIT=1c31e89ec1828d51710ad35a607bdfad7e18464e
+BATTERYPLUS_TARBALL=knubat.components-$BATTERYPLUS_COMMIT.tar.gz
+BATTERYPLUS_URL=https://github.com/Mikhailzrick/knubat.components/archive/$BATTERYPLUS_COMMIT.tar.gz
+BATTERYPLUS_SHA256=1619da9e945746ea589edb70efd1095b07d21207be3fa43a4c1598be5c2a2089
 
 # Shaun Inman's main-zero40 release: the Zero 40 boot chain for the hybrid image.
 MAINZERO40_VERSION=20260202-1

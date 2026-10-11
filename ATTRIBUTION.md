@@ -212,6 +212,16 @@ SDK builds come from its `dl/` directory under their own licenses. The small
 patches under `sdk-patches/package-patches/` and `sdk-patches/tree/` that touch
 those packages are offered under the license of the package they modify.
 
+## Mikhailzrick: BatteryPlus
+
+**[knubat.components](https://github.com/Mikhailzrick/knubat.components)**
+`BatteryPlus/batteryplus.cpp`, the battery daemon Knulli ships (commit `1c31e89`,
+2026-07-31; GPL-2.0). `scripts/fetch-inputs.sh` fetches it (sha256 in `scripts/lib.sh`) and
+`build.sh` compiles it unmodified into the image's `/usr/magicx/bin/batteryplus`. Its
+configuration and init script in `overlay/etc/` are oakMOSS's own
+([docs/batteryplus.md](docs/batteryplus.md)). An image that carries the binary carries a
+GPL-2.0 program; its source is that commit.
+
 ## spruceOS
 
 [spruceOS](https://github.com/spruceUI/spruceOS) (CC BY-NC 4.0) is the launcher

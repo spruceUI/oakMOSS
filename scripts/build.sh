@@ -54,6 +54,20 @@ zero40_encrypt_obj() {
 # own build (same compiler, flags and headers as the vendor objects), cached in
 # $BUILDS_DIR. For boards with no matching MagicX object: theirs reboot the kernel
 # when the board's security chip does not answer to their key.
+batteryplus_bin() {  # BatteryPlus from the pinned source, static from the Arm toolchain, cached in $BUILDS_DIR by commit
+    local tb=$INPUTS_DIR/$BATTERYPLUS_TARBALL out=$BUILDS_DIR/batteryplus-${BATTERYPLUS_COMMIT:0:12} tmp
+    if [ ! -x "$out" ]; then
+        [ -f "$tb" ] && sha256_check "$tb" "$BATTERYPLUS_SHA256" || die "no verified $tb (scripts/fetch-inputs.sh)"
+        mkdir -p "$BUILDS_DIR"; tmp=$(mktemp -d) || die "mktemp failed"
+        tar -C "$tmp" -xzf "$tb" "knubat.components-$BATTERYPLUS_COMMIT/BatteryPlus/batteryplus.cpp" &&
+        "$ARMGNU_DIR/bin/aarch64-none-linux-gnu-g++" -static -O2 -std=gnu++20 -Wall -Wextra -s -o "$out.part" \
+            "$tmp/knubat.components-$BATTERYPLUS_COMMIT/BatteryPlus/batteryplus.cpp" >&2 || { rm -rf "${tmp:?}"; die "BatteryPlus did not build"; }
+        rm -rf "${tmp:?}"; mv -f "$out.part" "$out"
+        log "BatteryPlus compiled: $out" >&2
+    fi
+    printf '%s' "$out"
+}
+
 encrypt_stub_obj() {
     local src=$OAKMOSS_ROOT/sdk-patches/sunxi_encrypt/encrypt_stub.c out=$BUILDS_DIR/encrypt-stub.o
     if [ ! -f "$out" ] || [ "$src" -nt "$out" ]; then
@@ -114,8 +128,12 @@ apply_overlay() {
     if [ -x "$cc" ]; then
         "$cc" -static -Os -s -Wall -Wextra -Werror -o "$SDK_DIR/package/add-rootfs-demo/usr/magicx/bin/oakmoss-sd1part" \
             "$OAKMOSS_ROOT/src/sd1part.c" || die "oakmoss-sd1part did not build"
+        # BatteryPlus (docs/batteryplus.md), started by /etc/init.d/batteryplus; its hook directories ship empty,
+        # so it never has to create them on a read-only root
+        cp -f "$(batteryplus_bin)" "$SDK_DIR/package/add-rootfs-demo/usr/magicx/bin/batteryplus" || die "no BatteryPlus"
+        mkdir -p "$SDK_DIR/package/add-rootfs-demo/etc/batteryplus/"{charging.d,discharging.d,state.d}
     else
-        warn "no Arm toolchain at $ARMGNU_DIR: the image gets no oakmoss-sd1part, so no SD1 installs"
+        warn "no Arm toolchain at $ARMGNU_DIR: the image gets no oakmoss-sd1part (no SD1 installs) and no BatteryPlus"
     fi
     printf '%s\n' "$DEVICE_MARKER" > "$SDK_DIR/package/add-rootfs-demo/usr/magicx/device"
     oakmoss_version > "$SDK_DIR/package/add-rootfs-demo/usr/magicx/version"
@@ -439,6 +457,7 @@ case $STEP in
       echo "libc=$(strings "$ROOTFS/lib/libc.so.6" 2>/dev/null | grep -m1 'GNU C Library')"
       echo "libstdcxx=$(for f in "$ROOTFS"/usr/lib/libstdc++.so.6.0.*; do [ -e "$f" ] && basename "$f" && break; done)"
       echo "flipset=$([ -n "${FLIPSET:-}" ] && sed -n 2,3p "$SDK_DIR/package/add-rootfs-demo/usr/magicx/flipset" | tr '\n' ' ' || echo none)"
+      echo "batteryplus=$([ -x "$ROOTFS/usr/magicx/bin/batteryplus" ] && echo "knubat.components ${BATTERYPLUS_COMMIT:0:12}, voltage mode" || echo none)"
       echo "outputs=$(basename "$FINAL") (raw GPT image: dd or Etcher to SD1, whole card); $(basename "$UPDATE") (update for cards with two slots, docs/updates.md; bootchain=${OMUPD_BOOTCHAIN:-0}); $(basename "$IMG") (Allwinner PhoenixSuit image); $(basename "$IMG").dump/rootfs.fex (rootfs squashfs, used by the hybrid and diag images)"
       echo "debug=$DEBUG_INFO"
     } > "$OUT/BUILD-INFO.txt"
