@@ -1138,11 +1138,13 @@ build_one() {
          make CC="$CC" AR="$AR" RANLIB="$RANLIB" COPTS="$CFLAGS" LDOPTS="$LDFLAGS" \
             linux >/dev/null && cp -af shared/libwrap.so.0* "$STAGE/usr/lib/") || die "libwrap: build failed"
         ship_lib libwrap.so.0 ;;
-    libcap) # build dependency only (systemd's configure)
+    libcap) # systemd's configure needs it, and the flip set ships it: systemd 249's libsystemd links libcap.so.2
+            # (Ubuntu's 245 did not), which neither the image nor the Flip's set carries
         d=$(src libcap-2.69.tar.xz libcap-2.69)
         (cd "$d/libcap" && make -j"$JOBS" CROSS_COMPILE=$TRIPLET- BUILD_CC=gcc lib=lib prefix=/usr GOLANG=no >/dev/null &&
          make CROSS_COMPILE=$TRIPLET- BUILD_CC=gcc lib=lib prefix=/usr GOLANG=no DESTDIR="$STAGE" install >/dev/null) ||
-            die "libcap: build failed" ;;
+            die "libcap: build failed"
+        if [ "$PORTS_SET" = flip ]; then ship_lib libcap.so.2; fi ;;
     libmount)   # build dependency only: systemd's configure wants libmount 2.30 or later
         d=$(src util-linux-2.39.4.tar.xz util-linux-2.39.4)
         ac_build "$d" --disable-all-programs --enable-libmount --enable-libblkid --disable-nls --without-python \
@@ -1318,7 +1320,7 @@ libspeechd.so.2 libspeex.so.1 libtcl8.6.so libtiff.so.5 libtk8.6.so libvorbiside
 libvpx.so.7 libwavpack.so.1 libwayland-client.so.0 libwayland-cursor.so.0 libwayland-egl++.so.1
 libwayland-egl.so.1 libwebpdemux.so.2 libxcb-render.so.0 libxcb-shm.so.0 libxcb.so.1 libxkbcommon.so.0
 libxmp.so.4 libzip.so.5
-libbsd.so.0 libfontconfig.so.1 libtheoraenc.so.1 libvorbisenc.so.2
+libbsd.so.0 libcap.so.2 libfontconfig.so.1 libtheoraenc.so.1 libvorbisenc.so.2
 libSDL2_image-2.0.so.0 libSDL2_mixer-2.0.so.0 libSDL2_ttf-2.0.so.0 libcrypt.so.1 libgnutls.so.30 libssl.so.1.1
 libcrypto.so.1.1 libgcrypt.so.20 libgpg-error.so.0 libgmp.so.10 libffi.so.7"
 FLIP_LINKS="libwebp.so.7.5.0=libwebp.so.7 libwebp.so.1.0.3=libwebp.so.7 libwebpdemux.so.2.6.0=libwebpdemux.so.2"

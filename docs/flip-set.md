@@ -38,7 +38,7 @@ puts `spruce/flip/lib` today. Images without the marker keep today's paths.
 | New recipes | 57: X11/xcb (15), Wayland and xkbcommon (6), codecs (17), ICU 63, cairo, pixman, tiff, fribidi, giflib, liblcf, lz4, libzip, SDL2_gfx and SDL2_net, speech-dispatcher's client, Python 3.10, Tcl/Tk 8.6 | |
 | PulseAudio extras | 4: libapparmor, libasyncns, libsystemd, libwrap | the Flip's PulseAudio linked them; this set's PulseAudio does not, they ship for completeness |
 | The ScummVM curl chain | 30: MIT Kerberos 1.17, Heimdal 7.7, OpenLDAP 2.4, Cyrus SASL, nettle 3.5 and 3.7, p11-kit, libtasn1, libidn2, libunistring, libpsl, nghttp2, brotli | what the libcurl ScummVM carries links |
-| Needed by the above, missing from the image | libbsd, libfontconfig, libtheoraenc, libvorbisenc | |
+| Needed by the above, missing from the image | libbsd, libcap, libfontconfig, libtheoraenc, libvorbisenc | libcap: systemd 249's libsystemd links it (Ubuntu's 245, the Flip's, did not) |
 | In the image, but weaker than the Flip's | 11: SDL2_image 2.8, SDL2_mixer 2.8, SDL2_ttf 2.22 (the vendor's are 2.0), libcrypt (libxcrypt's `XCRYPT_*` versions), GnuTLS 3.6.16 (`GNUTLS_3_6_6..13`), OpenSSL 1.1.1 with DTLS (libssl and libcrypto), libgcrypt 1.8, libgpg-error, gmp, libffi (symbol versions) | ports, which get the set first, had the Flip's copies |
 | In the image in equal form (not shipped) | 5: libatomic, libbz2, libmad, libnsl, libpcre | same exports |
 
