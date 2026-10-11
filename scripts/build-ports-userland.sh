@@ -1216,12 +1216,16 @@ build_one() {
          native make -C lib/asn1 asn1_compile >/dev/null && native make -C lib/sl slc >/dev/null &&
          cp -f lib/asn1/asn1_compile lib/sl/slc "$HOST/heimdal/" && cp -f "$HOST/usr/bin/compile_et" "$HOST/heimdal/") ||
             die "heimdal: build-host tools failed"
+        # cross-compiling sends configure to its own com_err (libcom_err.so.1); e2fsprogs' compile_et passes the
+        # test it would run, and libcom_err.so.2 has Heimdal's _r calls, so link that as Ubuntu's Heimdal does
+        sed -i 's/krb_cv_compile_et="yes" krb_cv_compile_et_cross=yes$/krb_cv_compile_et="yes"/' "$d/configure"
+        ! grep -q 'krb_cv_compile_et_cross=yes' "$d/configure" || die "heimdal: configure's com_err switch moved"
         # shellcheck disable=SC2086
         (cd "$d" && ./configure --host=$TRIPLET --prefix=/usr --sysconfdir=/etc --disable-static \
             --with-cross-tools="$HOST/heimdal/" --with-sqlite3="$STAGE/usr" $hopts \
             LDFLAGS="$LDFLAGS -Wl,--allow-shlib-undefined" >/dev/null &&
          make -j"$JOBS" -C include >/dev/null && make -j"$JOBS" -C lib >/dev/null &&
-         make -C lib DESTDIR="$WORK/heimdal-dest" install >/dev/null &&
+         rm -rf "$WORK/heimdal-dest" && make -C lib DESTDIR="$WORK/heimdal-dest" install >/dev/null &&
          cp -af "$WORK"/heimdal-dest/usr/lib/lib{asn1,gssapi,hcrypto,heimbase,heimntlm,hx509,krb5,roken,wind}.so.* \
             "$STAGE/usr/lib/") || die "heimdal: build failed"
         ship_lib libasn1.so.8 libgssapi.so.3 libhcrypto.so.4 libheimbase.so.1 libheimntlm.so.0 libhx509.so.5 \
