@@ -944,6 +944,8 @@ build_one() {
         ship_lib libidn2.so.0 ;;
     libpsl)     # libidn2 + libunistring, as Ubuntu's
         d=$(src libpsl-0.21.0.tar.gz libpsl-0.21.0)
+        # its table generator runs as `env python`; the lane has python3 only (the script handles both)
+        sed -i '1s,^#!/usr/bin/env python$,#!/usr/bin/env python3,' "$d/src/psl-make-dafsa"
         ac_build "$d" --disable-man --disable-gtk-doc --enable-runtime=libidn2 --enable-builtin=libidn2
         ship_lib libpsl.so.5 ;;
     ffmpegflip) # LGPL (no postproc, so no --enable-gpl) with the codecs the Flip's copy links, and TLS through the
