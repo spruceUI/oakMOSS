@@ -143,7 +143,7 @@ libogg libvorbis theora modplug mpg123 lame opus opusfile speex speexdsp libsndf
 libvpx libvpx16 libvpx18 libvpx111 dav1d libavif faad2 wavpack libxmp a52dec libmpeg2 gme tremor libopenmpt \
 ffmpegflip libpng libjpegturbo8flip libwebp103 giflib tiff pixman fontconfig fribidi \
 xorgproto xtrans libXau libXdmcp xcbproto libxcb libX11 libXext libXfixes libXrender libXcursor libXi libXrandr \
-libXScrnSaver libICE libSM cairo wayland waylandprotocols libxkbcommon libdecor waylandpp \
+libXScrnSaver libICE libSM cairo wayland waylandprotocols libxkbcommon libdecor eglheaders waylandpp \
 sdl2 sdl2gfx sdl2net sdl2image sdl2mixer sdl2ttf mikmod icu liblcf python310 tcl tk glib speechd boost libzip \
 libasyncns libwrap libapparmor libcap libmount systemd \
 gmp libgpgerror libgcrypt nettle35 nettle37 libtasn1 libunistring libidn2 libpsl p11kit gnutls keyutils comerr krb5 heimdal cyrussasl openldap \
@@ -226,6 +226,7 @@ c = '$TC/bin/$TRIPLET-gcc'
 cpp = '$TC/bin/$TRIPLET-g++'
 ar = '$TC/bin/$TRIPLET-ar'
 strip = '$TC/bin/$TRIPLET-strip'
+pkgconfig = 'pkg-config'
 pkg-config = 'pkg-config'
 [built-in options]
 c_args = [$(mlist $CFLAGS)]
@@ -238,9 +239,15 @@ cpu_family = 'aarch64'
 cpu = 'aarch64'
 endian = 'little'
 EOF
+    # build-machine dependencies (wayland-scanner) come from $HOST, looked up without the target's staging settings
+    printf '#!/bin/sh\nexec env -u PKG_CONFIG_SYSROOT_DIR -u PKG_CONFIG_LIBDIR PKG_CONFIG_PATH=%s pkg-config "$@"\n' \
+        "$HOST/usr/lib/pkgconfig:$HOST/usr/share/pkgconfig" > "$WORK/host-pkg-config"
+    chmod +x "$WORK/host-pkg-config"
+    printf "[binaries]\npkgconfig = '%s'\npkg-config = '%s'\n" "$WORK/host-pkg-config" "$WORK/host-pkg-config" \
+        > "$WORK/meson-native.ini"
     env -u CC -u CXX -u AR -u RANLIB -u LD -u NM -u STRIP -u CFLAGS -u CXXFLAGS -u CPPFLAGS -u LDFLAGS \
-        meson setup "$src/build" "$src" --cross-file "$WORK/meson-cross.ini" --prefix=/usr --libdir=lib \
-        --buildtype=release -Ddefault_library=shared --wrap-mode=nodownload "$@"
+        meson setup "$src/build" "$src" --cross-file "$WORK/meson-cross.ini" --native-file "$WORK/meson-native.ini" \
+        --prefix=/usr --libdir=lib --buildtype=release -Ddefault_library=shared --wrap-mode=nodownload "$@"
 }
 meson_make() {  # meson_make <srcdir> [install] : build, or install into staging
     if [ "${2:-}" = install ]; then DESTDIR="$STAGE" ninja -C "$1/build" install
@@ -959,12 +966,10 @@ build_one() {
         d=$(src xcb-proto-1.16.0.tar.xz xcb-proto-1.16.0)
         (cd "$d" && ./configure --host=$TRIPLET --prefix=/usr >/dev/null && make DESTDIR="$STAGE" install >/dev/null) ||
             die "xcbproto: build failed" ;;
-    libxcb)     # every extension builds; libxcb, -render and -shm ship (what cairo and the Flip set link)
+    libxcb)     # every extension builds; libxcb, -render and -shm ship (what cairo and the Flip set link). Its
+                # configure finds xcb-proto's XML and Python module in staging (pkg-config prefixes the sysroot)
         d=$(src libxcb-1.16.tar.xz libxcb-1.16)
-        py=$(dirname "$(find "$STAGE/usr/lib" -type d -name xcbgen | head -1)")
-        (cd "$d" && ./configure --host=$TRIPLET --prefix=/usr --disable-static --disable-devel-docs --without-doxygen \
-            >/dev/null && make -j"$JOBS" XCBPROTO_XCBINCLUDEDIR="$STAGE/usr/share/xcb" XCBPROTO_XCBPYTHONDIR="$py" \
-            PYTHONPATH="$py" >/dev/null && make DESTDIR="$STAGE" install >/dev/null)
+        ac_build "$d" --disable-devel-docs --without-doxygen
         ship_lib libxcb.so.1 libxcb-render.so.0 libxcb-shm.so.0 ;;
     libX11)
         d=$(src libX11-1.8.7.tar.xz libX11-1.8.7)
@@ -994,7 +999,7 @@ build_one() {
     wayland)    # against libffi 3.3, the image's libffi.so.7: the Flip's copy wants libffi.so.8, which nothing in the
                 # set or the image provides. wayland-scanner is built for the build host first.
         d=$(src wayland-1.22.0.tar.xz wayland-1.22.0)
-        native meson setup "$d/build-host" "$d" --prefix="$HOST/usr" -Dlibraries=false -Dtests=false \
+        native meson setup "$d/build-host" "$d" --prefix="$HOST/usr" --libdir=lib -Dlibraries=false -Dtests=false \
             -Ddocumentation=false -Ddtd_validation=false >/dev/null &&
         native ninja -C "$d/build-host" install >/dev/null &&
         meson_cross "$d" -Dscanner=false -Dtests=false -Ddocumentation=false -Ddtd_validation=false >/dev/null &&
@@ -1011,9 +1016,14 @@ build_one() {
         ship_lib libxkbcommon.so.0 ;;
     libdecor)   # the core library alone, as the Flip's (its plugins are loaded at run time and are not in the set)
         d=$(src libdecor-0.2.2.tar.xz libdecor-0.2.2)
+        sed -i "/^subdir('cairo')\$/d" "$d/src/plugins/meson.build"   # its cairo plugin needs pango; no option skips it
         meson_cross "$d" -Ddemo=false -Dinstall_demo=false -Ddbus=disabled -Dgtk=disabled >/dev/null &&
         meson_make "$d" >/dev/null && meson_make "$d" install >/dev/null
         ship_lib libdecor-0.so.0 ;;
+    eglheaders) # build dependency only: waylandpp's wayland-egl++ uses the EGL types (Khronos's own headers; no libEGL)
+        d=$(src EGL-Registry-db3425b8246136faccb5e2782b5694960bd6edf1.tar.gz EGL-Registry-db3425b8246136faccb5e2782b5694960bd6edf1)
+        mkdir -p "$STAGE/usr/include/EGL" "$STAGE/usr/include/KHR" && cp -f "$d"/api/EGL/*.h "$STAGE/usr/include/EGL/" &&
+        cp -f "$d"/api/KHR/*.h "$STAGE/usr/include/KHR/" || die "eglheaders: copy failed" ;;
     waylandpp)  # libwayland-egl++.so.1. wayland-scanner++ is built for the build host first.
         d=$(src waylandpp-1.0.0.tar.gz waylandpp-1.0.0)
         (native cmake -S "$d" -B "$d/build-host" -DCMAKE_INSTALL_PREFIX="$HOST/usr" -DBUILD_LIBRARIES=OFF \
@@ -1284,7 +1294,8 @@ log "checking every shipped file loads on glibc 2.33 or older"
 bad=0
 for f in "$OUT"/bin/* "$OUT"/lib/*; do
     [ -f "$f" ] || continue
-    v=$(readelf -V "$f" 2>/dev/null | grep -oE 'GLIBC_2\.[0-9]+' | sort -t. -k2 -n | tail -1)
+    # a file with no glibc versions at all (ICU's data library) leaves grep without a match: not a failure
+    v=$(readelf -V "$f" 2>/dev/null | grep -oE 'GLIBC_2\.[0-9]+' | sort -t. -k2 -n | tail -1 || true)
     case "$v" in
         GLIBC_2.3[4-9]|GLIBC_2.[4-9][0-9]) echo "TOO NEW: $f needs $v" >&2; bad=1 ;;
     esac
