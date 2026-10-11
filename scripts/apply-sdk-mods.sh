@@ -17,6 +17,7 @@ CHECK=0; for a in "$@"; do case $a in --check) CHECK=1 ;; *) die "unknown option
 P=$OAKMOSS_ROOT/sdk-patches
 cd "$SDK_DIR" || die "cannot enter $SDK_DIR"
 missing=0
+changed=0   # set wherever a step actually patches, copies, moves or stages something (not on a no-op)
 note() { printf '  %-8s %s\n' "$1" "$2" >&2; }
 
 # The kernel mark patch (sdk-patches/debug/, build.sh KDEBUG_MARK, on by default) edits files
@@ -137,7 +138,7 @@ for patch in "$P"/tree/*.patch; do
     if upgrade_pending "$patch"; then
         if [ "$CHECK" = 1 ]; then note UPGRADE "$name"; missing=1; continue; fi
         upgrade_apply "$patch" || die "patch $name: its .upgrade does not bring this tree to the patch - nothing changed"
-        note upgraded "$name"; continue
+        changed=1; note upgraded "$name"; continue
     fi
     if patch_effect_present "$patch"; then note "in-tree" "$name"; continue; fi
     if [ "$CHECK" = 1 ]; then note MISSING "$name"; missing=1; continue; fi
@@ -152,7 +153,7 @@ for patch in "$P"/tree/*.patch; do
     # <file>.orig - the very name the loop above keeps the pristine SDK copy under - so
     # one failed attempt overwrites the pristine backup (config-4.9.orig, 2026-09-18).
     patch -p1 -N -s --no-backup-if-mismatch < "$patch" || die "patch $name did not apply cleanly"
-    note patched "$name"
+    changed=1; note patched "$name"
 done
 
 # 2. Package patches (OpenWrt quilt style: dropped into package/<pkg>/patches/).
@@ -184,7 +185,7 @@ while read -r pkgdir sub; do
         done
         if [ -n "$same" ]; then note "same-fix" "$same"; continue; fi
         if [ "$CHECK" = 1 ]; then note MISSING "$dst"; missing=1; continue; fi
-        mkdir -p "$pkgdir/patches"; cp -a "$src" "$dst"; note added "$dst"
+        mkdir -p "$pkgdir/patches"; cp -a "$src" "$dst"; changed=1; note added "$dst"
     done
 done <<'EOF'
 package/utils/busybox busybox
@@ -203,7 +204,7 @@ elif [ "$CHECK" = 1 ]; then note MISSING "package/libs/ncurses 6.2"; missing=1
 else
     mkdir -p .oakmoss-orig
     [ -d .oakmoss-orig/ncurses-5.9 ] || mv package/libs/ncurses .oakmoss-orig/ncurses-5.9
-    rm -rf package/libs/ncurses; cp -a "$P/ncurses-6.2" package/libs/ncurses; note replaced "package/libs/ncurses -> 6.2"
+    rm -rf package/libs/ncurses; cp -a "$P/ncurses-6.2" package/libs/ncurses; changed=1; note replaced "package/libs/ncurses -> 6.2"
 fi
 
 # 3b. bluez-alsa 1.3.1 -> 4.0.0 (tree patch 133 rewrites the package Makefile). The SDK's
@@ -215,7 +216,7 @@ for f in 0001-add-extern-hfp-over-pcm-support.patch 0002-fix-volume-adjustment-i
     elif [ "$CHECK" = 1 ]; then note MISSING "$src still in place (bluez-alsa 4.0.0)"; missing=1
     else
         mkdir -p .oakmoss-orig/bluez-alsa-20180913-patches
-        mv "$src" .oakmoss-orig/bluez-alsa-20180913-patches/; note moved "$src -> .oakmoss-orig/bluez-alsa-20180913-patches/"
+        mv "$src" .oakmoss-orig/bluez-alsa-20180913-patches/; changed=1; note moved "$src -> .oakmoss-orig/bluez-alsa-20180913-patches/"
     fi
 done
 
@@ -227,19 +228,19 @@ elif [ "$CHECK" = 1 ]; then note MISSING "package/libs/openssl 1.1.1w"; missing=
 else
     mkdir -p .oakmoss-orig
     [ -d .oakmoss-orig/openssl-1.1.0i ] || mv package/libs/openssl .oakmoss-orig/openssl-1.1.0i
-    rm -rf package/libs/openssl; cp -a "$P/openssl-1.1.1w" package/libs/openssl; note replaced "package/libs/openssl -> 1.1.1w"
+    rm -rf package/libs/openssl; cp -a "$P/openssl-1.1.1w" package/libs/openssl; changed=1; note replaced "package/libs/openssl -> 1.1.1w"
 fi
 
 # 4. GCC 7.5.0 patch set for the phase-2 fallback toolchain (menu option added by tree patch 030).
 if [ -d toolchain/gcc/patches/7.5.0 ] && diff -rq "$P/gcc-7.5.0-patches" toolchain/gcc/patches/7.5.0 >/dev/null 2>&1; then note present "toolchain/gcc/patches/7.5.0"
 elif [ "$CHECK" = 1 ]; then note MISSING "toolchain/gcc/patches/7.5.0"; missing=1
-else mkdir -p toolchain/gcc/patches/7.5.0; cp -a "$P"/gcc-7.5.0-patches/. toolchain/gcc/patches/7.5.0/; note added "toolchain/gcc/patches/7.5.0"
+else mkdir -p toolchain/gcc/patches/7.5.0; cp -a "$P"/gcc-7.5.0-patches/. toolchain/gcc/patches/7.5.0/; changed=1; note added "toolchain/gcc/patches/7.5.0"
 fi
 
 # 5. Source tarballs the SDK cannot download any more.
 for t in "$NCURSES_TARBALL" "$BLUEZALSA_TARBALL" "$ZLIB_TARBALL" "$OPENSSL_TARBALL" "$GCC750_TARBALL" "$BINUTILS228_TARBALL"; do
     if [ -f "dl/$t" ]; then note present "dl/$t"
-    elif [ -f "$INPUTS_DIR/$t" ]; then [ "$CHECK" = 1 ] || { cp -a "$INPUTS_DIR/$t" "dl/$t"; note staged "dl/$t"; }
+    elif [ -f "$INPUTS_DIR/$t" ]; then [ "$CHECK" = 1 ] || { cp -a "$INPUTS_DIR/$t" "dl/$t"; changed=1; note staged "dl/$t"; }
     elif [ "$t" = "$NCURSES_TARBALL" ] || [ "$t" = "$BLUEZALSA_TARBALL" ] || [ "$t" = "$ZLIB_TARBALL" ] || [ "$t" = "$OPENSSL_TARBALL" ]; then note MISSING "dl/$t (scripts/fetch-inputs.sh)"; missing=1
     fi
 done
@@ -248,16 +249,16 @@ done
 enc=lichee/linux-4.9/drivers/char/sunxi_encrypt/encrypt
 if [ ! -f "$enc.zero28" ]; then
     [ "$(md5_of "$enc")" = "$SDK_ENCRYPT_ZERO28_MD5" ] || die "$enc is not the SDK's original object (md5 $(md5_of "$enc"))"
-    [ "$CHECK" = 1 ] || { cp -a "$enc" "$enc.zero28"; note backup "$enc.zero28"; }
+    [ "$CHECK" = 1 ] || { cp -a "$enc" "$enc.zero28"; changed=1; note backup "$enc.zero28"; }
 fi
 for f in target/allwinner/a133-aw3/defconfig target/allwinner/a133-aw3/base-files/etc/rc.local \
          package/base-files/files/etc/banner target/allwinner/generic/boot-resource/boot-resource/bootlogo.bmp; do
-    [ -f "$f.orig" ] || [ "$CHECK" = 1 ] || { cp -a "$f" "$f.orig"; note backup "$f.orig"; }
+    [ -f "$f.orig" ] || [ "$CHECK" = 1 ] || { cp -a "$f" "$f.orig"; changed=1; note backup "$f.orig"; }
 done
 
 if [ "$CHECK" = 1 ]; then
     [ "$missing" = 0 ] && log "all SDK modifications are in place" || die "SDK modifications missing (run without --check)"
 else
-    { echo "oakmoss_mods_version=$OAKMOSS_MODS_VERSION"; echo "applied=$(date -u +%FT%TZ)"; echo "oakmoss=$(oakmoss_version)"; } > .oakmoss-mods
+    apply_mods_stamp "$changed"   # lib.sh: applied= moves only when changed=1 or the version did
     log "SDK modifications applied; ledger: docs/sdk-mods.md"
 fi

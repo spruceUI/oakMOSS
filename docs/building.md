@@ -92,6 +92,36 @@ Without `DIAG=0` those images carry the diagnostic hand-off; the script's header
   the image's `System.map`; `build.sh image` reconfigures the kernel only when that merged
   configuration changes.
 
+## Stale kernel modules
+
+Kbuild's own dependency tracking lives entirely in-tree at `lichee/linux-4.9` (`LINUX_DIR`,
+`build/kernel-build.mk`): `ext` never wipes it (speed), so a `.ko` whose own inputs did not
+change is never relinked - even across an SDK-mods upgrade that should invalidate it (2026-10-10:
+salusa kept a `vin_v4l2.ko` from two days earlier through nine later mods rounds). Compiler
+resolution for in-tree kernel objects (`KERNEL_MAKEOPTS`'s `CROSS_COMPILE="$(KERNEL_CROSS)"`,
+`sdk-patches/tree/010`) depends on live environment variables `run-in-sdk.sh` sets, so the same
+bare `.cmd` command line can resolve to a different compiler/flags depending on how the build
+was invoked; both hosts' `vmlinux` carry producer strings from three GCC generations never fully
+rebuilt since this tree's bring-up (2026-10-11). Two guards:
+
+- `scripts/apply-sdk-mods.sh` (`lib.sh`, `apply_mods_stamp`) only moves `.oakmoss-mods`'
+  `applied=` forward when this run actually patched, copied, moved or staged something, or the
+  tree's recorded version was not already current - never on an idempotent no-op re-run, which
+  would otherwise make the next `image` refuse modules that are actually fine. Whenever
+  `applied=` does move, it also wipes the kernel build tree (`wipe_kernel_build_tree`, through
+  `run-in-sdk.sh`'s lunch preamble, not a bare host `make`), forcing the next `ext`/`image` to
+  recompile every module against the mods now in place.
+- `scripts/build.sh image` still refuses to ship (`lib.sh`, `check_shipped_modules`): any `.ko`
+  under the rootfs's `lib/modules/<kver>/` whose kbuild link time (read from the `ipkg-sunxi`
+  per-package copy, since the rootfs install re-stamps its own copy; `modpost` batches many
+  modules into one link pass, so several sharing one identical second is normal, not a separate
+  staging step) predates `$SDK_DIR/.oakmoss-mods`'s `applied=` time is a holdover the build did
+  not produce. It also checks every shipped `.ko` and `vmlinux` for an Arm GNU 13.3 producer
+  string (`check_compiler_identity`): a timestamp alone would not catch a build that touched the
+  object but resolved the wrong toolchain. Either refusal deletes the half-built record rather
+  than leaving it to look done; fix with a clean kernel rebuild (the warning prints the exact
+  command, run through `run-in-sdk.sh`).
+
 ## Diagnostics and debug records
 
 - `scripts/make-diag-image.sh` turns any image into a colour-staged diagnostic boot that
