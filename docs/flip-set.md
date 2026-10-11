@@ -12,12 +12,14 @@ place the vendor's PowerVR SDL2 in `/usr/magicx/lib` already takes.
 ## Building it
 
 ```
-PORTS_SET=flip PORTS_TOOLCHAIN=armgnu103 scripts/run-userland-lane.sh     # -> builds/<stamp>-ports-userland-flipset/
+PORTS_SET=flip PORTS_TOOLCHAIN=armgnu13 scripts/run-userland-lane.sh     # -> builds/<stamp>-ports-userland-flipset/
 FLIPSET=builds/<stamp>-ports-userland-flipset scripts/build.sh all zero28 zero40 xu20
 ```
 
 The set is the userland lane (`scripts/build-ports-userland.sh`) with a second package list. It builds with the
-Arm GNU 10.3 toolchain (glibc 2.33), whose output loads on the image's glibc 2.38, and it runs inside
+image's own Arm GNU 13.3 toolchain (glibc 2.38, `GLIBCXX_3.4.32`; user, 2026-10-11: "intended only for devices
+running oakMOSS"), so what it ships needs exactly what the image has and loads nowhere older; the lane's glibc
+gate is 2.38 for this set (2.33 for the card lanes, which must load on TrimUI). It runs inside
 `docker/userland-lane` (Debian 12 with cmake, meson, autotools, bison, gperf...), so build hosts need only
 Docker. `scripts/fetch-userland.sh` downloads the sources named in `inputs/userland/urls.txt` and checks them
 against `inputs/userland/SHA256SUMS`.

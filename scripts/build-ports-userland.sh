@@ -5,10 +5,11 @@
 #
 #   scripts/build-ports-userland.sh [package ...]      (no args = every package)
 #   PORTS_TOOLCHAIN=armgnu103 scripts/build-ports-userland.sh [package ...]
-#   PORTS_SET=flip PORTS_TOOLCHAIN=armgnu103 scripts/build-ports-userland.sh [package ...]
+#   PORTS_SET=flip PORTS_TOOLCHAIN=armgnu13 scripts/build-ports-userland.sh [package ...]
 #
 # PORTS_SET=flip builds a second set from the same recipes: the libraries of spruce/flip/lib, for
-# the oakMOSS image rather than the card (docs/flip-set.md). It runs in docker/userland-lane.
+# the oakMOSS image only, with the image's own toolchain (glibc 2.38; docs/flip-set.md). It runs in
+# docker/userland-lane.
 #
 # WHY THE VENDOR TOOLCHAIN IS THE DEFAULT. The output is ordinary aarch64 glibc userland -
 # it is not board-specific and not even A133P-specific. What matters is the glibc it is
@@ -33,7 +34,7 @@
 # inputs/userland/SHA256SUMS.
 . "$(dirname "$0")/lib.sh"
 
-# TWO TOOLCHAINS, ONE RECIPE LIST (2026-09-21, see spruce-lib-audit TOOLCHAINS.md).
+# THREE TOOLCHAINS, ONE RECIPE LIST (2026-09-21, see spruce-lib-audit TOOLCHAINS.md; armgnu13 2026-10-11).
 #   PORTS_TOOLCHAIN=tina       (default) the vendor Linaro GCC 6.4 / glibc 2.23. Every file it makes needs
 #                        at most GLIBC_2.17, so it runs on any firmware a device can be carrying.
 #   PORTS_TOOLCHAIN=armgnu103  Arm GNU Toolchain 10.3-2021.07: GCC 10.3.1 / glibc 2.33, which is the
@@ -42,16 +43,20 @@
 #                        Output that calls the stat family needs exactly GLIBC_2.33: zero margin on
 #                        TrimUI, and it will not start on a Smart Pro below firmware 1.0.4 (2.29).
 #                        It builds what GCC 6.4 cannot (OpenAL Soft 1.23.1).
+#   PORTS_TOOLCHAIN=armgnu13   the oakMOSS image's own Arm GNU 13.3 (glibc 2.38, GLIBCXX_3.4.32): for
+#                        PORTS_SET=flip alone, which ships inside the image and so may need what it has.
 PORTS_TOOLCHAIN=${PORTS_TOOLCHAIN:-tina}
 case "$PORTS_TOOLCHAIN" in
-    tina)      OUT_SUFFIX="" ;;
-    armgnu103) OUT_SUFFIX="-glibc233" ;;
-    *) die "unknown PORTS_TOOLCHAIN=$PORTS_TOOLCHAIN (tina | armgnu103)" ;;
+    tina)      OUT_SUFFIX="" ;          GLIBC_CEILING=33 ;;
+    armgnu103) OUT_SUFFIX="-glibc233";  GLIBC_CEILING=33 ;;
+    armgnu13)  OUT_SUFFIX="-glibc238";  GLIBC_CEILING=38 ;;
+    *) die "unknown PORTS_TOOLCHAIN=$PORTS_TOOLCHAIN (tina | armgnu103 | armgnu13)" ;;
 esac
 PORTS_SET=${PORTS_SET:-card}
 case "$PORTS_SET" in
-    card) ;;
-    flip) [ "$PORTS_TOOLCHAIN" = armgnu103 ] || die "PORTS_SET=flip builds with PORTS_TOOLCHAIN=armgnu103"
+    card) [ "$PORTS_TOOLCHAIN" != armgnu13 ] || die "the card set must load on glibc 2.33 (TrimUI): not armgnu13"
+          ;;
+    flip) [ "$PORTS_TOOLCHAIN" = armgnu13 ] || die "PORTS_SET=flip builds with PORTS_TOOLCHAIN=armgnu13 (oakMOSS's own)"
           OUT_SUFFIX="-flipset" ;;
     *) die "unknown PORTS_SET=$PORTS_SET (card | flip)" ;;
 esac
@@ -86,6 +91,14 @@ armgnu103)
     # This toolchain adds no rpath, and elf-set-rpath.py can only SHRINK one that exists, so every
     # link gets a long placeholder to be rewritten to $ORIGIN afterwards. --disable-new-dtags asks
     # for DT_RPATH, which is what the Tina lane ships (it also covers a library's own dependencies).
+    EXTRA_LDFLAGS="-Wl,--disable-new-dtags -Wl,-rpath,/tmp/oakmoss-rpath-placeholder-0000000000000000000000000000"
+    OPENAL_VER=1.23.1 ;;
+armgnu13)
+    # the oakMOSS image's own toolchain (glibc 2.38, GLIBCXX_3.4.32): only for PORTS_SET=flip, which ships in the image
+    TC=$TOOLCHAINS_DIR/arm-gnu-13.3-aarch64
+    TRIPLET=aarch64-none-linux-gnu
+    TC_LIBDIR=$TC/$TRIPLET/lib64
+    TC_LIBC=$TC/$TRIPLET/libc/lib64/libc.so.6
     EXTRA_LDFLAGS="-Wl,--disable-new-dtags -Wl,-rpath,/tmp/oakmoss-rpath-placeholder-0000000000000000000000000000"
     OPENAL_VER=1.23.1 ;;
 esac
@@ -1347,17 +1360,15 @@ fi
 } > "$OUT/BUILD-INFO"
 ( cd "$OUT" && find bin lib -type f | sort | xargs sha256sum > SHA256SUMS )
 
-log "checking every shipped file loads on glibc 2.33 or older"
+log "checking every shipped file loads on glibc 2.$GLIBC_CEILING or older"
 bad=0
 for f in "$OUT"/bin/* "$OUT"/lib/*; do
     [ -f "$f" ] || continue
     # a file with no glibc versions at all (ICU's data library) leaves grep without a match: not a failure
     v=$(readelf -V "$f" 2>/dev/null | grep -oE 'GLIBC_2\.[0-9]+' | sort -t. -k2 -n | tail -1 || true)
-    case "$v" in
-        GLIBC_2.3[4-9]|GLIBC_2.[4-9][0-9]) echo "TOO NEW: $f needs $v" >&2; bad=1 ;;
-    esac
+    [ -n "$v" ] && [ "${v#GLIBC_2.}" -gt "$GLIBC_CEILING" ] && { echo "TOO NEW: $f needs $v" >&2; bad=1; }
 done
-[ "$bad" = 0 ] || die "some artifacts need a glibc newer than the TrimUI rootfs"
+[ "$bad" = 0 ] || die "some artifacts need a glibc newer than 2.$GLIBC_CEILING (TrimUI's for the card set, oakMOSS's for flip)"
 
 # FLOOR GATES. The firmware serves its own zlib and freetype ahead of the card on every board that has them,
 # so what ships may import only what the OLDEST fleet copies export: zlib 1.2.8's version set and
