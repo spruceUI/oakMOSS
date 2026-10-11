@@ -119,7 +119,7 @@ CU_TOOLS="env sort mv cp stat timeout shuf tac sha1sum sha256sum md5sum${EXTRA_C
 ALL_PKGS="zlib xz zstd libbsd pcre2 grep tar unzip coreutils findutils lame libvpx ffmpeg libjpegturbo libjpegturbo8 libpng libwebp libogg libvorbis libsndfile libevdev libuuid alsa flac theora modplug physfs openal mpg123 libatomic libgomp pcre openssl ncurses boost ltdl speexdsp pulseaudio interpose curl libdrm freetypefloor harfbuzz libffi glib fluidsynth sdl12 sdlimage12 sdlttf freetype${EXTRA_PKGS:+ $EXTRA_PKGS}"
 PKGS=${*:-$ALL_PKGS}
 
-mkdir -p "$OUT"/{bin,lib,logs} "$WORK" "$STAGE"
+mkdir -p "$OUT"/{bin,lib,logs} "$WORK" "$STAGE/usr/lib"   # usr/lib: the toolchain-copy packages run alone too
 
 src() {  # src <tarball> <unpacked-dir> : verify, unpack into $WORK, echo the dir
     local glob=$1 dir=$2 tb
