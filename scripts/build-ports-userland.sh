@@ -1095,9 +1095,18 @@ build_one() {
         ship_lib libtk8.6.so ;;
     speechd)    # libspeechd.so.2, the client library alone (ScummVM's text-to-speech), against glib
         d=$(src speech-dispatcher-0.11.5.tar.gz speech-dispatcher-0.11.5)
-        ac_build "$d" --disable-python --without-pulse --without-libao --without-oss --without-nas --without-alsa \
-            --without-espeak --without-espeak-ng --without-flite --without-ibmtts --without-voxin --without-pico \
-            --without-kali --without-baratinoo
+        # configure checks the server's libraries unconditionally; the client links glib alone (as the Flip's
+        # copy does), so those checks get placeholders and only the client and its headers are built
+        (cd "$d" && GMODULE_CFLAGS=" " GMODULE_LIBS=" " DOTCONF_CFLAGS=" " DOTCONF_LIBS=" " SNDFILE_CFLAGS=" " \
+            SNDFILE_LIBS=" " ./configure --host=$TRIPLET --prefix=/usr --disable-static --disable-python \
+            --without-pulse --without-libao --without-oss --without-nas --without-alsa --without-espeak \
+            --without-espeak-ng --without-flite --without-ibmtts --without-voxin --without-pico --without-kali \
+            --without-baratinoo >/dev/null &&
+         # LIBS: configure adds the server's ltdl and libm to every link, which Ubuntu's --as-needed dropped;
+         # --no-undefined proves the client needs nothing else
+         make -j"$JOBS" -C src/api/c LIBS=-lpthread LDFLAGS="$LDFLAGS -Wl,--no-undefined" >/dev/null &&
+         make -C src/api/c LIBS=-lpthread LDFLAGS="$LDFLAGS -Wl,--no-undefined" DESTDIR="$STAGE" install >/dev/null &&
+         make -C include DESTDIR="$STAGE" install >/dev/null) || die "speech-dispatcher: configure or make failed"
         ship_lib libspeechd.so.2 ;;
     libapparmor)    # one of the extras Ubuntu's PulseAudio links in the Flip set
         d=$(src apparmor-3.0.13.tar.gz apparmor-3.0.13)
@@ -1106,8 +1115,14 @@ build_one() {
     libwrap)    # tcp_wrappers 7.6 with Debian's patches (7.6.q-31), which add the shared libwrap.so.0
         d=$(src tcp-wrappers_7.6.q.orig.tar.gz tcp_wrappers_7.6)
         src_into tcp-wrappers_7.6.q-31.debian.tar.xz "$d"
+        # this glibc's libnsl.so.1 is compat-only, so nothing links its yp_get_default_domain: netgroups take
+        # the domain from getdomainname() (USE_GETDOMAIN, tcp_wrappers' own fallback) and -lnsl goes
         (cd "$d" && while read -r pt; do case $pt in ''|'#'*) continue ;; esac; patch -p1 -s < "debian/patches/$pt" || exit 1
-         done < debian/patches/series && make CC="$CC" AR="$AR" RANLIB="$RANLIB" COPTS="$CFLAGS" LDOPTS="$LDFLAGS" \
+         done < debian/patches/series &&
+         sed -i '/^linux:/,/ all$/{s/LIBS=-lnsl /LIBS= /;s/NETGROUP="-DNETGROUP" /NETGROUP="-DNETGROUP -DUSE_GETDOMAIN" /}' Makefile &&
+         sed -n '/^linux:/,/ all$/p' Makefile | grep -q 'LIBS= RANLIB' &&
+         sed -n '/^linux:/,/ all$/p' Makefile | grep -q 'NETGROUP="-DNETGROUP -DUSE_GETDOMAIN" TLI' &&
+         make CC="$CC" AR="$AR" RANLIB="$RANLIB" COPTS="$CFLAGS" LDOPTS="$LDFLAGS" \
             linux >/dev/null && cp -af shared/libwrap.so.0* "$STAGE/usr/lib/") || die "libwrap: build failed"
         ship_lib libwrap.so.0 ;;
     libcap) # build dependency only (systemd's configure)
