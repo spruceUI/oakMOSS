@@ -5,7 +5,10 @@ enters git. This ledger lists every change made to it, with the reason, so that 
 fresh unpack can be brought to the same state. `scripts/apply-sdk-mods.sh` applies
 the first two tables (idempotent; `--check` audits), `scripts/build.sh` applies the
 third at build time. Originals of edited files are kept beside them as `*.orig`;
-replaced package directories move to `sdk/lichee/.oakmoss-orig/`.
+replaced package directories move to `sdk/lichee/.oakmoss-orig/`. A tree patch that was
+revised can carry a `<name>.upgrade` beside it: the exact lines that changed (`@ <file>`, then
+`-old` / `+new` pairs). `apply-sdk-mods.sh` rewrites them in a tree that has the previous
+revision, and `--check` reports that tree as `UPGRADE`.
 
 Paths are relative to `sdk/lichee/`. "Source" names where the change came from:
 Moss = Shaun Inman's Moss-zero28 notes, deps = `docs/DEPENDENCIES.md`, oakMOSS =
@@ -431,3 +434,21 @@ the Zero 28's, the SDK's own h028b23, drives it low at power-on, in the kernel a
 
 The device tree and U-Boot sit in the U-Boot package, which an update carries only with
 `OMUPD_BOOTCHAIN=1`; otherwise write the card image. `mods_version` 17 -> 18.
+
+## Round 26 (2026-10-10): libgomp in the image
+
+The SDK's own libc file spec ships `libgomp` with glibc (`./lib/lib{anl,c,cidn,gomp,crypt,...}`),
+which is why TrimUI's Tina firmware has `/lib/libgomp.so.1`. Patch 010's external-toolchain libc
+specs had dropped `gomp`, so images up to v0.5.0-beta.2 had no libgomp, and AdvanceMAME and
+EasyRPG's fluidsynth could not load.
+
+| what | where | why |
+|---|---|---|
+| `010-rules-mk-external-toolchain-override.patch` | both external-toolchain `CONFIG_LIBC_FILE_SPEC` lines in `rules.mk` | `gomp` back in the libc spec |
+| `010-rules-mk-external-toolchain-override.upgrade` | the same two lines | brings a tree with the previous 010 to this one |
+| `scripts/prepare-toolchain.sh` | `tina-sysroot/lib/libgomp.so.1*` | the spec's `./lib` has to hold it; a sysroot without it is prepared again |
+| `scripts/run-in-sdk.sh` | the toolchain check | refuses a sysroot prepared before this round |
+
+On an existing tree: revert the debug marker (`KDEBUG_MARK=0 scripts/build.sh overlay zero28`), run
+`scripts/apply-sdk-mods.sh` (it reports 010 `upgraded`), then `scripts/prepare-toolchain.sh`, which
+needs the Arm GNU Toolchain tarball from `scripts/fetch-inputs.sh`. `mods_version` 18 -> 19.

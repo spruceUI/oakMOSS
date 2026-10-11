@@ -1,0 +1,7 @@
+# 010 up to oakMOSS v0.5.0-beta.2: the two external-toolchain libc specs without `gomp`.
+# apply-sdk-mods.sh rewrites these lines in a tree that has that revision (docs/sdk-mods.md, round 26).
+@ rules.mk
+-      CONFIG_LIBC_FILE_SPEC="./lib/ld-linux-aarch64.so.1 ./lib/libc.so ./lib/lib{anl,c,crypt,dl,m,mvec,nsl,nss_compat,nss_dns,nss_files,resolv,util,BrokenLocale,thread_db,c_malloc_debug}.so.*"
++      CONFIG_LIBC_FILE_SPEC="./lib/ld-linux-aarch64.so.1 ./lib/libc.so ./lib/lib{anl,c,crypt,dl,gomp,m,mvec,nsl,nss_compat,nss_dns,nss_files,resolv,util,BrokenLocale,thread_db,c_malloc_debug}.so.*"
+-    CONFIG_LIBC_FILE_SPEC="./lib/ld-linux-aarch64.so.1 ./lib/libc.so ./lib/lib{anl,c,crypt,dl,m,mvec,nsl,nss_compat,nss_dns,nss_files,resolv,util,BrokenLocale,thread_db,c_malloc_debug}.so.*"
++    CONFIG_LIBC_FILE_SPEC="./lib/ld-linux-aarch64.so.1 ./lib/libc.so ./lib/lib{anl,c,crypt,dl,gomp,m,mvec,nsl,nss_compat,nss_dns,nss_files,resolv,util,BrokenLocale,thread_db,c_malloc_debug}.so.*"
