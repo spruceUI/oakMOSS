@@ -1053,11 +1053,13 @@ build_one() {
         cp -f "$d"/api/KHR/*.h "$STAGE/usr/include/KHR/" || die "eglheaders: copy failed" ;;
     waylandpp)  # libwayland-egl++.so.1. wayland-scanner++ is built for the build host first.
         d=$(src waylandpp-1.0.0.tar.gz waylandpp-1.0.0)
+        # GCC 13's libstdc++ no longer brings <cstdint> in through other headers; 1.0.0's use std::uint32_t bare
+        cxx13=""; [ "$PORTS_TOOLCHAIN" = armgnu13 ] && cxx13="-DCMAKE_CXX_FLAGS=$CFLAGS -include cstdint"
         (native cmake -S "$d" -B "$d/build-host" -DCMAKE_INSTALL_PREFIX="$HOST/usr" -DBUILD_LIBRARIES=OFF \
             -DBUILD_SCANNER=ON -DBUILD_DOCUMENTATION=OFF -DBUILD_EXAMPLES=OFF >/dev/null &&
          native make -C "$d/build-host" -j"$JOBS" install >/dev/null) &&
         (cmake_cross "$d" -DBUILD_SCANNER=OFF -DBUILD_LIBRARIES=ON -DBUILD_DOCUMENTATION=OFF -DBUILD_EXAMPLES=OFF \
-            -DWAYLAND_SCANNERPP="$HOST/usr/bin/wayland-scanner++" >/dev/null &&
+            -DWAYLAND_SCANNERPP="$HOST/usr/bin/wayland-scanner++" ${cxx13:+"$cxx13"} >/dev/null &&
          cmake_make "$d" -j"$JOBS" >/dev/null && cmake_make "$d" DESTDIR="$STAGE" install >/dev/null)
         ship_lib libwayland-egl++.so.1 ;;
     sdl2)   # build dependency only, at the image's version (the vendor's 2.26.1): SDL headers and a libSDL2 to link
