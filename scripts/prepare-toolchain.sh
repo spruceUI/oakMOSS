@@ -5,7 +5,7 @@
 #   toolchains/arm-gnu-13.3-aarch64/            the toolchain as shipped by Arm
 #   toolchains/arm-gnu-13.3-aarch64/tina-sysroot  ./lib + ./usr/lib with the runtime
 #       libraries the SDK copies into the rootfs (Tina's CONFIG_LIBC_FILE_SPEC globs
-#       expect glibc under ./lib and libstdc++/libgcc_s/libatomic under ./usr/lib;
+#       expect glibc and libgomp under ./lib and libstdc++/libgcc_s/libatomic under ./usr/lib;
 #       Arm keeps them in lib64/, with the loader in lib/). Real copies, not
 #       symlinked directories: the SDK's cp -R would ship dangling links otherwise.
 #       ./lib/libc.so -> libc.so.6 satisfies Allwinner's prebuilt libresamplerate_64.so,
@@ -19,7 +19,8 @@
 . "$(dirname "$0")/lib.sh"
 FORCE=0; for a in "$@"; do case $a in --force) FORCE=1 ;; *) die "unknown option $a" ;; esac; done
 tarball=$INPUTS_DIR/$ARMGNU_TARBALL
-if [ "$FORCE" = 0 ] && [ -x "$ARMGNU_DIR/bin/aarch64-none-linux-gnu-gcc" ] && [ -f "$ARMGNU_DIR/tina-sysroot/lib/libc.so.6" ] && [ -x "$ARMGNU_DIR/wrap/aarch64-none-linux-gnu-gcc" ]; then
+if [ "$FORCE" = 0 ] && [ -x "$ARMGNU_DIR/bin/aarch64-none-linux-gnu-gcc" ] && [ -f "$ARMGNU_DIR/tina-sysroot/lib/libc.so.6" ] &&
+   [ -e "$ARMGNU_DIR/tina-sysroot/lib/libgomp.so.1" ] && [ -x "$ARMGNU_DIR/wrap/aarch64-none-linux-gnu-gcc" ]; then
     log "toolchain already prepared at $ARMGNU_DIR"; exit 0
 fi
 [ -f "$tarball" ] || die "missing $tarball (scripts/fetch-inputs.sh)"
