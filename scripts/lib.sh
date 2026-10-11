@@ -175,7 +175,16 @@ kdebug_patch_state() {
     elif ( cd "$SDK_DIR" && patch -p1 -N --dry-run -s -F0 < "$1" >/dev/null 2>&1 ); then echo absent
     else echo mismatch; fi
 }
-need_mods() { [ -f "$SDK_DIR/.oakmoss-mods" ] || die "SDK modifications not applied (run scripts/apply-sdk-mods.sh)"; }
+# The level apply-sdk-mods.sh stamps (docs/sdk-mods.md, `mods_version`). A tree stamped lower
+# lacks later rounds, so build.sh refuses it.
+OAKMOSS_MODS_VERSION=19
+need_mods() {
+    local v
+    [ -f "$SDK_DIR/.oakmoss-mods" ] || die "SDK modifications not applied (run scripts/apply-sdk-mods.sh)"
+    v=$(sed -n 's/^oakmoss_mods_version=//p' "$SDK_DIR/.oakmoss-mods")
+    [ "${v:-0}" -ge "$OAKMOSS_MODS_VERSION" ] 2>/dev/null ||
+        die "the SDK has modifications version ${v:-none}, this checkout needs $OAKMOSS_MODS_VERSION (scripts/kdebug.sh revert, then scripts/apply-sdk-mods.sh)"
+}
 
 # squashfs tools: the SDK builds its own (out/host/bin); the host's squashfs-tools 4.x take the same flags.
 squashfs_tools() {

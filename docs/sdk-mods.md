@@ -8,7 +8,10 @@ third at build time. Originals of edited files are kept beside them as `*.orig`;
 replaced package directories move to `sdk/lichee/.oakmoss-orig/`. A tree patch that was
 revised can carry a `<name>.upgrade` beside it: the exact lines that changed (`@ <file>`, then
 `-old` / `+new` pairs). `apply-sdk-mods.sh` rewrites them in a tree that has the previous
-revision, and `--check` reports that tree as `UPGRADE`.
+revision, and `--check` reports that tree as `UPGRADE`. A tree counts as having it when it holds
+an old line and, with the lines rewritten on scratch copies, reads as the patch: a pristine tree
+can hold old lines too (020's "is not set" pair). The test runs before the in-tree one, which a
+previous revision can pass, so an old line must never occur in a tree that has the current patch.
 
 Paths are relative to `sdk/lichee/`. "Source" names where the change came from:
 Moss = Shaun Inman's Moss-zero28 notes, deps = `docs/DEPENDENCIES.md`, oakMOSS =
@@ -293,7 +296,8 @@ set" and switched those decompressors off.
 | `020-kernel-config-4.9.patch` | `device/config/chips/a133/configs/aw3/linux/config-4.9` | `SQUASHFS_ZLIB=y`, `SQUASHFS_ZSTD=y`. `ZLIB_INFLATE` was already built in, so gzip adds only squashfs's zlib wrapper; zstd brings in the kernel's backported zstd decompressor (`lib/zstd`, hidden `ZSTD_DECOMPRESS` and `XXHASH`, no new prompts). |
 | `134-kernel-keeps-squashfs-decompressors.patch` | `build/kernel-defaults.mk` | The choice's unchosen "is not set" lines are no longer copied, so config-4.9 decides which decompressors the kernel has: XZ, LZ4, LZO, gzip and zstd. The rootfs image stays XZ. |
 
-`mods_version` 11 -> 12.
+`mods_version` 11 -> 12. A tree patched before this round stopped `apply-sdk-mods.sh` at 020 until
+round 26 gave it `020-kernel-config-4.9.upgrade`.
 
 ## Round 18 (2026-10-05): zlib 1.3.1
 
@@ -414,9 +418,9 @@ display marks and `oakmoss.disp_smooth=0`, which blanked the same way.
 |---|---|---|
 | `100-disp2-fb-g2d-rotation.patch` | `Fb_copy_boot_fb` in `dev_fb.c` | the unrotated copy advances the source by `src_stride`; folded into patch 100, which adds the line |
 
-An SDK tree with the old patch 100 applied gets the line by hand: in `dev_fb.c` the last
-`src_addr = tmp_src + src_bpp / 8;` becomes `src_addr = tmp_src + src_stride;` (revert the debug
-marker first). `mods_version` 16 -> 17.
+An SDK tree with the old patch 100 applied got the line by hand until round 26: the old patch
+reads as in place (its other three `src_stride` lines are the same), so `apply-sdk-mods.sh` left
+the tree as it was. `100-disp2-fb-g2d-rotation.upgrade` now changes it. `mods_version` 16 -> 17.
 
 ## Round 25 (2026-10-09): the case LED's blue half off while running, on all three boards
 
@@ -448,7 +452,13 @@ EasyRPG's fluidsynth could not load.
 | `010-rules-mk-external-toolchain-override.upgrade` | the same two lines | brings a tree with the previous 010 to this one |
 | `scripts/prepare-toolchain.sh` | `tina-sysroot/lib/libgomp.so.1*` | the spec's `./lib` has to hold it; a sysroot without it is prepared again |
 | `scripts/run-in-sdk.sh` | the toolchain check | refuses a sysroot prepared before this round |
+| `020-kernel-config-4.9.upgrade`, `100-disp2-fb-g2d-rotation.upgrade` | the lines rounds 17 and 24 changed | a tree from before them (Caladan's was at mods 10) comes up without hand edits |
+| `scripts/apply-sdk-mods.sh` | the upgrade test | proved on scratch copies, and tried before the in-tree test (see the top of this file) |
+| `scripts/lib.sh` `OAKMOSS_MODS_VERSION`, `need_mods` | `build.sh` | refuses an SDK stamped below the checkout's level; it used to check only that a stamp existed |
 
-On an existing tree: revert the debug marker (`KDEBUG_MARK=0 scripts/build.sh overlay zero28`), run
-`scripts/apply-sdk-mods.sh` (it reports 010 `upgraded`), then `scripts/prepare-toolchain.sh`, which
-needs the Arm GNU Toolchain tarball from `scripts/fetch-inputs.sh`. `mods_version` 18 -> 19.
+On an existing tree: `scripts/fetch-inputs.sh` (the Arm GNU Toolchain tarball; a tree from before
+rounds 16-19 also needs the bluez-alsa, zlib and OpenSSL sources it stages into `dl/`; the script
+wants `inputs/Linux_SDK.zip` even when the SDK is unpacked), `scripts/kdebug.sh revert`,
+`scripts/apply-sdk-mods.sh` (010 reports `upgraded`, and so do 020 and 100 on a tree from before
+rounds 17 and 24), then `scripts/prepare-toolchain.sh`, with `--force` where libgomp was copied
+into the sysroot by hand. `mods_version` 18 -> 19.

@@ -1,0 +1,7 @@
+# 020 up to oakMOSS v0.4.1-beta.1 (before round 17): squashfs without its gzip and zstd decompressors.
+# apply-sdk-mods.sh rewrites these lines in a tree that has that revision (docs/sdk-mods.md, round 26).
+@ device/config/chips/a133/configs/aw3/linux/config-4.9
+-# CONFIG_SQUASHFS_ZLIB is not set
++CONFIG_SQUASHFS_ZLIB=y
+-# CONFIG_SQUASHFS_ZSTD is not set
++CONFIG_SQUASHFS_ZSTD=y

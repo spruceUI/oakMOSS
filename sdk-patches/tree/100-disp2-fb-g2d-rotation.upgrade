@@ -1,0 +1,5 @@
+# 100 up to oakMOSS v0.4.2-beta.1 (before round 24): the unrotated boot-picture copy moved the source one pixel per row.
+# apply-sdk-mods.sh rewrites the line in a tree that has that revision (docs/sdk-mods.md, round 26).
+@ lichee/linux-4.9/drivers/video/fbdev/sunxi/disp2/disp/dev_fb.c
+-			src_addr = tmp_src + src_bpp / 8;
++			src_addr = tmp_src + src_stride;

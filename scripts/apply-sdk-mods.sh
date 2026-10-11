@@ -68,9 +68,9 @@ patch_effect_present() {
     [ "$added" -gt 0 ]
 }
 
-# A revised tree patch can meet its previous revision in the tree, which neither test above
-# recognises and a forward apply refuses. <name>.upgrade beside it lists the lines that changed:
-# "@ <file>", then "-<old line>" / "+<new line>" pairs, whole lines compared byte for byte.
+# A revised tree patch can meet its previous revision in the tree, which a forward apply refuses.
+# <name>.upgrade beside it lists the lines that changed: "@ <file>", then "-<old line>" / "+<new line>"
+# pairs, whole lines compared byte for byte. An old line must never occur once the patch is in.
 UPGRADE_AWK='
 FNR == NR {
     if ($0 ~ /^#/ || $0 == "") next
@@ -86,14 +86,27 @@ END { if (mode == "check") exit(pending ? 0 : 1) }'
 
 upgrade_files() { awk '/^@ / { print substr($0, 3) }' "${1%.patch}.upgrade"; }
 
-# upgrade_pending <patch> : true when a line its .upgrade replaces is still in the tree.
+# upgrade_pending <patch> : true when the tree has lines its .upgrade replaces and, with them replaced
+# on scratch copies, reads as the patch. A pristine tree can hold the old lines too (020's "is not set").
 upgrade_pending() {
-    local f
-    [ -f "${1%.patch}.upgrade" ] || return 1
+    local f up=${1%.patch}.upgrade found=0 scratch rc
+    [ -f "$up" ] || return 1
     while IFS= read -r f; do
-        [ -f "$f" ] && LC_ALL=C awk -v target="$f" -v mode=check "$UPGRADE_AWK" "${1%.patch}.upgrade" "$f" && return 0
+        if [ -f "$f" ] && LC_ALL=C awk -v target="$f" -v mode=check "$UPGRADE_AWK" "$up" "$f"; then found=1; fi
     done < <(upgrade_files "$1")
-    return 1
+    [ "$found" = 1 ] || return 1
+    scratch=$(mktemp -d) || return 1
+    while IFS= read -r f; do
+        [ -f "$f" ] || continue
+        mkdir -p "$scratch/$(dirname "$f")"; cp "$f" "$scratch/$f"
+    done < <(patch_targets "$1")
+    while IFS= read -r f; do
+        [ -f "$f" ] || continue
+        mkdir -p "$scratch/$(dirname "$f")"
+        LC_ALL=C awk -v target="$f" -v mode=apply "$UPGRADE_AWK" "$up" "$f" > "$scratch/$f"
+    done < <(upgrade_files "$1")
+    ( cd "$scratch" && patch_effect_present "$1" ); rc=$?
+    rm -rf "$scratch"; return "$rc"
 }
 
 # upgrade_apply <patch> : rewrite those lines (pristine .orig kept as the forward path keeps it);
@@ -119,12 +132,14 @@ upgrade_apply() {
 for patch in "$P"/tree/*.patch; do
     name=$(basename "$patch" .patch)
     if patch -p1 -R --dry-run -s -f < "$patch" >/dev/null 2>&1; then note applied "$name"; continue; fi
-    if patch_effect_present "$patch"; then note "in-tree" "$name"; continue; fi
+    # before the in-tree test, which a previous revision can pass: 100 before round 24 already
+    # had three of its four "src_stride" lines, so every line the patch adds was in the file
     if upgrade_pending "$patch"; then
         if [ "$CHECK" = 1 ]; then note UPGRADE "$name"; missing=1; continue; fi
         upgrade_apply "$patch" || die "patch $name: its .upgrade does not bring this tree to the patch - nothing changed"
         note upgraded "$name"; continue
     fi
+    if patch_effect_present "$patch"; then note "in-tree" "$name"; continue; fi
     if [ "$CHECK" = 1 ]; then note MISSING "$name"; missing=1; continue; fi
     # never forced: a patch that does not apply cleanly stops here with the tree untouched
     patch -p1 -N --dry-run -s --no-backup-if-mismatch < "$patch" >/dev/null 2>&1 ||
@@ -243,6 +258,6 @@ done
 if [ "$CHECK" = 1 ]; then
     [ "$missing" = 0 ] && log "all SDK modifications are in place" || die "SDK modifications missing (run without --check)"
 else
-    { echo "oakmoss_mods_version=19"; echo "applied=$(date -u +%FT%TZ)"; echo "oakmoss=$(oakmoss_version)"; } > .oakmoss-mods
+    { echo "oakmoss_mods_version=$OAKMOSS_MODS_VERSION"; echo "applied=$(date -u +%FT%TZ)"; echo "oakmoss=$(oakmoss_version)"; } > .oakmoss-mods
     log "SDK modifications applied; ledger: docs/sdk-mods.md"
 fi
