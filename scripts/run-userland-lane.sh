@@ -21,5 +21,6 @@ for v in OUT WORK SRC_DIR; do [ -n "${!v:-}" ] && args+=(-e "$v=${!v}"); done
 exec docker run --rm --name "$NAME" --user "$(id -u):$(id -g)" -e HOME=/tmp -e JOBS="$JOBS" \
     -e PORTS_TOOLCHAIN="${PORTS_TOOLCHAIN:-tina}" -e PORTS_SET="${PORTS_SET:-card}" \
     -e OAKMOSS_WORK="$OAKMOSS_WORK" -e INPUTS_DIR="$INPUTS_DIR" -e TOOLCHAINS_DIR="$TOOLCHAINS_DIR" \
+    -e OAKMOSS_DESCRIBE="$(oakmoss_version)" \
     -e BUILDS_DIR="$BUILDS_DIR" -e SDK_DIR="$SDK_DIR" "${args[@]}" "$IMG" \
     "$OAKMOSS_ROOT/scripts/build-ports-userland.sh" "$@"

@@ -423,6 +423,7 @@ case $STEP in
             done
         done
         [ "$bad" = 0 ] || die "the flip set needs libraries this image does not have"
+        log "flip set closure ok: $(find "$ROOTFS/usr/lib/flipset" -maxdepth 1 -type f | wc -l) files resolve in the set or this image"
     fi
     {
       echo "device=$BOARD"; echo "device_marker=$DEVICE_MARKER"; echo "built=$ST"; echo "oakmoss=$(oakmoss_version)"

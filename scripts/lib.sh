@@ -304,6 +304,7 @@ apply_mods_stamp() {
 }
 
 stamp() { date +%Y%m%d-%H%M; }
-oakmoss_version() { git -C "$OAKMOSS_ROOT" describe --always --dirty --tags 2>/dev/null || echo untracked; }
+# OAKMOSS_DESCRIBE: run-userland-lane.sh passes the host's, since a container may not see a linked worktree's .git
+oakmoss_version() { [ -n "${OAKMOSS_DESCRIBE:-}" ] && echo "$OAKMOSS_DESCRIBE" && return; git -C "$OAKMOSS_ROOT" describe --always --dirty --tags 2>/dev/null || echo untracked; }
 # The commit time, which an update must exceed to be installed (docs/updates.md).
 oakmoss_build() { git -C "$OAKMOSS_ROOT" log -1 --format=%ct 2>/dev/null || echo 0; }
