@@ -1232,6 +1232,10 @@ build_one() {
                  libkrb5.so.26 libroken.so.18 libwind.so.0 ;;
     cyrussasl)  # libsasl2.so.2 alone, as the Flip's: its mechanisms are plugins loaded at run time, none in the set
         d=$(src cyrus-sasl-2.1.28.tar.gz cyrus-sasl-2.1.28)
+        # upstream named it libsasl2.so.3 from 2.1.27; Debian and Ubuntu keep 2:25:0 (libsasl2.so.2.0.25), the
+        # Flip's. Makefile.in, not .am, so automake does not run again
+        sed -i 's/^sasl_version = 3:0:0$/sasl_version = 2:25:0/' "$d/lib/Makefile.in"
+        grep -q '^sasl_version = 2:25:0$' "$d/lib/Makefile.in" || die "cyrus-sasl: its version line moved"
         ac_build "$d" --disable-sample --disable-cram --disable-digest --disable-scram --disable-otp --disable-gssapi \
             --disable-plain --disable-anon --with-dblib=none --without-openssl --without-saslauthd --without-authdaemond \
             --without-pwcheck --disable-macos-framework
