@@ -674,7 +674,9 @@ build_one() {
         ship_lib libharfbuzz.so.0 ;;
     libffi) # build dependency only (glib's gobject)
         d=$(src libffi-3.3.tar.gz libffi-3.3)
-        (cd "$d" && ./configure --host=$TRIPLET --prefix=/usr --disable-static --disable-docs >/dev/null &&
+        # --disable-multi-os-directory: it installs into gcc's lib64 otherwise, where ship_lib never looks
+        (cd "$d" && ./configure --host=$TRIPLET --prefix=/usr --disable-static --disable-docs \
+            --disable-multi-os-directory >/dev/null &&
          make -j"$JOBS" >/dev/null && make DESTDIR="$STAGE" install >/dev/null && rm -f "$STAGE/usr/lib/libffi.la")
         # the flip set ships it: the Flip's copy has symbol versions (LIBFFI_BASE_7.0...) the image's lacks
         if [ "$PORTS_SET" = flip ]; then ship_lib libffi.so.7; fi ;;
@@ -894,7 +896,8 @@ build_one() {
     libasyncns) # one of the extras Ubuntu's PulseAudio links in the Flip set
         d=$(src libasyncns-0.8.tar.gz libasyncns-0.8)
         fresh_config "$d"
-        ac_build "$d" --disable-lynx
+        # AC_FUNC_MALLOC cannot run its test when cross-compiling and swaps in an rpl_malloc nobody provides
+        ac_build "$d" --disable-lynx ac_cv_func_malloc_0_nonnull=yes
         ship_lib libasyncns.so.0 ;;
     keyutils)   # libkeyutils.so.1: MIT Kerberos's keyring credential cache
         d=$(src keyutils-1.6.1.tar.bz2 keyutils-1.6.1)
