@@ -1164,8 +1164,19 @@ build_one() {
     gnutls) # 3.6.16: the image's 3.6.5 lacks the GNUTLS_3_6_6..13 versions of the Flip's copy, which ports on the
             # port path got. Against nettle 3.5, as the image's and the Flip's are.
         d=$(src gnutls-3.6.16.tar.xz gnutls-3.6.16)
-        ac_build "$d" --disable-doc --disable-tools --disable-cxx --disable-tests --disable-guile --without-tpm \
-            --disable-libdane --without-included-libtasn1 --without-included-unistring --disable-nls
+        # nettle 3.5 lacks curve448 and GOST, so GnuTLS builds its bundled copy, whose tables come from an eccdata
+        # it builds for the target: make the six headers first with a build-host one, on nettle's mini-gmp
+        n=$(src nettle-3.5.1.tar.gz nettle-3.5.1); h=$WORK/eccdata-host; mkdir -p "$h"
+        printf '#include "%s/mini-gmp.h"\n' "$n" > "$h/gmp.h"
+        native gcc -O2 -I"$h" -o "$h/eccdata" "$d/lib/nettle/ecc/eccdata.c" "$n/mini-gmp.c" || die "gnutls: host eccdata failed"
+        (cd "$d" && ./configure --host=$TRIPLET --prefix=/usr --disable-static --disable-doc --disable-tools \
+            --disable-cxx --disable-tests --disable-guile --without-tpm --disable-libdane --without-included-libtasn1 \
+            --without-included-unistring --disable-nls >/dev/null &&
+         touch lib/nettle/ecc/eccdata.stamp &&
+         for c in "curve448 38 6=curve448" "gost_gc256b 11 6=gost-gc256b" "gost_gc512a 43 6=gost-gc512a"; do
+             for b in 32 64; do "$h/eccdata" ${c%=*} $b > "lib/nettle/ecc/ecc-${c#*=}-$b.h" || exit 1; done
+         done &&
+         make -j"$JOBS" >/dev/null && make DESTDIR="$STAGE" install >/dev/null) || die "gnutls-3.6.16: configure or make failed"
         ship_lib libgnutls.so.30 ;;
     comerr) # libcom_err.so.2 from e2fsprogs, which both Kerberos builds in the Flip set link (as Ubuntu's), and its
             # compile_et, a shell script, for the build host
