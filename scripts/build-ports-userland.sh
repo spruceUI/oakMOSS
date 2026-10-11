@@ -934,7 +934,9 @@ build_one() {
         d=$(src nettle-3.7.3.tar.gz nettle-3.7.3)
         (cd "$d" && ./configure --host=$TRIPLET --prefix=/usr --libdir=/usr/lib --disable-static \
             --disable-documentation >/dev/null && make -j"$JOBS" >/dev/null &&
-         cp -af .lib/libnettle.so.8* .lib/libhogweed.so.6* "$STAGE/usr/lib/")
+         # the files themselves: .lib/'s links go through the bare libnettle.so, which in staging is 3.5's
+         rm -f "$STAGE/usr/lib/libnettle.so.8" "$STAGE/usr/lib/libhogweed.so.6" &&
+         cp -f libnettle.so "$STAGE/usr/lib/libnettle.so.8" && cp -f libhogweed.so "$STAGE/usr/lib/libhogweed.so.6")
         ship_lib libnettle.so.8 libhogweed.so.6 ;;
     libidn2)    # against the shipped libunistring, as Ubuntu's
         d=$(src libidn2-2.3.0.tar.gz libidn2-2.3.0)
