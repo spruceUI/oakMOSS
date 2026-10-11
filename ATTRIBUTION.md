@@ -181,7 +181,7 @@ commit by `scripts/build-openixcard.sh`; not included.
 Exception; glibc: LGPL-2.1; binutils: GPL-3.0). Downloaded and checksum-verified
 by `scripts/fetch-inputs.sh`; not included. The image ships its runtime
 libraries: glibc 2.38 (`ld-linux-aarch64.so.1`, `libc.so.6`, ...), `libstdc++.so.6`
-(GLIBCXX_3.4.32), `libgcc_s.so.1`, `libatomic.so.1`. `sdk-patches/toolchain/arm-gnu-wrapper.sh`
+(GLIBCXX_3.4.32), `libgcc_s.so.1`, `libatomic.so.1`, `libgomp.so.1`. `sdk-patches/toolchain/arm-gnu-wrapper.sh`
 and the `tina-sysroot` shim are oakMOSS's.
 
 ## OpenWrt

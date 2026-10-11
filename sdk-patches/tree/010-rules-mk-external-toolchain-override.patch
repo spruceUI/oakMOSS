@@ -40,7 +40,7 @@
 +      CONFIG_LIBSSP_FILE_SPEC=""
 +      CONFIG_LIBSTDCPP_FILE_SPEC="./usr/lib/libstdc++.so.*"
 +      CONFIG_LIBASAN_FILE_SPEC=""
-+      CONFIG_LIBC_FILE_SPEC="./lib/ld-linux-aarch64.so.1 ./lib/libc.so ./lib/lib{anl,c,crypt,dl,m,mvec,nsl,nss_compat,nss_dns,nss_files,resolv,util,BrokenLocale,thread_db,c_malloc_debug}.so.*"
++      CONFIG_LIBC_FILE_SPEC="./lib/ld-linux-aarch64.so.1 ./lib/libc.so ./lib/lib{anl,c,crypt,dl,gomp,m,mvec,nsl,nss_compat,nss_dns,nss_files,resolv,util,BrokenLocale,thread_db,c_malloc_debug}.so.*"
 +    endif
    else
      CONFIG_LIBC_ROOT_DIR="$(CONFIG_TOOLCHAIN_ROOT)/sysroot/"
@@ -51,7 +51,7 @@
        CONFIG_LIBC_FILE_SPEC="./lib/ld-{*.so,linux*.so.*} ./lib/lib{anl,c,cidn,gomp,crypt,dl,m,nsl,nss_dns,nss_files,resolv,util}{-*.so,.so*}"
 +  # TINA_EXT_LIBC_SPEC_LATE: the external-toolchain override must win over the glibc spec above
 +  ifneq ($(TINA_EXT_TOOLCHAIN_ROOT),)
-+    CONFIG_LIBC_FILE_SPEC="./lib/ld-linux-aarch64.so.1 ./lib/libc.so ./lib/lib{anl,c,crypt,dl,m,mvec,nsl,nss_compat,nss_dns,nss_files,resolv,util,BrokenLocale,thread_db,c_malloc_debug}.so.*"
++    CONFIG_LIBC_FILE_SPEC="./lib/ld-linux-aarch64.so.1 ./lib/libc.so ./lib/lib{anl,c,crypt,dl,gomp,m,mvec,nsl,nss_compat,nss_dns,nss_files,resolv,util,BrokenLocale,thread_db,c_malloc_debug}.so.*"
 +  endif
      endif
      CONFIG_LDD_ROOT_DIR=$(CONFIG_TOOLCHAIN_ROOT)

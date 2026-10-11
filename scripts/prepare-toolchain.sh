@@ -37,6 +37,8 @@ cp -a "$libc"/lib64/*.so* "$sr/lib/"
 cp -a "$libc/lib/ld-linux-aarch64.so.1" "$sr/lib/"
 ln -sfn libc.so.6 "$sr/lib/libc.so"
 cp -a "$libc"/usr/lib64/libstdc++.so.6* "$libc/usr/lib64/libgcc_s.so.1" "$libc"/usr/lib64/libatomic.so.1* "$sr/usr/lib/"
+# The SDK's libc spec ships libgomp with glibc under ./lib (OpenMP: AdvanceMAME, EasyRPG's fluidsynth).
+cp -a "$libc"/usr/lib64/libgomp.so.1* "$sr/lib/" || die "no libgomp in $libc/usr/lib64"
 
 wrap=$ARMGNU_DIR/wrap
 mkdir -p "$wrap"

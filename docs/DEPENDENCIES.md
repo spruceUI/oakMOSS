@@ -82,7 +82,9 @@ study checked): `libc.so.6`, `libm.so.6`, `libpthread.so.0`, `libdl.so.2`, `libr
 per the SONAME finding above, effectively `libSDL2-2.0.so.0` and `libstdc++.so.6`. The v0.4.2-beta.1
 root filesystem provides all of them except `libdrm.so.2` and `libfontconfig.so.1` (neither
 package is built) and `libffi.so.8` (it has `libffi.so.7`); its libpng is 1.2 (`libpng12.so.0`),
-not 1.6.
+not 1.6. `libgomp.so.1` (AdvanceMAME, EasyRPG's fluidsynth) was missing up to v0.5.0-beta.2: the
+external-toolchain libc spec had dropped the `gomp` that the SDK's own spec carries. It is back in
+the libc spec, and `run-in-sdk.sh` refuses a sysroot prepared before it.
 
 ## 3. glibc / GLIBCXX
 

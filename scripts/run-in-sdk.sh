@@ -27,6 +27,7 @@ case "$TOOLCHAIN" in
   vendor) ;;
   armgnu13)
     [ -x "$ARMGNU_DIR/wrap/aarch64-none-linux-gnu-gcc" ] || die "toolchain not prepared (scripts/prepare-toolchain.sh)"
+    [ -e "$ARMGNU_DIR/tina-sysroot/lib/libgomp.so.1" ] || die "toolchain sysroot predates libgomp: re-run scripts/prepare-toolchain.sh"
     R=/home/builder/toolchains/arm-gnu-13.3-aarch64
     EXT_ENV=(-e "TINA_EXT_TOOLCHAIN_ROOT=$R" -e TINA_EXT_TOOLCHAIN_PREFIX=aarch64-none-linux-gnu- \
              -e TINA_EXT_TOOLCHAIN_TARGET_NAME=aarch64-none-linux-gnu -e "TINA_EXT_TOOLCHAIN_SYSROOT=$R/tina-sysroot" \

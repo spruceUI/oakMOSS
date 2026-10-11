@@ -36,7 +36,9 @@ environment variables (`TINA_EXT_TOOLCHAIN_ROOT`, `_PREFIX`, `_TARGET_NAME`,
   module use it too; the rogue_km build keys its compiler config on the prefix).
 - `tina-sysroot/`: the SDK's `CONFIG_LIBC_FILE_SPEC` globs expect glibc under
   `./lib` and libstdc++/libgcc_s/libatomic under `./usr/lib`; Arm keeps them in
-  `lib64/`. `scripts/prepare-toolchain.sh` copies them into that shape. The
+  `lib64/`. `scripts/prepare-toolchain.sh` copies them into that shape, and libgomp
+  under `./lib` too: the SDK's libc spec ships it with glibc (up to v0.5.0-beta.2 the
+  override dropped it, so AdvanceMAME and EasyRPG's fluidsynth could not load). The
   override sets the file specs twice because `rules.mk` reassigns
   `CONFIG_LIBC_FILE_SPEC` late (the second block is marked `TINA_EXT_LIBC_SPEC_LATE`).
   `./lib/libc.so -> libc.so.6` is there for Allwinner's prebuilt

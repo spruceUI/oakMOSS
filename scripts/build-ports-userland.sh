@@ -116,7 +116,7 @@ LIB_RPATH='$ORIGIN'
 set_rpath() { "$OAKMOSS_ROOT/scripts/elf-set-rpath.py" "$1" "$2"; }
 
 CU_TOOLS="env sort mv cp stat timeout shuf tac sha1sum sha256sum md5sum${EXTRA_CU_TOOLS:+ $EXTRA_CU_TOOLS}"
-ALL_PKGS="zlib xz zstd libbsd pcre2 grep tar unzip coreutils findutils lame libvpx ffmpeg libjpegturbo libjpegturbo8 libpng libwebp libogg libvorbis libsndfile libevdev libuuid alsa flac theora modplug physfs openal mpg123 libatomic pcre openssl ncurses boost ltdl speexdsp pulseaudio interpose curl libdrm freetypefloor harfbuzz libffi glib fluidsynth sdl12 sdlimage12 sdlttf freetype${EXTRA_PKGS:+ $EXTRA_PKGS}"
+ALL_PKGS="zlib xz zstd libbsd pcre2 grep tar unzip coreutils findutils lame libvpx ffmpeg libjpegturbo libjpegturbo8 libpng libwebp libogg libvorbis libsndfile libevdev libuuid alsa flac theora modplug physfs openal mpg123 libatomic libgomp pcre openssl ncurses boost ltdl speexdsp pulseaudio interpose curl libdrm freetypefloor harfbuzz libffi glib fluidsynth sdl12 sdlimage12 sdlttf freetype${EXTRA_PKGS:+ $EXTRA_PKGS}"
 PKGS=${*:-$ALL_PKGS}
 
 mkdir -p "$OUT"/{bin,lib,logs} "$WORK" "$STAGE"
@@ -647,6 +647,10 @@ build_one() {
                 # libopenal needs it, and the H700 BaseOS rootfs has none (it came from h700/ports-lib64).
         cp -af "$TC_LIBDIR"/libatomic.so.1* "$STAGE/usr/lib/"
         ship_lib libatomic.so.1 ;;
+    libgomp)    # not built either: the toolchain's OpenMP runtime. AdvanceMAME and EasyRPG's fluidsynth need it,
+                # and neither the H700 BaseOS rootfs nor oakMOSS up to v0.5.0-beta.2 has one.
+        cp -af "$TC_LIBDIR"/libgomp.so.1* "$STAGE/usr/lib/"
+        ship_lib libgomp.so.1 ;;
     *) die "unknown package: $p" ;;
     esac
 }
