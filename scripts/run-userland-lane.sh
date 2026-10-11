@@ -3,7 +3,7 @@
 # programs (cmake, meson, autotools, bison...) so no build host needs them installed.
 #
 #   scripts/run-userland-lane.sh [package ...]     (environment as for build-ports-userland.sh, e.g.
-#                                                   PORTS_SET=flip PORTS_TOOLCHAIN=armgnu103)
+#                                                   PORTS_SET=flip PORTS_TOOLCHAIN=armgnu13)
 #
 # LANE_IMAGE and LANE_CONTAINER name the image and the container (oakmoss-lane-build:bookworm and
 # oakmoss-lane-<stamp> by default); the image is built from docker/userland-lane when it is missing.
