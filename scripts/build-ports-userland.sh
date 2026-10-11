@@ -1223,7 +1223,8 @@ build_one() {
         ship_lib liblber-2.4.so.2 libldap_r-2.4.so.2 ;;
     libgpgerror)
         d=$(src libgpg-error-1.47.tar.bz2 libgpg-error-1.47)
-        ac_build "$d" --disable-doc --disable-tests --disable-nls --disable-languages
+        # libgcrypt 1.8's configure runs gpg-error-config, which 1.47 installs only on request
+        ac_build "$d" --disable-doc --disable-tests --disable-nls --disable-languages --enable-install-gpg-error-config
         ship_lib libgpg-error.so.0 ;;
     libgcrypt)  # the 1.8 line (libgcrypt.so.20, the Flip's 1.8.5), against the shipped libgpg-error
         d=$(src libgcrypt-1.8.11.tar.bz2 libgcrypt-1.8.11)
