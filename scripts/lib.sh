@@ -228,8 +228,11 @@ mkenvimage_tool() {
 # runs (speed), so a .ko whose own inputs are untouched is never rebuilt - including across
 # an SDK-mods upgrade that should invalidate it (2026-10-10: salusa's vin_v4l2.ko survived
 # from 2026-10-08 that way). The final rootfs copy is re-stamped at install time, so this
-# checks the ipkg-sunxi per-package staging copy instead, which keeps the real compile mtime,
-# against $SDK_DIR/.oakmoss-mods' own "applied=" stamp - the SDK's own declared current state.
+# checks the ipkg-sunxi per-package staging copy instead: the moment the package layer last
+# (re)installed that module there (not each file's own compile time - many modules staged in
+# the same pass share one identical second, confirmed on both salusa and Caladan), which still
+# moves only when that module's build was actually revisited. Compared against
+# $SDK_DIR/.oakmoss-mods' own "applied=" stamp - the SDK's own declared current state.
 # Prints what it found; returns 1 so the caller can clean up its half-built output and die.
 OAKMOSS_KVER=4.9.191
 check_shipped_modules() {
@@ -247,7 +250,7 @@ check_shipped_modules() {
         src=$(find "$stage" -path "*/lib/modules/$OAKMOSS_KVER/$base" -print -quit 2>/dev/null)
         if [ -z "$src" ]; then warn "$base: no ipkg-sunxi staging copy to check, skipping"; continue; fi
         if [ "$(stat -c %Y "$src")" -lt "$applied_epoch" ]; then
-            warn "STALE: $base built $(stat -c %y "$src" | cut -d. -f1), mods applied $applied ($modsfile)"
+            warn "STALE: $base staged $(stat -c %y "$src" | cut -d. -f1), mods applied $applied ($modsfile)"
             bad=1
         fi
     done
@@ -256,6 +259,27 @@ check_shipped_modules() {
         return 1
     fi
     return 0
+}
+
+# apply_mods_stamp <changed>: write $SDK_DIR/.oakmoss-mods for this apply-sdk-mods.sh run.
+# applied= only moves forward when <changed>=1 (something was actually patched, copied, moved
+# or staged this run) or the tree's recorded version differs from OAKMOSS_MODS_VERSION - never
+# on a no-op re-run, because build.sh's pack-time check (check_shipped_modules) refuses any .ko
+# staged before applied=, and advancing it without a matching rebuild would make the next image
+# refuse modules that are actually fine. Whenever applied= does move, also wipes the kernel
+# build tree so the next ext/image recompiles everything it now claims is current.
+apply_mods_stamp() {
+    local changed=$1 modsfile=$SDK_DIR/.oakmoss-mods old_version old_applied new_applied
+    old_version=$(sed -n 's/^oakmoss_mods_version=//p' "$modsfile" 2>/dev/null || true)
+    old_applied=$(sed -n 's/^applied=//p' "$modsfile" 2>/dev/null || true)
+    if [ "$changed" = 1 ] || [ "$old_version" != "$OAKMOSS_MODS_VERSION" ]; then
+        new_applied=$(date -u +%FT%TZ)
+        rm -rf "$SDK_DIR/out/a133-aw3/compile_dir/target/linux-a133-aw3"
+        warn "cleared kernel build tree (changed=$changed, mods $old_version -> $OAKMOSS_MODS_VERSION)"
+    else
+        new_applied=$old_applied
+    fi
+    { echo "oakmoss_mods_version=$OAKMOSS_MODS_VERSION"; echo "applied=$new_applied"; echo "oakmoss=$(oakmoss_version)"; } > "$modsfile"
 }
 
 stamp() { date +%Y%m%d-%H%M; }

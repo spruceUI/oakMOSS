@@ -99,15 +99,20 @@ inputs did not change is never recompiled - even across an SDK-mods upgrade that
 invalidated it (2026-10-10: salusa kept a `vin_v4l2.ko` from two days earlier, built with other
 flags, through nine later mods rounds). Two guards:
 
-- `scripts/apply-sdk-mods.sh` wipes the kernel build tree whenever the mods version it is
-  about to stamp is higher than the one already on the tree, forcing the next `ext`/`image` to
+- `scripts/apply-sdk-mods.sh` (`lib.sh`, `apply_mods_stamp`) only moves `.oakmoss-mods`'
+  `applied=` forward when this run actually patched, copied, moved or staged something, or the
+  tree's recorded version was not already current - never on an idempotent no-op re-run, which
+  would otherwise make the next `image` refuse modules that are actually fine. Whenever
+  `applied=` does move, it also wipes the kernel build tree, forcing the next `ext`/`image` to
   recompile every module against the mods now in place.
 - `scripts/build.sh image` still refuses to ship (`lib.sh`, `check_shipped_modules`): any `.ko`
-  under the rootfs's `lib/modules/<kver>/` whose true compile time (read from the `ipkg-sunxi`
-  package staging copy, since the rootfs install re-stamps its own copy) predates
-  `$SDK_DIR/.oakmoss-mods`'s `applied=` time is a holdover the build did not produce, and the
-  half-built record is deleted rather than left to look done. Fix with a clean kernel rebuild
-  (the warning prints the exact command).
+  under the rootfs's `lib/modules/<kver>/` whose package-staging time (read from the
+  `ipkg-sunxi` per-package copy, since the rootfs install re-stamps its own copy - this is the
+  moment the package layer last (re)installed that module, not each file's own compile time;
+  modules staged together in one pass share one identical second on both hosts checked)
+  predates `$SDK_DIR/.oakmoss-mods`'s `applied=` time is a holdover the build did not produce,
+  and the half-built record is deleted rather than left to look done. Fix with a clean kernel
+  rebuild (the warning prints the exact command).
 
 ## Diagnostics and debug records
 
