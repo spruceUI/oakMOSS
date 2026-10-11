@@ -144,10 +144,10 @@ libvpx libvpx16 libvpx18 libvpx111 dav1d libavif faad2 wavpack libxmp a52dec lib
 ffmpegflip libpng libjpegturbo8flip libwebp103 giflib tiff pixman fontconfig fribidi \
 xorgproto xtrans libXau libXdmcp xcbproto libxcb libX11 libXext libXfixes libXrender libXcursor libXi libXrandr \
 libXScrnSaver libICE libSM cairo wayland waylandprotocols libxkbcommon libdecor waylandpp \
-sdl2 sdl2gfx sdl2net mikmod icu liblcf python310 tcl tk glib speechd boost libzip \
+sdl2 sdl2gfx sdl2net sdl2image sdl2mixer sdl2ttf mikmod icu liblcf python310 tcl tk glib speechd boost libzip \
 libasyncns libwrap libapparmor libcap libmount systemd \
-gmp nettle35 nettle37 libtasn1 libunistring libidn2 libpsl p11kit gnutls keyutils comerr krb5 heimdal cyrussasl openldap \
-nghttp2 brotli"
+gmp libgpgerror libgcrypt nettle35 nettle37 libtasn1 libunistring libidn2 libpsl p11kit gnutls keyutils comerr krb5 heimdal cyrussasl openldap \
+nghttp2 brotli libxcrypt"
 [ "$PORTS_SET" = flip ] && SET_PKGS=$FLIP_PKGS || SET_PKGS=$ALL_PKGS
 PKGS=${*:-$SET_PKGS}
 
@@ -667,7 +667,9 @@ build_one() {
     libffi) # build dependency only (glib's gobject)
         d=$(src libffi-3.3.tar.gz libffi-3.3)
         (cd "$d" && ./configure --host=$TRIPLET --prefix=/usr --disable-static --disable-docs >/dev/null &&
-         make -j"$JOBS" >/dev/null && make DESTDIR="$STAGE" install >/dev/null && rm -f "$STAGE/usr/lib/libffi.la") ;;
+         make -j"$JOBS" >/dev/null && make DESTDIR="$STAGE" install >/dev/null && rm -f "$STAGE/usr/lib/libffi.la")
+        # the flip set ships it: the Flip's copy has symbol versions (LIBFFI_BASE_7.0...) the image's lacks
+        if [ "$PORTS_SET" = flip ]; then ship_lib libffi.so.7; fi ;;
     glib)   # libglib-2.0.so.0 + libgthread-2.0.so.0: fluidsynth's only dependencies. 2.56 is the last release
             # whose tarball still carries a generated configure (2.58's ships only meson). Internal PCRE, no
             # libmount/selinux/xattr; the cross answers configure cannot test are the well-known glibc ones.
@@ -810,7 +812,9 @@ build_one() {
                                     # the headers stay the 1.13.1 ones (libvpx.so.8) that ffmpeg links.
         case $p in libvpx16) v=1.6.1 so=4 ;; libvpx18) v=1.8.2 so=6 ;; *) v=1.11.0 so=7 ;; esac
         d=$(src libvpx-$v.tar.gz libvpx-$v)
-        (cd "$d" && LDFLAGS="$LDFLAGS -lpthread" CROSS=$TRIPLET- ./configure --target=arm64-linux-gcc --prefix=/usr \
+        # without the staging include path, where the 1.13.1 headers would shadow the tree's own
+        (cd "$d" && export CFLAGS="-O2 -fPIC" CPPFLAGS="" &&
+         LDFLAGS="$LDFLAGS -lpthread" CROSS=$TRIPLET- ./configure --target=arm64-linux-gcc --prefix=/usr \
             --enable-pic --enable-shared --disable-static --disable-examples --disable-tools --disable-docs \
             --disable-unit-tests >/dev/null && make -j"$JOBS" >/dev/null && cp -af libvpx.so.$so* "$STAGE/usr/lib/")
         ship_lib libvpx.so.$so ;;
@@ -829,9 +833,10 @@ build_one() {
             # PIC objects are linked by hand
         d=$(src a52dec-0.7.4.tar.gz a52dec-0.7.4)
         fresh_config "$d"
-        (cd "$d" && ./configure --host=$TRIPLET --prefix=/usr --enable-shared --disable-static >/dev/null &&
-         make -j"$JOBS" -C liba52 >/dev/null &&
-         $CC -shared -Wl,-soname,liba52-0.7.4.so -o "$STAGE/usr/lib/liba52-0.7.4.so" liba52/.libs/*.o -lm $LDFLAGS &&
+        # its 2002 libtool does not know aarch64 and builds the objects static only; they are PIC from CFLAGS
+        (cd "$d" && ./configure --host=$TRIPLET --prefix=/usr >/dev/null && make -j"$JOBS" -C liba52 CFLAGS="$CFLAGS" >/dev/null &&
+         objs=$(ls liba52/.libs/*.o 2>/dev/null || ls liba52/*.o) &&
+         $CC -shared -Wl,-soname,liba52-0.7.4.so -o "$STAGE/usr/lib/liba52-0.7.4.so" $objs -lm $LDFLAGS &&
          install -Dm644 include/a52.h "$STAGE/usr/include/a52dec/a52.h" &&
          install -Dm644 include/attributes.h "$STAGE/usr/include/a52dec/attributes.h")
         ship_lib liba52-0.7.4.so ;;
@@ -849,7 +854,8 @@ build_one() {
         ship_lib libgme.so.0 ;;
     tremor) # libvorbisidec.so.1 for aarch64: the Flip's copy is an armhf file no 64-bit program can load
         d=$(src libvorbisidec_1.2.1+git20180316.orig.tar.gz libvorbisidec-1.2.1+git20180316)
-        (cd "$d" && autoreconf -fi >/dev/null 2>&1) || die "tremor: autoreconf failed"
+        # its configure.ac uses XIPH_PATH_OGG, from the ogg.m4 libogg installed into staging
+        (cd "$d" && ACLOCAL_PATH="$STAGE/usr/share/aclocal" autoreconf -fi >/dev/null 2>&1) || die "tremor: autoreconf failed"
         ac_build "$d"
         ship_lib libvorbisidec.so.1 ;;
     libopenmpt) # 0.4.11, the Flip's: zlib, mpg123 and Vorbis for its compressed samples
@@ -860,7 +866,9 @@ build_one() {
         ship_lib libopenmpt.so.0 ;;
     libjpegturbo8flip)  # 2.1.5 with the jpeg8 ABI, as the Flip's, whose LIBJPEGTURBO_8.0 versions 1.5.3 lacks
         d=$(src libjpeg-turbo-2.1.5.tar.gz libjpeg-turbo-2.1.5)
-        (cmake_cross "$d" -DWITH_JPEG8=ON -DENABLE_STATIC=OFF -DWITH_TURBOJPEG=OFF >/dev/null &&
+        # absolute directories: its own GNUInstallDirs turns lib into /lib, outside the /usr prefix
+        (cmake_cross "$d" -DWITH_JPEG8=ON -DENABLE_STATIC=OFF -DWITH_TURBOJPEG=OFF -DCMAKE_INSTALL_LIBDIR=/usr/lib \
+            -DCMAKE_INSTALL_INCLUDEDIR=/usr/include >/dev/null &&
          cmake_make "$d" -j"$JOBS" >/dev/null && cmake_make "$d" DESTDIR="$STAGE" install >/dev/null)
         ship_lib libjpeg.so.8 ;;
     libwebp103) # libwebp.so.7 and libwebpdemux.so.2 (1.0.3, the Flip's version); its odd names become links
@@ -903,9 +911,10 @@ build_one() {
         d=$(src libtasn1-4.16.0.tar.gz libtasn1-4.16.0)
         ac_build "$d" --disable-doc --disable-valgrind-tests
         ship_lib libtasn1.so.6 ;;
-    gmp)    # build dependency only (nettle's hogweed, GnuTLS): the image has libgmp.so.10
+    gmp)    # nettle's hogweed and GnuTLS link it; the image's libgmp.so.10 lacks 18 of the Flip copy's exports
         d=$(src gmp-6.2.1.tar.xz gmp-6.2.1)
-        ac_build "$d" --disable-cxx ;;
+        ac_build "$d" --disable-cxx
+        ship_lib libgmp.so.10 ;;
     nettle35)   # libnettle.so.7 / libhogweed.so.5, the pair GnuTLS 3.6 links (the image's and the Flip's)
         d=$(src nettle-3.5.1.tar.gz nettle-3.5.1)
         ac_build "$d" --libdir=/usr/lib --disable-documentation
@@ -1119,11 +1128,12 @@ build_one() {
         ac_build "$d" --disable-trust-module --disable-doc --disable-nls --without-systemd --without-bash-completion \
             --with-module-path=/usr/lib/pkcs11
         ship_lib libp11-kit.so.0 ;;
-    gnutls) # build dependency only (OpenLDAP): the image has libgnutls.so.30 3.6.5, and nothing on the card needs
-            # more of it than that. Against nettle 3.5, as the image's and the Flip's are.
+    gnutls) # 3.6.16: the image's 3.6.5 lacks the GNUTLS_3_6_6..13 versions of the Flip's copy, which ports on the
+            # port path got. Against nettle 3.5, as the image's and the Flip's are.
         d=$(src gnutls-3.6.16.tar.xz gnutls-3.6.16)
         ac_build "$d" --disable-doc --disable-tools --disable-cxx --disable-tests --disable-guile --without-tpm \
-            --disable-libdane --without-included-libtasn1 --without-included-unistring --disable-nls ;;
+            --disable-libdane --without-included-libtasn1 --without-included-unistring --disable-nls
+        ship_lib libgnutls.so.30 ;;
     comerr) # libcom_err.so.2 from e2fsprogs, which both Kerberos builds in the Flip set link (as Ubuntu's), and its
             # compile_et, a shell script, for the build host
         d=$(src e2fsprogs-1.47.0.tar.xz e2fsprogs-1.47.0)
@@ -1182,6 +1192,35 @@ build_one() {
          make -j"$JOBS" -C libraries >/dev/null && make -C libraries DESTDIR="$STAGE" install >/dev/null &&
          make -C include DESTDIR="$STAGE" install >/dev/null) || die "openldap: build failed"
         ship_lib liblber-2.4.so.2 libldap_r-2.4.so.2 ;;
+    libgpgerror)
+        d=$(src libgpg-error-1.47.tar.bz2 libgpg-error-1.47)
+        ac_build "$d" --disable-doc --disable-tests --disable-nls --disable-languages
+        ship_lib libgpg-error.so.0 ;;
+    libgcrypt)  # the 1.8 line (libgcrypt.so.20, the Flip's 1.8.5), against the shipped libgpg-error
+        d=$(src libgcrypt-1.8.11.tar.bz2 libgcrypt-1.8.11)
+        ac_build "$d" --disable-doc --with-libgpg-error-prefix="$STAGE/usr"
+        ship_lib libgcrypt.so.20 ;;
+    sdl2image)  # 2.8: the Flip's has the 2.6 API (AVIF, animations) the vendor's 2.0 lacks. stb_image for PNG and
+                # JPEG as upstream builds it; WebP, AVIF and TIFF through the shipped libraries, loaded at run time
+        d=$(src SDL2_image-2.8.2.tar.gz SDL2_image-2.8.2)
+        ac_build "$d" --disable-sdltest --disable-jxl --disable-qoi-shared
+        ship_lib libSDL2_image-2.0.so.0 ;;
+    sdl2mixer)  # 2.8 with its built-in decoders (stb_vorbis, dr_flac, minimp3, timidity); libxmp, opusfile,
+                # wavpack and libgme loaded at run time, as upstream builds it
+        d=$(src SDL2_mixer-2.8.0.tar.gz SDL2_mixer-2.8.0)
+        ac_build "$d" --disable-sdltest --disable-music-midi-fluidsynth
+        ship_lib libSDL2_mixer-2.0.so.0 ;;
+    sdl2ttf)    # 2.22 with its bundled FreeType and HarfBuzz, as the Flip's, so the image's FreeType 2.6.1 does not
+                # cap its API (its exports come from the bundled copies too)
+        d=$(src SDL2_ttf-2.22.0.tar.gz SDL2_ttf-2.22.0)
+        ac_build "$d" --disable-sdltest --enable-freetype-builtin --enable-harfbuzz-builtin
+        ship_lib libSDL2_ttf-2.0.so.0 ;;
+    libxcrypt)  # libcrypt.so.1 with libxcrypt's XCRYPT_* versions, which the Flip's has and glibc's lacks. Built
+                # last, so nothing in the set links it: a process that already holds glibc's libcrypt.so.1 would
+                # then fail on those versions. Its GLIBC_2.17 compatibility versions serve the rest.
+        d=$(src libxcrypt-4.4.36.tar.xz libxcrypt-4.4.36)
+        ac_build "$d" --enable-obsolete-api=glibc --enable-hashes=all --disable-werror
+        ship_lib libcrypt.so.1 ;;
     *) die "unknown package: $p" ;;
     esac
 }
@@ -1193,8 +1232,8 @@ for p in $PKGS; do
     log "$p ok"
 done
 
-# FLIP SET: exactly FLIP_SHIP ships, the Flip's libraries the image lacks plus what they need that it lacks
-# (libbsd, libfontconfig, theora's and vorbis's encoders). FLIP_LINKS adds the Flip's other file names.
+# FLIP SET: exactly FLIP_SHIP ships: the Flip's libraries, less five the image has in equal form (libatomic, libbz2,
+# libmad, libnsl, libpcre), plus what they need that it lacks. FLIP_LINKS adds the Flip's other file names.
 FLIP_SHIP="libavcodec.so.58 libavformat.so.58 libavutil.so.56 libswresample.so.3 libswscale.so.5
 libboost_filesystem.so.1.71.0 libjpeg.so.8 liblzma.so.5 libmodplug.so.1 libmp3lame.so.0 libmpg123.so.0 libogg.so.0
 libopenal.so.1 libpng16.so.16 libpulse-simple.so.0 libpulse.so.0 libpulsecommon-13.99.so libtheoradec.so.1
@@ -1214,12 +1253,13 @@ libspeechd.so.2 libspeex.so.1 libtcl8.6.so libtiff.so.5 libtk8.6.so libvorbiside
 libvpx.so.7 libwavpack.so.1 libwayland-client.so.0 libwayland-cursor.so.0 libwayland-egl++.so.1
 libwayland-egl.so.1 libwebpdemux.so.2 libxcb-render.so.0 libxcb-shm.so.0 libxcb.so.1 libxkbcommon.so.0
 libxmp.so.4 libzip.so.5
-libbsd.so.0 libfontconfig.so.1 libtheoraenc.so.1 libvorbisenc.so.2"
+libbsd.so.0 libfontconfig.so.1 libtheoraenc.so.1 libvorbisenc.so.2
+libSDL2_image-2.0.so.0 libSDL2_mixer-2.0.so.0 libSDL2_ttf-2.0.so.0 libcrypt.so.1 libgnutls.so.30 libssl.so.1.1
+libcrypto.so.1.1 libgcrypt.so.20 libgpg-error.so.0 libgmp.so.10 libffi.so.7"
 FLIP_LINKS="libwebp.so.7.5.0=libwebp.so.7 libwebp.so.1.0.3=libwebp.so.7 libwebpdemux.so.2.6.0=libwebpdemux.so.2"
 # what the set may need from the image beyond the base system (checked against the real rootfs by build.sh)
-IMAGE_OK="libssl.so.1.1 libcrypto.so.1.1 libffi.so.7 libexpat.so.1 libglib-2.0.so.0 libsqlite3.so.0 libsndfile.so.1
-libuuid.so.1 libgnutls.so.30 libgmp.so.10 libbz2.so.1.0 libcrypt.so.1 libnsl.so.1 libresolv.so.2 libutil.so.1
-libfreetype.so.6 libasound.so.2 libSDL2-2.0.so.0 libatomic.so.1"
+IMAGE_OK="libexpat.so.1 libglib-2.0.so.0 libsqlite3.so.0 libsndfile.so.1 libuuid.so.1 libbz2.so.1.0 libcrypt.so.1
+libnsl.so.1 libresolv.so.2 libutil.so.1 libfreetype.so.6 libasound.so.2 libSDL2-2.0.so.0 libatomic.so.1"
 if [ "$PORTS_SET" = flip ]; then
     for f in "$OUT"/lib/*; do
         case " $(echo $FLIP_SHIP) " in *" $(basename "$f") "*) ;; *) rm -f "$f" ;; esac
