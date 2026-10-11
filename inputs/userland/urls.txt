@@ -34,6 +34,7 @@ https://sourceforge.net/projects/pcre/files/pcre/8.45/pcre-8.45.tar.bz2/download
 https://www.openssl.org/source/old/1.1.1/openssl-1.1.1w.tar.gz
 https://ftp.gnu.org/gnu/ncurses/ncurses-6.5.tar.gz
 https://freedesktop.org/software/pulseaudio/releases/pulseaudio-13.99.1.tar.xz
+https://dbus.freedesktop.org/releases/dbus/dbus-1.10.4.tar.gz
 https://ftp.gnu.org/gnu/libtool/libtool-2.4.7.tar.xz
 https://downloads.xiph.org/releases/speex/speexdsp-1.2.1.tar.gz
 https://github.com/PortsMaster/gptokeyb2/archive/refs/tags/2026.02.28-2309.tar.gz  (saved as gptokeyb2-2026.02.28-2309.tar.gz)

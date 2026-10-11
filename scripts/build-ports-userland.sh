@@ -139,7 +139,7 @@ ALL_PKGS="zlib xz zstd libbsd pcre2 grep tar unzip coreutils findutils lame libv
 # The flip set in build order. Build-only packages stage what a later one links and the image already
 # carries (zlib, expat, sqlite, SDL2, OpenSSL, GnuTLS...); FLIP_SHIP below is what ships.
 FLIP_PKGS="zlib bzip2 xz zstd lz4 libbsd libuuid expat sqlite libffi alsa freetypefloor openssl \
-libogg libvorbis theora modplug mpg123 lame opus opusfile speex speexdsp libsndfile ltdl pulseaudio openal \
+libogg libvorbis theora modplug mpg123 lame opus opusfile speex speexdsp libsndfile ltdl dbus pulseaudio openal \
 libvpx libvpx16 libvpx18 libvpx111 dav1d libavif faad2 wavpack libxmp a52dec libmpeg2 gme tremor libopenmpt \
 ffmpegflip libpng libjpegturbo8flip libwebp103 giflib tiff pixman fontconfig fribidi \
 xorgproto xtrans libXau libXdmcp xcbproto libxcb libX11 libXext libXfixes libXrender libXcursor libXi libXrandr \
@@ -590,12 +590,18 @@ build_one() {
         (cd "$d" && ./configure --host=$TRIPLET --prefix=/usr --disable-static --disable-examples >/dev/null &&
          make -j"$JOBS" >/dev/null && make DESTDIR="$STAGE" install >/dev/null)
         ship_lib libspeexdsp.so.1 ;;
+    dbus)   # build dependency only (PulseAudio's D-Bus parts): the image's own libdbus-1.so.3 is the SDK's 1.10.4,
+            # this source, built with the SDK package's own settings
+        d=$(src dbus-1.10.4.tar.gz dbus-1.10.4)
+        ac_build "$d" ac_cv_have_abstract_sockets=yes --enable-abstract-sockets --disable-asserts --disable-tests \
+            --disable-verbose-mode --disable-doxygen-docs --disable-xml-docs --disable-selinux --disable-libaudit \
+            --disable-systemd --with-xml=expat --without-x ;;
     pulseaudio) # libpulse.so.0, libpulse-simple.so.0, libpulsecommon-13.99.so: the client set Moonlight's
                 # binary links. The card carried Ubuntu 20.04's copies in spruce/flip/lib (and libpulse.so.0
                 # again in Moonlight's own libs), which the Pixel 2 never lists; one lane-built set replaces them.
-                # Client libraries only: no daemon, no modules, no X11/dbus/glib/alsa; 13.99 parses JSON itself
-                # and the trio needs nothing beyond libsndfile at run time. The dist tarball's
-                # configure insists on intltool even with --disable-nls; the stub answers its version probe.
+                # Client libraries only: no daemon, no modules, no X11/glib/alsa; 13.99 parses JSON itself. D-Bus
+                # as Ubuntu's: Ubuntu-built libpulse copies (Moonlight's own) import its pa_dbus_* and rtkit_*.
+                # The dist tarball's configure insists on intltool even with --disable-nls; a stub answers it.
         d=$(src pulseaudio-13.99.1.tar.xz pulseaudio-13.99.1)
         mkdir -p "$WORK/intltool-stub"
         for t in intltool-update intltool-merge intltool-extract; do
@@ -606,7 +612,7 @@ build_one() {
             --disable-nls --disable-x11 --disable-tests --disable-samplerate --disable-oss-output --disable-oss-wrapper \
             --disable-alsa --disable-solaris --disable-waveout --disable-glib2 --disable-gtk3 --disable-gsettings \
             --disable-gconf --disable-avahi --disable-jack --disable-asyncns --disable-tcpwrap --disable-lirc \
-            --disable-dbus --disable-bluez5 --disable-udev --disable-hal-compat --disable-openssl --disable-orc \
+            --enable-dbus --disable-bluez5 --disable-udev --disable-hal-compat --disable-openssl --disable-orc \
             --disable-manpages --disable-systemd-daemon --disable-systemd-login --disable-systemd-journal \
             --disable-webrtc-aec --disable-adrian-aec --disable-neon-opt --without-caps --with-database=simple \
             --without-fftw --without-soxr --disable-default-build-tests >/dev/null &&
@@ -1243,8 +1249,9 @@ build_one() {
     openldap)   # liblber-2.4.so.2 and libldap_r-2.4.so.2 with Cyrus SASL and GnuTLS (the image's), libraries only
         d=$(src openldap-2.4.59.tgz openldap-2.4.59)
         fresh_config "$d"
-        (cd "$d" && ac_cv_func_memcmp_working=yes ./configure --host=$TRIPLET --prefix=/usr --sysconfdir=/etc \
-            --disable-static --disable-slapd --with-tls=gnutls --with-cyrus-sasl --with-threads \
+        # LDAP_CONNECTIONLESS as Debian builds it: the Flip's libldap_r imports liblber's ber_sockbuf_io_udp
+        (cd "$d" && ac_cv_func_memcmp_working=yes CPPFLAGS="$CPPFLAGS -DLDAP_CONNECTIONLESS" ./configure \
+            --host=$TRIPLET --prefix=/usr --sysconfdir=/etc --disable-static --disable-slapd --with-tls=gnutls --with-cyrus-sasl --with-threads \
             --with-yielding-select=yes --enable-ipv6 >/dev/null && make depend >/dev/null &&
          make -j"$JOBS" -C libraries >/dev/null && make -C libraries DESTDIR="$STAGE" install >/dev/null &&
          make -C include DESTDIR="$STAGE" install >/dev/null) || die "openldap: build failed"
@@ -1317,7 +1324,7 @@ libcrypto.so.1.1 libgcrypt.so.20 libgpg-error.so.0 libgmp.so.10 libffi.so.7"
 FLIP_LINKS="libwebp.so.7.5.0=libwebp.so.7 libwebp.so.1.0.3=libwebp.so.7 libwebpdemux.so.2.6.0=libwebpdemux.so.2"
 # what the set may need from the image beyond the base system (checked against the real rootfs by build.sh)
 IMAGE_OK="libexpat.so.1 libglib-2.0.so.0 libsqlite3.so.0 libsndfile.so.1 libuuid.so.1 libbz2.so.1.0 libcrypt.so.1
-libnsl.so.1 libresolv.so.2 libutil.so.1 libfreetype.so.6 libasound.so.2 libSDL2-2.0.so.0 libatomic.so.1"
+libnsl.so.1 libresolv.so.2 libutil.so.1 libfreetype.so.6 libasound.so.2 libSDL2-2.0.so.0 libatomic.so.1 libdbus-1.so.3"
 if [ "$PORTS_SET" = flip ]; then
     for f in "$OUT"/lib/*; do
         case " $(echo $FLIP_SHIP) " in *" $(basename "$f") "*) ;; *) rm -f "$f" ;; esac

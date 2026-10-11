@@ -65,8 +65,12 @@ zlib 1.2.8 (the lane's floor; the image has 1.3.1). These are build-only package
 - `libvorbisidec.so.1` is an aarch64 build (the Flip's is armhf, which no 64-bit program can load).
 - `libwayland-client.so.0` links the image's `libffi.so.7` (the Flip's wants `libffi.so.8`).
 - ffmpeg is the LGPL configuration (no postproc, filters or devices) with TLS through the image's OpenSSL 1.1.
-- PulseAudio is the lane's client build: no X11, D-Bus, systemd, tcp_wrappers or AppArmor behind it.
-- `libldap_r` has no Debian GSSAPI patch; SASL mechanisms (none in the set) would supply that.
+- PulseAudio is the lane's client build: no X11, systemd, tcp_wrappers or AppArmor behind it. It has D-Bus, as
+  Ubuntu's does: Ubuntu-built `libpulse.so.0` copies on the card (Moonlight's own) import `libpulsecommon`'s
+  `pa_dbus_*` and `rtkit_*`, so the client trio links the image's `libdbus-1.so.3` (the SDK's D-Bus 1.10.4, also
+  the build-only source here). The symbol census (2026-10-11) found that gap; Moonlight could not start without it.
+- `libldap_r` has no Debian GSSAPI patch; SASL mechanisms (none in the set) would supply that. It is built with
+  Debian's `LDAP_CONNECTIONLESS`, so `liblber` has the `ber_sockbuf_io_udp` the Flip's `libldap_r` imports.
 - `libtk8.6.so` links the shipped X11 libraries instead of carrying them inside.
 - `libcom_err.so.2` is e2fsprogs', as Ubuntu's Kerberos builds link.
 
