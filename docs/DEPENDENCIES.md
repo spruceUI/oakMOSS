@@ -13,8 +13,9 @@ Boards: MagicX Mini Zero 28 (640x480), Zero 40 (480x800 portrait, AXS15205 touch
 (1024x768, Hynitron touch). Allwinner A133P aarch64, kernel 4.9.191, PowerVR GE8300, AXP2202
 PMIC. Radios: an XR829 (WiFi, and Bluetooth over UART) on the Zero 40, a Realtek RTL8189ES (WiFi
 only) on the Zero 28 and XU20. Userland: glibc 2.38 and libstdc++ `GLIBCXX_3.4.32` /
-`CXXABI_1.3.14` from the Arm GNU Toolchain 13.3 (`docs/toolchain.md`); the kernel is built with
-the vendor's GCC 6.4. spruce lives on SD2: `/usr/magicx/bin/runmagicx.sh` hands off to
+`CXXABI_1.3.14` from the Arm GNU Toolchain 13.3 (`docs/toolchain.md`); the kernel is compiled
+with the same GCC 13.3 and linked with the vendor's binutils, and the GE8300 GPU module is built
+with the vendor's GCC 6.4. spruce lives on SD2: `/usr/magicx/bin/runmagicx.sh` hands off to
 `/mnt/SDCARD/.tmp_update/updater` (or `magicx/init.sh`). Line numbers cited from the Tina SDK
 (`sdk/lichee`, proprietary and untracked) are the study's; they are the only durable record of
 those files.

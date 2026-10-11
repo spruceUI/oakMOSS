@@ -406,7 +406,7 @@ case $STEP in
       echo "sdk=mplus_a133_tina_v1.0 (Linux_SDK.zip) board a133-aw3, kernel 4.9.191, u-boot 2018"
       echo "sdk_tarball_md5=$(grep -m1 tarball_md5 "$SDK_DIR/.oakmoss-sdk" 2>/dev/null | cut -d= -f2)"
       echo "toolchain_mode=$TOOLCHAIN"
-      case $TOOLCHAIN in armgnu13) echo "toolchain=userland Arm GNU Toolchain 13.3.Rel1 aarch64-none-linux-gnu (glibc 2.38, libstdc++ GLIBCXX_3.4.32); kernel + GE8300 km: vendor GCC 6.4 Linaro" ;;
+      case $TOOLCHAIN in armgnu13) echo "toolchain=userland Arm GNU Toolchain 13.3.Rel1 aarch64-none-linux-gnu (glibc 2.38, libstdc++ GLIBCXX_3.4.32); kernel: the same gcc with the vendor binutils; GE8300 km: vendor GCC 6.4 Linaro" ;;
                          *) echo "toolchain=$(grep '^CONFIG_GCC_VERSION=' "$SDK_DIR/.config") $(grep '^CONFIG_GLIBC_VERSION=' "$SDK_DIR/.config")" ;; esac
       echo "kernel_encrypt_obj_md5=$(md5_of "$ENC/encrypt") ($ENCRYPT_OBJ)"
       echo "uboot_md5=$(md5_of "$UBOOT_BIN") ($(strings "$UBOOT_BIN" | grep -m1 '^U-Boot 2018'))"

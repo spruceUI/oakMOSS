@@ -87,7 +87,8 @@ hardware description, and the kernel device trees they start from are GPL-2.0.
 
 Tina Linux is Allwinner's OpenWrt-derived SDK (OpenWrt build system: GPL-2.0;
 Allwinner additions under their own terms). The prebuilt `aarch64-openwrt-linux-gnu`
-GCC 6.4 (Linaro) inside it still builds the kernel and the GE8300 kernel module.
+GCC 6.4 (Linaro) inside it still builds the GE8300 kernel module, and its binutils link the
+kernel.
 The XR829 WiFi/Bluetooth driver and firmware and the `sunxi_encrypt` object are
 Allwinner/XRadio proprietary components shipped inside the SDK.
 
