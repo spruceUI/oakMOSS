@@ -223,6 +223,41 @@ mkenvimage_tool() {
     else MKENVIMAGE=$(command -v mkenvimage || true); [ -n "$MKENVIMAGE" ] || die "need mkenvimage (u-boot-tools) or a built SDK"; fi
 }
 
+# check_shipped_modules <board>: refuse a module the current build did not actually
+# recompile. The `ext` step deliberately keeps compile_dir/target/linux-a133-aw3 across
+# runs (speed), so a .ko whose own inputs are untouched is never rebuilt - including across
+# an SDK-mods upgrade that should invalidate it (2026-10-10: salusa's vin_v4l2.ko survived
+# from 2026-10-08 that way). The final rootfs copy is re-stamped at install time, so this
+# checks the ipkg-sunxi per-package staging copy instead, which keeps the real compile mtime,
+# against $SDK_DIR/.oakmoss-mods' own "applied=" stamp - the SDK's own declared current state.
+# Prints what it found; returns 1 so the caller can clean up its half-built output and die.
+OAKMOSS_KVER=4.9.191
+check_shipped_modules() {
+    local board=$1 modsfile=$SDK_DIR/.oakmoss-mods applied applied_epoch bad=0
+    local rootfs_mods=$SDK_DIR/out/a133-aw3/compile_dir/target/rootfs/lib/modules/$OAKMOSS_KVER
+    local stage=$SDK_DIR/out/a133-aw3/compile_dir/target/linux-a133-aw3/packages/ipkg-sunxi
+    [ -f "$modsfile" ] || die "no $modsfile (need_mods should have caught this)"
+    applied=$(sed -n 's/^applied=//p' "$modsfile")
+    applied_epoch=$(date -u -d "$applied" +%s) || die "cannot parse applied= '$applied' in $modsfile"
+    [ -d "$rootfs_mods" ] || { warn "no $rootfs_mods: nothing to check for $board"; return 0; }
+    local ko base src
+    for ko in "$rootfs_mods"/*.ko; do
+        [ -e "$ko" ] || continue
+        base=$(basename "$ko")
+        src=$(find "$stage" -path "*/lib/modules/$OAKMOSS_KVER/$base" -print -quit 2>/dev/null)
+        if [ -z "$src" ]; then warn "$base: no ipkg-sunxi staging copy to check, skipping"; continue; fi
+        if [ "$(stat -c %Y "$src")" -lt "$applied_epoch" ]; then
+            warn "STALE: $base built $(stat -c %y "$src" | cut -d. -f1), mods applied $applied ($modsfile)"
+            bad=1
+        fi
+    done
+    if [ "$bad" = 1 ]; then
+        warn "clean-rebuild: rm -rf $SDK_DIR/out/a133-aw3/compile_dir/target/linux-a133-aw3 && scripts/build.sh ext && scripts/build.sh image $board"
+        return 1
+    fi
+    return 0
+}
+
 stamp() { date +%Y%m%d-%H%M; }
 oakmoss_version() { git -C "$OAKMOSS_ROOT" describe --always --dirty --tags 2>/dev/null || echo untracked; }
 # The commit time, which an update must exceed to be installed (docs/updates.md).

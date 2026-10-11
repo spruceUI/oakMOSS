@@ -92,6 +92,23 @@ Without `DIAG=0` those images carry the diagnostic hand-off; the script's header
   the image's `System.map`; `build.sh image` reconfigures the kernel only when that merged
   configuration changes.
 
+## Stale kernel modules
+
+`ext` keeps `compile_dir/target/linux-a133-aw3` across runs for speed, so a `.ko` whose own
+inputs did not change is never recompiled - even across an SDK-mods upgrade that should have
+invalidated it (2026-10-10: salusa kept a `vin_v4l2.ko` from two days earlier, built with other
+flags, through nine later mods rounds). Two guards:
+
+- `scripts/apply-sdk-mods.sh` wipes the kernel build tree whenever the mods version it is
+  about to stamp is higher than the one already on the tree, forcing the next `ext`/`image` to
+  recompile every module against the mods now in place.
+- `scripts/build.sh image` still refuses to ship (`lib.sh`, `check_shipped_modules`): any `.ko`
+  under the rootfs's `lib/modules/<kver>/` whose true compile time (read from the `ipkg-sunxi`
+  package staging copy, since the rootfs install re-stamps its own copy) predates
+  `$SDK_DIR/.oakmoss-mods`'s `applied=` time is a holdover the build did not produce, and the
+  half-built record is deleted rather than left to look done. Fix with a clean kernel rebuild
+  (the warning prints the exact command).
+
 ## Diagnostics and debug records
 
 - `scripts/make-diag-image.sh` turns any image into a colour-staged diagnostic boot that

@@ -258,6 +258,15 @@ done
 if [ "$CHECK" = 1 ]; then
     [ "$missing" = 0 ] && log "all SDK modifications are in place" || die "SDK modifications missing (run without --check)"
 else
+    # A version bump can leave kernel modules whose own inputs did not change (the stale
+    # vin_v4l2.ko case, 2026-10-10): wipe the kernel build tree so the next ext/image
+    # recompiles every module against the mods now in place, rather than relying only on
+    # build.sh's pack-time check (lib.sh, check_shipped_modules) to catch a holdover.
+    old=$(sed -n 's/^oakmoss_mods_version=//p' .oakmoss-mods 2>/dev/null || true)
+    if [ -n "$old" ] && [ "$old" -lt "$OAKMOSS_MODS_VERSION" ] 2>/dev/null; then
+        rm -rf out/a133-aw3/compile_dir/target/linux-a133-aw3
+        note cleared "kernel build tree (mods $old -> $OAKMOSS_MODS_VERSION)"
+    fi
     { echo "oakmoss_mods_version=$OAKMOSS_MODS_VERSION"; echo "applied=$(date -u +%FT%TZ)"; echo "oakmoss=$(oakmoss_version)"; } > .oakmoss-mods
     log "SDK modifications applied; ledger: docs/sdk-mods.md"
 fi

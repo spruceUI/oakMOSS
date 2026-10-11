@@ -397,6 +397,9 @@ case $STEP in
     "$OAKMOSS_ROOT/scripts/make-update.py" $([ "${OMUPD_BOOTCHAIN:-0}" = 1 ] && echo --bootchain) \
         "$FINAL" "$BOARD" "$(oakmoss_version)" "$UPDATE" "$(oakmoss_build)" ||
         die "could not make the update"
+    # Refuse to ship a kernel module this build did not actually produce (lib.sh,
+    # check_shipped_modules): deletes this half-built record rather than leaving it to look done.
+    check_shipped_modules "$BOARD" || { rm -rf "$OUT"; die "refusing $OUT: stale kernel module(s) above"; }
     ROOTFS=$SDK_DIR/out/a133-aw3/compile_dir/target/rootfs
     {
       echo "device=$BOARD"; echo "device_marker=$DEVICE_MARKER"; echo "built=$ST"; echo "oakmoss=$(oakmoss_version)"
