@@ -6,7 +6,7 @@ https://ftp.gnu.org/gnu/grep/grep-3.11.tar.gz
 https://ftp.gnu.org/gnu/tar/tar-1.35.tar.gz
 https://downloads.sourceforge.net/infozip/unzip60.tar.gz
 https://downloads.sourceforge.net/lame/lame-3.100.tar.gz
-https://github.com/webmproject/libvpx/archive/refs/tags/v1.13.1.tar.gz
+https://github.com/webmproject/libvpx/archive/refs/tags/v1.13.1.tar.gz  (saved as libvpx-1.13.1.tar.gz)
 https://ffmpeg.org/releases/ffmpeg-4.4.5.tar.xz
 https://downloads.sourceforge.net/libjpeg-turbo/libjpeg-turbo-1.5.3.tar.gz
 https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-0.6.1.tar.gz
@@ -30,7 +30,7 @@ https://downloads.sourceforge.net/mpg123/mpg123-1.32.9.tar.bz2
 https://github.com/kcat/openal-soft/releases/download/1.23.1/openal-soft-1.23.1.tar.bz2
 https://downloads.sourceforge.net/project/dos2unix/dos2unix/7.5.2/dos2unix-7.5.2.tar.gz  (sha256 equals Debian's dos2unix_7.5.2.orig.tar.gz)
 https://archives.boost.io/release/1.71.0/source/boost_1_71_0.tar.bz2
-https://sourceforge.net/projects/pcre/files/pcre/8.45/pcre-8.45.tar.bz2/download
+https://sourceforge.net/projects/pcre/files/pcre/8.45/pcre-8.45.tar.bz2/download  (saved as pcre-8.45.tar.bz2)
 https://www.openssl.org/source/old/1.1.1/openssl-1.1.1w.tar.gz
 https://ftp.gnu.org/gnu/ncurses/ncurses-6.5.tar.gz
 https://freedesktop.org/software/pulseaudio/releases/pulseaudio-13.99.1.tar.xz
@@ -49,3 +49,87 @@ https://zlib.net/fossils/zlib-1.2.8.tar.gz
 https://download.savannah.gnu.org/releases/freetype/freetype-old/freetype-2.6.1.tar.bz2
 https://curl.se/download/curl-8.7.1.tar.xz
 https://dri.freedesktop.org/libdrm/libdrm-2.4.99.tar.bz2
+# ---- flip set (PORTS_SET=flip, 2026-10-11): the libraries of spruce/flip/lib, built for the oakMOSS image
+https://github.com/lz4/lz4/releases/download/v1.9.4/lz4-1.9.4.tar.gz
+https://downloads.xiph.org/releases/opus/opus-1.4.tar.gz
+https://downloads.xiph.org/releases/opus/opusfile-0.12.tar.gz
+https://downloads.xiph.org/releases/speex/speex-1.2.1.tar.gz
+https://github.com/knik0/faad2/archive/refs/tags/2.10.1.tar.gz  (saved as faad2-2.10.1.tar.gz)
+https://www.wavpack.com/wavpack-5.6.0.tar.xz
+https://github.com/libxmp/libxmp/releases/download/libxmp-4.6.0/libxmp-4.6.0.tar.gz
+https://github.com/fribidi/fribidi/releases/download/v1.0.8/fribidi-1.0.8.tar.bz2
+https://downloads.sourceforge.net/giflib/giflib-5.2.1.tar.gz
+https://download.osgeo.org/libtiff/tiff-4.2.0.tar.gz
+https://www.x.org/releases/individual/lib/pixman-0.42.2.tar.xz
+https://github.com/webmproject/libvpx/archive/refs/tags/v1.6.1.tar.gz  (saved as libvpx-1.6.1.tar.gz)
+https://github.com/webmproject/libvpx/archive/refs/tags/v1.8.2.tar.gz  (saved as libvpx-1.8.2.tar.gz)
+https://github.com/webmproject/libvpx/archive/refs/tags/v1.11.0.tar.gz  (saved as libvpx-1.11.0.tar.gz)
+https://downloads.videolan.org/pub/videolan/dav1d/1.2.1/dav1d-1.2.1.tar.xz
+https://github.com/AOMediaCodec/libavif/archive/refs/tags/v1.0.4.tar.gz  (saved as libavif-1.0.4.tar.gz)
+https://deb.debian.org/debian/pool/main/a/a52dec/a52dec_0.7.4.orig.tar.gz  (saved as a52dec-0.7.4.tar.gz)
+https://deb.debian.org/debian/pool/main/m/mpeg2dec/mpeg2dec_0.5.1.orig.tar.gz  (saved as libmpeg2-0.5.1.tar.gz)
+https://github.com/libgme/game-music-emu/archive/refs/tags/0.6.3.tar.gz  (saved as game-music-emu-0.6.3.tar.gz)
+https://downloads.sourceforge.net/mikmod/libmikmod-3.3.11.1.tar.gz
+https://lib.openmpt.org/files/libopenmpt/src/libopenmpt-0.4.11+release.autotools.tar.gz
+https://deb.debian.org/debian/pool/main/libv/libvorbisidec/libvorbisidec_1.2.1+git20180316.orig.tar.gz
+https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/2.1.5/libjpeg-turbo-2.1.5.tar.gz
+https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-1.0.3.tar.gz
+https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz
+https://libzip.org/download/libzip-1.5.2.tar.xz
+https://github.com/libexpat/libexpat/releases/download/R_2_1_0/expat-2.1.0.tar.gz
+https://www.sqlite.org/2016/sqlite-autoconf-3120200.tar.gz
+https://github.com/libsdl-org/SDL/releases/download/release-2.26.1/SDL2-2.26.1.tar.gz
+https://downloads.sourceforge.net/sdl2gfx/SDL2_gfx-1.0.4.tar.gz
+https://github.com/libsdl-org/SDL_net/releases/download/release-2.2.0/SDL2_net-2.2.0.tar.gz
+https://www.x.org/releases/individual/proto/xorgproto-2023.2.tar.xz
+https://www.x.org/releases/individual/lib/xtrans-1.5.0.tar.xz
+https://www.x.org/releases/individual/lib/libXau-1.0.11.tar.xz
+https://www.x.org/releases/individual/lib/libXdmcp-1.1.4.tar.xz
+https://www.x.org/releases/individual/proto/xcb-proto-1.16.0.tar.xz
+https://www.x.org/releases/individual/lib/libxcb-1.16.tar.xz
+https://www.x.org/releases/individual/lib/libX11-1.8.7.tar.xz
+https://www.x.org/releases/individual/lib/libXext-1.3.5.tar.xz
+https://www.x.org/releases/individual/lib/libXfixes-6.0.1.tar.xz
+https://www.x.org/releases/individual/lib/libXrender-0.9.11.tar.xz
+https://www.x.org/releases/individual/lib/libXcursor-1.2.1.tar.xz
+https://www.x.org/releases/individual/lib/libXi-1.8.1.tar.xz
+https://www.x.org/releases/individual/lib/libXrandr-1.5.4.tar.xz
+https://www.x.org/releases/individual/lib/libXScrnSaver-1.2.4.tar.xz
+https://www.x.org/releases/individual/lib/libICE-1.1.1.tar.xz
+https://www.x.org/releases/individual/lib/libSM-1.2.4.tar.xz
+https://www.freedesktop.org/software/fontconfig/release/fontconfig-2.12.6.tar.bz2
+https://www.cairographics.org/releases/cairo-1.16.0.tar.xz
+https://gitlab.freedesktop.org/wayland/wayland/-/releases/1.22.0/downloads/wayland-1.22.0.tar.xz
+https://gitlab.freedesktop.org/wayland/wayland-protocols/-/releases/1.32/downloads/wayland-protocols-1.32.tar.xz
+https://xkbcommon.org/download/libxkbcommon-1.6.0.tar.xz
+https://gitlab.freedesktop.org/libdecor/libdecor/-/releases/0.2.2/downloads/libdecor-0.2.2.tar.xz
+https://github.com/NilsBrause/waylandpp/archive/refs/tags/1.0.0.tar.gz  (saved as waylandpp-1.0.0.tar.gz)
+https://github.com/unicode-org/icu/releases/download/release-63-2/icu4c-63_2-src.tgz
+https://easyrpg.org/downloads/player/0.8/liblcf-0.8.tar.xz
+https://www.python.org/ftp/python/3.10.19/Python-3.10.19.tar.xz
+https://downloads.sourceforge.net/tcl/tcl8.6.14-src.tar.gz
+https://downloads.sourceforge.net/tcl/tk8.6.14-src.tar.gz
+https://github.com/brailcom/speechd/releases/download/0.11.5/speech-dispatcher-0.11.5.tar.gz
+https://launchpad.net/apparmor/3.0/3.0.13/+download/apparmor-3.0.13.tar.gz
+https://deb.debian.org/debian/pool/main/t/tcp-wrappers/tcp-wrappers_7.6.q.orig.tar.gz
+https://deb.debian.org/debian/pool/main/t/tcp-wrappers/tcp-wrappers_7.6.q-31.debian.tar.xz
+http://0pointer.de/lennart/projects/libasyncns/libasyncns-0.8.tar.gz
+https://kernel.org/pub/linux/libs/security/linux-privs/libcap2/libcap-2.69.tar.xz
+https://github.com/systemd/systemd-stable/archive/refs/tags/v249.17.tar.gz  (saved as systemd-stable-249.17.tar.gz)
+https://people.redhat.com/~dhowells/keyutils/keyutils-1.6.1.tar.bz2
+https://kerberos.org/dist/krb5/1.17/krb5-1.17.2.tar.gz
+https://github.com/heimdal/heimdal/releases/download/heimdal-7.7.1/heimdal-7.7.1.tar.gz
+https://github.com/cyrusimap/cyrus-sasl/releases/download/cyrus-sasl-2.1.28/cyrus-sasl-2.1.28.tar.gz
+https://www.openldap.org/software/download/OpenLDAP/openldap-release/openldap-2.4.59.tgz
+https://ftp.gnu.org/gnu/gmp/gmp-6.2.1.tar.xz
+https://ftp.gnu.org/gnu/nettle/nettle-3.5.1.tar.gz
+https://ftp.gnu.org/gnu/nettle/nettle-3.7.3.tar.gz
+https://ftp.gnu.org/gnu/libtasn1/libtasn1-4.16.0.tar.gz
+https://ftp.gnu.org/gnu/libunistring/libunistring-0.9.10.tar.xz
+https://ftp.gnu.org/gnu/libidn/libidn2-2.3.0.tar.gz
+https://github.com/rockdaboot/libpsl/releases/download/libpsl-0.21.0/libpsl-0.21.0.tar.gz
+https://github.com/p11-glue/p11-kit/releases/download/0.23.22/p11-kit-0.23.22.tar.xz
+https://www.gnupg.org/ftp/gcrypt/gnutls/v3.6/gnutls-3.6.16.tar.xz
+https://github.com/nghttp2/nghttp2/releases/download/v1.40.0/nghttp2-1.40.0.tar.xz
+https://github.com/google/brotli/archive/refs/tags/v1.0.9.tar.gz  (saved as brotli-1.0.9.tar.gz)
+https://mirrors.edge.kernel.org/pub/linux/kernel/people/tytso/e2fsprogs/v1.47.0/e2fsprogs-1.47.0.tar.xz
