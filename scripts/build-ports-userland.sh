@@ -1204,8 +1204,11 @@ build_one() {
                 # built for the build host first; com_err is e2fsprogs', sqlite the image's. Installed apart from
                 # staging, which keeps MIT's headers, and only the libraries copied in.
         d=$(src heimdal-7.7.1.tar.gz heimdal-7.7.1)
+        # lib/sl always calls readline and the bundled libedit wants curses; nothing shipped links sl, so libedit is
+        # skipped (no sub-configure, readline "present") and only Heimdal's own tools link sl's unresolved readline
         hopts="--disable-otp --disable-pk-init --disable-kx509 --disable-afs-support --without-libedit --without-readline
-            --without-berkeley-db --disable-mdb-db --without-openssl --without-openldap --disable-heimdal-documentation"
+            --without-berkeley-db --disable-mdb-db --without-openssl --without-openldap --disable-heimdal-documentation
+            --no-recursion ac_cv_func_readline=yes"
         mkdir -p "$d/build-host" "$HOST/heimdal"
         # shellcheck disable=SC2086  # hopts is a word list
         (cd "$d/build-host" && native ../configure --prefix="$HOST/usr" --disable-shared --enable-static $hopts >/dev/null &&
@@ -1215,7 +1218,8 @@ build_one() {
             die "heimdal: build-host tools failed"
         # shellcheck disable=SC2086
         (cd "$d" && ./configure --host=$TRIPLET --prefix=/usr --sysconfdir=/etc --disable-static \
-            --with-cross-tools="$HOST/heimdal/" --with-sqlite3="$STAGE/usr" $hopts >/dev/null &&
+            --with-cross-tools="$HOST/heimdal/" --with-sqlite3="$STAGE/usr" $hopts \
+            LDFLAGS="$LDFLAGS -Wl,--allow-shlib-undefined" >/dev/null &&
          make -j"$JOBS" -C include >/dev/null && make -j"$JOBS" -C lib >/dev/null &&
          make -C lib DESTDIR="$WORK/heimdal-dest" install >/dev/null &&
          cp -af "$WORK"/heimdal-dest/usr/lib/lib{asn1,gssapi,hcrypto,heimbase,heimntlm,hx509,krb5,roken,wind}.so.* \
