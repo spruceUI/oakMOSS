@@ -1186,7 +1186,8 @@ build_one() {
             >/dev/null && make -j"$JOBS" -C lib/et >/dev/null && make -C lib/et DESTDIR="$STAGE" install >/dev/null) ||
             die "comerr: build failed"
         mkdir -p "$HOST/usr/bin"
-        printf '#!/bin/sh\nDIR=%s exec sh %s "$@"\n' "$STAGE/usr/share/et" "$STAGE/usr/bin/compile_et" > "$HOST/usr/bin/compile_et"
+        # _ET_DIR_OVERRIDE: the script sets DIR itself, to the target's /usr/share/et
+        printf '#!/bin/sh\n_ET_DIR_OVERRIDE=%s exec sh %s "$@"\n' "$STAGE/usr/share/et" "$STAGE/usr/bin/compile_et" > "$HOST/usr/bin/compile_et"
         chmod +x "$HOST/usr/bin/compile_et"
         ship_lib libcom_err.so.2 ;;
     krb5)   # MIT Kerberos 1.17 (the Flip's is krb5-1.17-final) with e2fsprogs' com_err and keyutils, as Ubuntu builds
