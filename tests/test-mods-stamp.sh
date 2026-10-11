@@ -7,6 +7,9 @@
 set -euo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 FAIL=0
+# The checkout's own level, so a mods round never has to edit this test
+CUR=$(sed -n 's/^OAKMOSS_MODS_VERSION=//p' "$HERE/../scripts/lib.sh")
+[ -n "$CUR" ] || { echo "FAIL - no OAKMOSS_MODS_VERSION in scripts/lib.sh"; exit 1; }
 
 make_fake_sdk() {  # make_fake_sdk <dir> <recorded-version> <applied-iso>
     local dir=$1 version=$2 applied=$3
@@ -31,16 +34,16 @@ check_wiped() {  # check_wiped <name> <sdk-dir> <expect: 0=gone 1=present>
     fi
 }
 
-# No-op: already at mods 19, nothing changed this run -> applied= untouched, tree not wiped.
+# No-op: already at the checkout's level, nothing changed this run -> applied= untouched, tree not wiped.
 SDK=/tmp/oakmoss-test-stamp-noop
-make_fake_sdk "$SDK" 19 "2026-10-11T03:36:17Z"
+make_fake_sdk "$SDK" "$CUR" "2026-10-11T03:36:17Z"
 run_stamp "$SDK" 0 >/tmp/oakmoss-test-stamp.log 2>&1
 check_eq "no-op: applied= unchanged" "$(sed -n 's/^applied=//p' "$SDK/.oakmoss-mods")" "2026-10-11T03:36:17Z"
 check_wiped "no-op: kernel tree not wiped" "$SDK" 1
 
 # Changed=1 at the same version -> applied= moves, tree wiped.
 SDK=/tmp/oakmoss-test-stamp-changed
-make_fake_sdk "$SDK" 19 "2026-10-11T03:36:17Z"
+make_fake_sdk "$SDK" "$CUR" "2026-10-11T03:36:17Z"
 run_stamp "$SDK" 1 >/tmp/oakmoss-test-stamp.log 2>&1
 got=$(sed -n 's/^applied=//p' "$SDK/.oakmoss-mods")
 [ "$got" != "2026-10-11T03:36:17Z" ] && echo "ok   - changed: applied= moved ($got)" || { echo "FAIL - changed: applied= did not move"; FAIL=1; }
@@ -48,7 +51,7 @@ check_wiped "changed: kernel tree wiped" "$SDK" 0
 
 # A real version bump, nothing else flagged changed -> still moves and wipes.
 SDK=/tmp/oakmoss-test-stamp-bump
-make_fake_sdk "$SDK" 18 "2026-10-09T05:32:21Z"
+make_fake_sdk "$SDK" "$((CUR - 1))" "2026-10-09T05:32:21Z"
 run_stamp "$SDK" 0 >/tmp/oakmoss-test-stamp.log 2>&1
 got=$(sed -n 's/^applied=//p' "$SDK/.oakmoss-mods")
 [ "$got" != "2026-10-09T05:32:21Z" ] && echo "ok   - version bump: applied= moved ($got)" || { echo "FAIL - version bump: applied= did not move"; FAIL=1; }
