@@ -223,17 +223,46 @@ mkenvimage_tool() {
     else MKENVIMAGE=$(command -v mkenvimage || true); [ -n "$MKENVIMAGE" ] || die "need mkenvimage (u-boot-tools) or a built SDK"; fi
 }
 
+# OAKMOSS_CLEAN_REBUILD: the human-facing remedy for a stale kernel tree, printed by
+# check_shipped_modules and run by wipe_kernel_build_tree. Runs inside the container, through
+# the same lunch preamble every other kernel-touching step uses (2026-10-11: a bare host `make
+# clean` left the compiler resolution that produced the staleness unverified - see
+# check_compiler_identity).
+OAKMOSS_CLEAN_REBUILD='source build/envsetup.sh; lunch a133_aw3-tina; rm -f lichee/linux-4.9/.configured lichee/linux-4.9/vmlinux lichee/linux-4.9/System.map; make -C lichee/linux-4.9 ARCH=arm64 clean'
+
+# wipe_kernel_build_tree: force every kernel module to recompile and relink, keeping .config.
+# $SDK_DIR/lichee/linux-4.9 is Tina's real kbuild tree (LINUX_DIR, build/kernel-build.mk's
+# STAMP_CONFIGURED) - an out/.../linux-a133-aw3 package dir elsewhere does not hold kbuild's own
+# object cache (2026-10-10, salusa's B7: wiping that dir forced a full `ext` but the same stale
+# vin_v4l2.ko came back). `make clean` keeps .config; this runs inside the container with the
+# same lunch preamble a real build uses, not a bare host `make`, so it resolves the compiler the
+# same way (2026-10-11: PATH/CROSS_COMPILE resolution for in-tree kernel objects is sensitive to
+# how the invocation reaches this tree - see check_compiler_identity).
+wipe_kernel_build_tree() {
+    "$OAKMOSS_ROOT/scripts/run-in-sdk.sh" "$OAKMOSS_CLEAN_REBUILD" >/dev/null 2>&1
+}
+
+# check_compiler_identity <obj>: true if <obj> carries a producer string from the toolchain
+# this SDK is meant to build with (Arm GNU 13.3). 2026-10-11: both hosts' vmlinux .comment
+# carries producer strings from three GCC generations never fully rebuilt since this tree's
+# bring-up (Arm GNU 13.3, OpenWrt/Linaro GCC 6.4, Linaro GCC 4.9); an object with NONE of the
+# current generation's strings was built entirely by a toolchain this tree no longer uses, which
+# check_shipped_modules' timestamp alone would not catch for an object outside lib/modules/.
+check_compiler_identity() { strings "$1" 2>/dev/null | grep -q "Arm GNU Toolchain 13.3"; }
+
 # check_shipped_modules <board>: refuse a module the current build did not actually
-# recompile. The `ext` step deliberately keeps compile_dir/target/linux-a133-aw3 across
-# runs (speed), so a .ko whose own inputs are untouched is never rebuilt - including across
-# an SDK-mods upgrade that should invalidate it (2026-10-10: salusa's vin_v4l2.ko survived
-# from 2026-10-08 that way). The final rootfs copy is re-stamped at install time, so this
-# checks the ipkg-sunxi per-package staging copy instead: the moment the package layer last
-# (re)installed that module there (not each file's own compile time - many modules staged in
-# the same pass share one identical second, confirmed on both salusa and Caladan), which still
-# moves only when that module's build was actually revisited. Compared against
-# $SDK_DIR/.oakmoss-mods' own "applied=" stamp - the SDK's own declared current state.
-# Prints what it found; returns 1 so the caller can clean up its half-built output and die.
+# recompile. The `ext` step's kbuild dependency tracking lives entirely in-tree at
+# $SDK_DIR/lichee/linux-4.9, so a .ko whose own inputs are untouched is never relinked - even
+# across an SDK-mods upgrade that should invalidate it (2026-10-10: salusa's vin_v4l2.ko
+# survived from 2026-10-08 that way). The final rootfs copy is re-stamped at install time, so
+# this checks the ipkg-sunxi per-package copy instead, which preserves the module's own kbuild
+# link time (modpost batches many modules together, so several sharing one identical second,
+# confirmed on both salusa and Caladan, is normal - it is still each module's real link time).
+# Compared against $SDK_DIR/.oakmoss-mods' own "applied=" stamp - the SDK's own declared current
+# state - and, on the shipped rootfs copy and on vmlinux, against check_compiler_identity, since
+# a timestamp alone does not catch an object a wrong/old toolchain produced within the same
+# build pass (2026-10-11). Prints what it found; returns 1 so the caller can clean up its
+# half-built output and die.
 OAKMOSS_KVER=4.9.191
 check_shipped_modules() {
     local board=$1 modsfile=$SDK_DIR/.oakmoss-mods applied applied_epoch bad=0
@@ -242,6 +271,11 @@ check_shipped_modules() {
     [ -f "$modsfile" ] || die "no $modsfile (need_mods should have caught this)"
     applied=$(sed -n 's/^applied=//p' "$modsfile")
     applied_epoch=$(date -u -d "$applied" +%s) || die "cannot parse applied= '$applied' in $modsfile"
+    local vmlinux=$SDK_DIR/lichee/linux-4.9/vmlinux
+    if [ -f "$vmlinux" ] && ! check_compiler_identity "$vmlinux"; then
+        warn "STALE: vmlinux carries no Arm GNU 13.3 producer string (wrong/old toolchain)"
+        bad=1
+    fi
     [ -d "$rootfs_mods" ] || { warn "no $rootfs_mods: nothing to check for $board"; return 0; }
     local ko base src
     for ko in "$rootfs_mods"/*.ko; do
@@ -250,12 +284,15 @@ check_shipped_modules() {
         src=$(find "$stage" -path "*/lib/modules/$OAKMOSS_KVER/$base" -print -quit 2>/dev/null)
         if [ -z "$src" ]; then warn "$base: no ipkg-sunxi staging copy to check, skipping"; continue; fi
         if [ "$(stat -c %Y "$src")" -lt "$applied_epoch" ]; then
-            warn "STALE: $base staged $(stat -c %y "$src" | cut -d. -f1), mods applied $applied ($modsfile)"
+            warn "STALE: $base linked $(stat -c %y "$src" | cut -d. -f1), mods applied $applied ($modsfile)"
+            bad=1
+        elif ! check_compiler_identity "$ko"; then
+            warn "STALE: $base carries no Arm GNU 13.3 producer string (wrong/old toolchain)"
             bad=1
         fi
     done
     if [ "$bad" = 1 ]; then
-        warn "clean-rebuild: rm -rf $SDK_DIR/out/a133-aw3/compile_dir/target/linux-a133-aw3 && scripts/build.sh ext && scripts/build.sh image $board"
+        warn "clean-rebuild: scripts/run-in-sdk.sh '$OAKMOSS_CLEAN_REBUILD' && scripts/build.sh ext && scripts/build.sh image $board"
         return 1
     fi
     return 0
@@ -265,17 +302,18 @@ check_shipped_modules() {
 # applied= only moves forward when <changed>=1 (something was actually patched, copied, moved
 # or staged this run) or the tree's recorded version differs from OAKMOSS_MODS_VERSION - never
 # on a no-op re-run, because build.sh's pack-time check (check_shipped_modules) refuses any .ko
-# staged before applied=, and advancing it without a matching rebuild would make the next image
+# linked before applied=, and advancing it without a matching rebuild would make the next image
 # refuse modules that are actually fine. Whenever applied= does move, also wipes the kernel
-# build tree so the next ext/image recompiles everything it now claims is current.
+# build tree (wipe_kernel_build_tree) so the next ext/image recompiles everything it now claims
+# is current.
 apply_mods_stamp() {
     local changed=$1 modsfile=$SDK_DIR/.oakmoss-mods old_version old_applied new_applied
     old_version=$(sed -n 's/^oakmoss_mods_version=//p' "$modsfile" 2>/dev/null || true)
     old_applied=$(sed -n 's/^applied=//p' "$modsfile" 2>/dev/null || true)
     if [ "$changed" = 1 ] || [ "$old_version" != "$OAKMOSS_MODS_VERSION" ]; then
         new_applied=$(date -u +%FT%TZ)
-        rm -rf "$SDK_DIR/out/a133-aw3/compile_dir/target/linux-a133-aw3"
-        warn "cleared kernel build tree (changed=$changed, mods $old_version -> $OAKMOSS_MODS_VERSION)"
+        wipe_kernel_build_tree
+        warn "cleared the kernel build tree (changed=$changed, mods $old_version -> $OAKMOSS_MODS_VERSION)"
     else
         new_applied=$old_applied
     fi

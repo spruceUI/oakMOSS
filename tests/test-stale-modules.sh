@@ -10,15 +10,17 @@ set -euo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 FAIL=0
 
-# make_fake_sdk <dir> <applied-iso> <ko-mtime-touch-spec>: a minimal tree with one module
-# (foo.ko) staged both where build.sh ships it from and where its true compile time survives.
+# make_fake_sdk <dir> <applied-iso> <ko-mtime-touch-spec> [producer-string]: a minimal tree
+# with one module (foo.ko) staged both where build.sh ships it from and where its true
+# compile time survives. producer-string defaults to the current toolchain's marker
+# (check_compiler_identity); pass "" to simulate an object the wrong/old toolchain built.
 make_fake_sdk() {
-    local dir=$1 applied=$2 ko_touch=$3
+    local dir=$1 applied=$2 ko_touch=$3 producer=${4-"GCC: (Arm GNU Toolchain 13.3.Rel1) fake"}
     rm -rf "$dir"; mkdir -p "$dir"
     local rootfs=$dir/out/a133-aw3/compile_dir/target/rootfs/lib/modules/4.9.191
     local stage=$dir/out/a133-aw3/compile_dir/target/linux-a133-aw3/packages/ipkg-sunxi/kmod-foo/lib/modules/4.9.191
     mkdir -p "$rootfs" "$stage"
-    printf 'fake module\n' > "$stage/foo.ko"
+    printf 'fake module\n%s\n' "$producer" > "$stage/foo.ko"
     touch -d "$ko_touch" "$stage/foo.ko"
     cp -a "$stage/foo.ko" "$rootfs/foo.ko"
     touch "$rootfs/foo.ko"   # the real install step re-stamps this copy; mtime here must not matter
@@ -42,5 +44,9 @@ check "stale module refused" 1 /tmp/oakmoss-test-stale
 make_fake_sdk /tmp/oakmoss-test-fresh "2026-10-11T03:36:17Z" "2026-10-11 03:40:00"
 check "fresh module accepted" 0 /tmp/oakmoss-test-fresh
 
-rm -rf /tmp/oakmoss-test-stale /tmp/oakmoss-test-fresh
+# Negative: fresh enough, but no Arm GNU 13.3 producer string -> refused (rc 1).
+make_fake_sdk /tmp/oakmoss-test-wrongcc "2026-10-11T03:36:17Z" "2026-10-11 03:40:00" "GCC: (OpenWrt/Linaro GCC 6.4-2017.11) fake"
+check "wrong-toolchain module refused" 1 /tmp/oakmoss-test-wrongcc
+
+rm -rf /tmp/oakmoss-test-stale /tmp/oakmoss-test-fresh /tmp/oakmoss-test-wrongcc
 [ "$FAIL" = 0 ] && echo "all tests passed" || { echo "TESTS FAILED"; exit 1; }

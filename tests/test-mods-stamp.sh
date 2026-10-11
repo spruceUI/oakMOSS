@@ -15,8 +15,11 @@ make_fake_sdk() {  # make_fake_sdk <dir> <recorded-version> <applied-iso>
     { echo "oakmoss_mods_version=$version"; echo "applied=$applied"; echo "oakmoss=test"; } > "$dir/.oakmoss-mods"
 }
 
-run_stamp() {  # run_stamp <sdk-dir> <changed>
-    SDK_DIR=$1 bash -c '. "'"$HERE"'/../scripts/lib.sh"; apply_mods_stamp "'"$2"'"'
+run_stamp() {  # run_stamp <sdk-dir> <changed>: stubs wipe_kernel_build_tree (real one needs
+               # docker) with a marker-file remover, to test apply_mods_stamp's own decision.
+    SDK_DIR=$1 bash -c '. "'"$HERE"'/../scripts/lib.sh"
+        wipe_kernel_build_tree() { rm -f "$SDK_DIR/out/a133-aw3/compile_dir/target/linux-a133-aw3/vmlinux"; }
+        apply_mods_stamp "'"$2"'"'
 }
 
 check_eq() { [ "$2" = "$3" ] && echo "ok   - $1" || { echo "FAIL - $1: expected '$3', got '$2'"; FAIL=1; }; }
