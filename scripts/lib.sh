@@ -238,7 +238,7 @@ OAKMOSS_CLEAN_REBUILD='source build/envsetup.sh; lunch a133_aw3-tina; rm -f lich
 # wipe_kernel_build_tree: force every kernel module to recompile and relink, keeping .config.
 # $SDK_DIR/lichee/linux-4.9 is Tina's real kbuild tree (LINUX_DIR, build/kernel-build.mk's
 # STAMP_CONFIGURED) - an out/.../linux-a133-aw3 package dir elsewhere does not hold kbuild's own
-# object cache (2026-10-10, salusa's B7: wiping that dir forced a full `ext` but the same stale
+# object cache (2026-10-10, a validation build: wiping that dir forced a full `ext` but the same stale
 # vin_v4l2.ko came back). `make clean` keeps .config.
 wipe_kernel_build_tree() {
     "$OAKMOSS_ROOT/scripts/run-in-sdk.sh" "$OAKMOSS_CLEAN_REBUILD" >/dev/null 2>&1
@@ -247,18 +247,18 @@ wipe_kernel_build_tree() {
 # check_shipped_modules <board>: refuse a module the current build did not actually
 # recompile. The `ext` step's kbuild dependency tracking lives entirely in-tree at
 # $SDK_DIR/lichee/linux-4.9, so a .ko whose own inputs are untouched is never relinked - even
-# across an SDK-mods upgrade that should invalidate it (2026-10-10: salusa's vin_v4l2.ko
+# across an SDK-mods upgrade that should invalidate it (2026-10-10: one build host's vin_v4l2.ko
 # survived from 2026-10-08 that way). The final rootfs copy is re-stamped at install time, so
 # this checks the ipkg-sunxi per-package copy instead, which preserves the module's own kbuild
 # link time (modpost batches many modules together, so several sharing one identical second,
-# confirmed on both salusa and Caladan, is normal - it is still each module's real link time).
+# confirmed on two build hosts, is normal - it is still each module's real link time).
 # Compared against $SDK_DIR/.oakmoss-mods' own "applied=" stamp - the SDK's own declared current
-# state. 2026-10-11: a producer-string/compiler-flag check was tried and dropped - salusa's stale
-# vin_v4l2.ko and Caladan's freshly rebuilt one carry the IDENTICAL compiler and flags (verified
+# state. 2026-10-11: a producer-string/compiler-flag check was tried and dropped - one host's stale
+# vin_v4l2.ko and another's freshly rebuilt one carry the IDENTICAL compiler and flags (verified
 # across every linked sub-object on both hosts), and some legitimate modules (the GE8300 GPU km,
 # sdk-patches/tree/040) are vendor-GCC-6.4 by design on a healthy build - a compiler-identity
 # check would have refused those on every build. Timestamp is the only signal that discriminated
-# correctly in practice (B4 refused, B5/B6 passed). Prints what it found; returns 1 so the
+# correctly in practice (validation builds: the stale tree refused, fresh ones passed). Prints what it found; returns 1 so the
 # caller can clean up its half-built output and die.
 OAKMOSS_KVER=4.9.191
 check_shipped_modules() {

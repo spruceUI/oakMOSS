@@ -97,7 +97,7 @@ Without `DIAG=0` those images carry the diagnostic hand-off; the script's header
 Kbuild's own dependency tracking lives entirely in-tree at `lichee/linux-4.9` (`LINUX_DIR`,
 `build/kernel-build.mk`): `ext` never wipes it (speed), so a `.ko` whose own inputs did not
 change is never relinked - even across an SDK-mods upgrade that should invalidate it (2026-10-10:
-salusa kept a `vin_v4l2.ko` from two days earlier through nine later mods rounds). Until mods 20
+one build host kept a `vin_v4l2.ko` from two days earlier through nine later mods rounds). Until mods 20
 each `.cmd` line named the kernel's compiler as a bare `aarch64-none-linux-gnu-gcc` (`KERNEL_MAKEOPTS`'
 `CC="$(KERNEL_CC)"`, defaulting to `TARGET_CC`), resolved on PATH, so the recorded command did not
 pin which compiler ran; tree patch 011 names it by absolute path (`docs/toolchain.md`). Both hosts'
@@ -119,8 +119,8 @@ bring-up (2026-10-11). Two guards:
   not produce. The refusal deletes the half-built record rather than leaving it to look done;
   fix with a clean kernel rebuild (the warning prints the exact command, run through
   `run-in-sdk.sh`). A producer-string check was tried and dropped (2026-10-11): the GE8300 module
-  is GCC 6.4 by design, and salusa's stale objects carried the same compiler and flags as
-  Caladan's fresh ones.
+  is GCC 6.4 by design, and one host's stale objects carried the same compiler and flags as
+  another host's fresh ones.
 
 ## Diagnostics and debug records
 

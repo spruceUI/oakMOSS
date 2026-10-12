@@ -455,7 +455,7 @@ EasyRPG's fluidsynth could not load.
 | `010-rules-mk-external-toolchain-override.upgrade` | the same two lines | brings a tree with the previous 010 to this one |
 | `scripts/prepare-toolchain.sh` | `tina-sysroot/lib/libgomp.so.1*` | the spec's `./lib` has to hold it; a sysroot without it is prepared again |
 | `scripts/run-in-sdk.sh` | the toolchain check | refuses a sysroot prepared before this round |
-| `020-kernel-config-4.9.upgrade`, `100-disp2-fb-g2d-rotation.upgrade` | the lines rounds 17 and 24 changed | a tree from before them (Caladan's was at mods 10) comes up without hand edits |
+| `020-kernel-config-4.9.upgrade`, `100-disp2-fb-g2d-rotation.upgrade` | the lines rounds 17 and 24 changed | a tree from before them (one build host's was at mods 10) comes up without hand edits |
 | `scripts/apply-sdk-mods.sh` | the upgrade test | proved on scratch copies, and tried before the in-tree test (see the top of this file) |
 | `scripts/lib.sh` `OAKMOSS_MODS_VERSION`, `need_mods` | `build.sh` | refuses an SDK stamped below the checkout's level; it used to check only that a stamp existed |
 
