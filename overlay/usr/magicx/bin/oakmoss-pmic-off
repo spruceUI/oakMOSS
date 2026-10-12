@@ -1,0 +1,47 @@
+#!/bin/sh
+# Switch the AXP2202 off directly at the end of a power-off: the firmware's own power-off sometimes
+# leaves it on, dark and warm (the "limbo" state). procd runs this last (procd patch 901); it returns
+# only when the board did not switch off, and procd then calls the firmware's power-off as before.
+# Usage: oakmoss-pmic-off [-n]   (-n: show the registers and the writes, write nothing)
+# Off: touch /etc/oakmoss-no-pmic-off. Sequence: MinUI's and NextUI's tg5040 fix (docs/hardware-notes.md).
+AXP=/sys/class/axp/axp_reg
+USB=/sys/class/power_supply/axp2202-usb/online
+DRY=; [ "$1" = -n ] && DRY=1
+
+say() {
+	echo "oakmoss-pmic-off: $*" >&2
+	[ -n "$DRY" ] || echo "oakmoss-pmic-off: $*" > /dev/kmsg 2>/dev/null
+}
+get() { echo "$1" > "$AXP" && v=$(cat "$AXP") && echo "${v#*=}"; }	# get 0xNN -> 0xV
+put() {	# put 0xNN VV: write the register, then read it back into $got
+	[ -n "$DRY" ] && { echo "write $1 = 0x$2 (reads $(get "$1"))"; got=0x$2; return 0; }
+	echo "$1$2" > "$AXP" && got=$(get "$1")
+}
+
+# The K scripts' umount -a also takes /sys.
+[ -e "$AXP" ] || mount -t sysfs sysfs /sys 2>/dev/null
+[ -e "$AXP" ] || { say "no $AXP: leaving it to the firmware"; exit 1; }
+[ -e /etc/oakmoss-no-pmic-off ] && { say "switched off by /etc/oakmoss-no-pmic-off"; exit 1; }
+# With USB in the PMIC switches straight back on; the firmware's path restarts into charge mode.
+if [ "$(cat "$USB" 2>/dev/null)" = 1 ]; then
+	say "USB present: leaving it to the firmware"
+	[ -n "$DRY" ] || exit 1
+fi
+
+# A pending interrupt holds the IRQ pin low, which switches the PMIC back on: mask them all, then
+# clear what is pending (write 1 to clear).
+for r in 0x40 0x41 0x42 0x43 0x44; do
+	put $r 00 && [ $((got)) -eq 0 ] || { say "$r reads ${got:-nothing} after masking"; exit 1; }
+done
+for r in 0x48 0x49 0x4a 0x4b 0x4c; do put $r ff; done
+# A power-key event powers off rather than restarts.
+put 0x22 0a && [ $((got)) -eq 10 ] || { say "0x22 reads ${got:-nothing}"; exit 1; }
+sleep 0.05
+
+# Soft power-off. A plain store, so it also clears bit 3 (restart when PWROK goes low).
+[ -n "$DRY" ] && { echo "write 0x27 = 0x01 (reads $(get 0x27)): power off"; exit 0; }
+sync
+echo 0x2701 > "$AXP"
+sleep 1
+say "still running 1 s after the soft power-off (0x27 reads $(get 0x27))"
+exit 1

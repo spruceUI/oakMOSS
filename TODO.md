@@ -169,6 +169,10 @@ because the base does not.
 
 ## Rootfs overlay: services and files
 
+- [ ] **Power-off through the PMIC on hardware** (round 28, `oakmoss-pmic-off`): on each board, a
+  menu power-off unplugged after a long idle and right after boot (next `boot.txt`: 0x21 reads
+  software power-off), one plugged in (the charge screen as before) and a reboot (unchanged); then
+  a long run of power cycles, as MinUI's 20 h.
 - [ ] **A version stamp spruce can read** (next bundle, with spruce's side). Write the image's
       version at build time where the launcher can read it - `OS_NAME=oakMOSS` and
       `OS_VERSION=<git describe>` in `/etc/os-release`, and/or `/usr/magicx/version` - so

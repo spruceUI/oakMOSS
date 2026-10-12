@@ -752,3 +752,33 @@ built with `scripts/kdebug.sh build <board>`):
 - Sleep does not need a key press. spruce's own `device_enter_sleep`, with the RTC wake
   alarm as the wake source, reproduces the power-key path, and a hang comes back by itself
   through the watchdog.
+
+## Power-off that left the PMIC on (2026-10-12)
+
+A Zero 28 on v0.5.0-beta.2 was powered off from spruce's menu on 2026-10-11 and found warm in its
+case a day later at 6% (65% at the power-off, 23.4 h later: about 65 mA, a running SoC). Its next
+boot record read last mark 0x67 (`machine_power_off` reached) and PMIC 0x21 = 0x01: the power key,
+held, switched it off. Every completed power-off on that unit reads 0x02 (software), and its
+power-offs on 2026-10-09 all completed, so the fault is intermittent. The firmware's PSCI power-off
+had left the AXP2202 on until the key was held.
+
+This is the TrimUI Brick's "limbo" state (MinUI also says "faux poweroff"), on the same SoC and PMIC.
+MinUI (tg5040, release 20251123-1), NextUI (v6.6.0, PR #560) and PakUI fixed it in userspace with
+a sequence from Helaas's nextui-brick-poweroff-hook that switches the PMIC off directly:
+
+| write | why |
+|---|---|
+| 0x40-0x44 <- 0x00 | mask every interrupt: a pending one holds the IRQ pin low, which switches the PMIC back on |
+| 0x48-0x4c <- 0xff | clear what is pending (write 1 to clear) |
+| 0x22 <- 0x0a | a power-key event powers off rather than restarts |
+| 0x27 <- 0x01 | soft power-off; the plain store also clears bit 3 (restart when PWROK goes low), which the board leaves set (0x27 = 0x08) |
+
+A running Zero 28 arms both power-key edge interrupts (0x41 = 0xf3) and had a status bit pending
+(0x48 = 0x10). oakMOSS runs the same sequence (`oakmoss-pmic-off`) from procd after the last kill
+and sync, at power-offs only (procd patch 901, `docs/sdk-mods.md` round 28). It goes through the
+driver's `/sys/class/axp/axp_reg`, which serializes with the driver and reads the chip itself (the
+AXP2202 regmap has no cache); NextUI's raw `/dev/i2c-6` writes are blamed for stuck Brick Pros in
+its open issue #835. With USB in it leaves the power-off to the firmware, whose reset into charge
+mode needs the PMIC on. `touch /etc/oakmoss-no-pmic-off` turns it off. `poweroff -f` and the
+kernel's own power-offs bypass procd and still take the firmware's path. 0x21's bits are the
+AXP717C datasheet's (V1.1), whose 0x20 bits match the AXP2202's. Not yet tested on hardware.

@@ -484,3 +484,22 @@ with the vendor's GCC 6.4 these docs said: OpenWrt passes `KERNEL_CC` as `CC=` b
 On an existing tree: `scripts/kdebug.sh revert`, then `scripts/apply-sdk-mods.sh` (011 reports
 `patched`). The stamp moves, which wipes the kernel build tree, so the next `ext` or `image`
 recompiles every kernel object. `mods_version` 19 -> 20.
+
+## Round 28 (2026-10-12): power-off through the PMIC
+
+A Zero 28 powered off from spruce's menu stayed on: its next boot record had the kernel's
+power-off mark (0x67), but PMIC 0x21 named the power key held as what switched it off (0x01), not
+software (0x02), and the battery went from 65% to 6% in 23 h. The power-off is PSCI's, carried out
+by the firmware (`docs/hardware-notes.md`, "Power-off that left the PMIC on"), so oakMOSS now
+switches the AXP2202 off itself first, as MinUI and NextUI fixed the same "limbo" state on the
+TrimUI Brick (the same SoC and PMIC). Not yet tested on hardware.
+
+| what | where | why |
+|---|---|---|
+| `sdk-patches/package-patches/procd/901-power-off-through-the-pmic.patch` | `package/system/procd/patches/` | At a power-off, after the last kill and sync, procd runs `/usr/magicx/bin/oakmoss-pmic-off` (capped at 5 s), then the firmware's power-off as before. The `K` scripts get `OAKMOSS_SHUTDOWN=poweroff` or `reboot`. |
+| `overlay/usr/magicx/bin/oakmoss-pmic-off` | rootfs | Masks the PMIC's interrupts, clears pending ones, sets 0x22 = 0x0a and writes 0x27 = 0x01, reading back each mask and 0x22; leaves a power-off with USB in to the firmware. `-n` shows the writes and writes nothing. |
+| `overlay/usr/magicx/bin/oakmoss-debug.sh` | rootfs | Dumps 0x40-0x4c, decodes 0x21, records whether a shutdown was a power-off or a reboot, and names a power-off that did not complete. |
+| `scripts/lib.sh` `OAKMOSS_MODS_VERSION` | `build.sh` | refuses a tree without 901 |
+
+On an existing tree: `scripts/apply-sdk-mods.sh` installs 901 beside 900, and procd rebuilds at the
+next `image`. The stamp moves, which wipes the kernel build tree. `mods_version` 20 -> 21.

@@ -24,12 +24,13 @@ Each boot gets a record, `oakmoss-debug-records/boot-NNNN/`, on the card spruce 
 last 30 are kept). v0.5.0-beta.1 wrote them to `oakmoss-debug/`, which is the switch file itself
 when SD1 hosts, so it wrote no records there:
 
-- **`boot.txt`:** how this boot started (the PMIC's power-on source and U-Boot's decision), how
-  the boot before ended (its last kernel mark and whether it wrote a shutdown record), the kernel
-  command line, the PMIC registers and the power supplies.
+- **`boot.txt`:** how this boot started (the PMIC's power-on and power-off sources and U-Boot's
+  decision), how the boot before ended (its last kernel mark, whether it wrote a shutdown record,
+  and a line when a power-off did not complete), the kernel command line, the PMIC registers and
+  the power supplies.
 - **`dmesg.txt`:** the kernel log, about a minute after the boot.
-- **`shutdown.txt`:** written at an orderly power-off or reboot: the PMIC and supplies, the
-  mounts, the running programs (names only) and the last 300 lines of the kernel log.
+- **`shutdown.txt`:** written at an orderly power-off or reboot (it says which): the PMIC and
+  supplies, the mounts, the running programs (names only) and the last 300 lines of the kernel log.
 
 A short copy of the last 6 records stays on SD1's data partition (`/mnt/UDISK/oakmoss-debug`)
 for boots where no card is there. `Saves/spruce/oakmoss-debug.log` on the card gets a summary

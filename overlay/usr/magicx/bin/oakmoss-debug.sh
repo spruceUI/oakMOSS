@@ -32,7 +32,8 @@ arg() {	# arg <name>: the value of a kernel argument
 pmic() {	# AXP2202 registers through the driver's debug node: a value under 0x100 only selects
 	n=/sys/class/axp/axp_reg
 	[ -w $n ] || { echo "(no $n)"; return; }
-	for r in 00 01 03 04 05 06 08 0a 0b 0c 0f 10 12 13 14 15 16 17 18 20 21 22 23 24 25 26 27 f0; do
+	for r in 00 01 03 04 05 06 08 0a 0b 0c 0f 10 12 13 14 15 16 17 18 20 21 22 23 24 25 26 27 \
+		40 41 42 43 44 48 49 4a 4b 4c f0; do
 		echo $r > $n && cat $n
 	done
 }
@@ -79,6 +80,23 @@ pwron_name() {
 	esac
 }
 
+pwroff_name() {	# PMIC 0x21 (bits as the AXP717's, whose 0x20 matches pwron_name)
+	case $1 in
+	0x00) echo "nothing latched: a reset that did not power-cycle the PMIC"; return ;;
+	0x[0-9a-f]*) ;;
+	*) echo "not read"; return ;;
+	esac
+	n=$(($1)); s=
+	[ $((n & 1)) = 0 ] || s="$s, power key held"
+	[ $((n & 2)) = 0 ] || s="$s, software power-off"
+	[ $((n & 8)) = 0 ] || s="$s, battery (VSYS) too low"
+	[ $((n & 16)) = 0 ] || s="$s, LDO over current"
+	[ $((n & 32)) = 0 ] || s="$s, DCDC under voltage"
+	[ $((n & 64)) = 0 ] || s="$s, DCDC over voltage"
+	[ $((n & 128)) = 0 ] || s="$s, over temperature"
+	echo "${s#, }"
+}
+
 src_name() {
 	case $1 in
 	-1) echo "unknown" ;; 0) echo "button" ;; 1) echo "irq" ;; 2) echo "usb, no battery" ;;
@@ -100,6 +118,7 @@ boot() {
 	R=$T/$(name $n); P=$D/$(name $((n - 1)))
 	mkdir -p "$R"
 	mark=$(arg oakmoss.prev_mark); pwron=$(arg oakmoss.pwron); f0=$(arg oakmoss.f0); src=$(arg oakmoss.src)
+	pwroff=$(arg oakmoss.pwroff)
 	case $f0 in 0x*) [ $((f0 & 8)) = 8 ] && f0="$f0 (bit 3, U-Boot's charging flag, is SET)" ;; esac
 	{
 		echo "oakMOSS debug record ${R##*/}, written $(now) at uptime $(up) s"
@@ -108,7 +127,7 @@ boot() {
 		echo
 		echo "== How this boot started (U-Boot)"
 		echo "power-on source, PMIC 0x20: $pwron = $(pwron_name "$pwron")"
-		echo "power-off status, PMIC 0x21: $(arg oakmoss.pwroff)"
+		echo "power-off source, PMIC 0x21: $pwroff = $(pwroff_name "$pwroff")"
 		echo "PMIC 0xf0: $f0"
 		echo "U-Boot's decision: source $src ($(src_name "$src")), charge mode $(arg oakmoss.chg)," \
 		     "charge-mode check ran $(arg oakmoss.axpinfo), boot-package logo $(arg oakmoss.logo)"
@@ -116,8 +135,12 @@ boot() {
 		echo
 		echo "== How the boot before ended"
 		echo "last mark: $mark = $(mark_name "$mark")"
+		case $mark:$pwroff in
+		0x67*:0x01) echo "the power-off did NOT complete: the kernel reached it, the PMIC stayed on until the power key was held" ;;
+		esac
 		if [ -f "$P/shutdown.txt" ]; then
-			echo "${P##*/}: orderly shutdown recorded ($(sed -n 's/^started: //p' "$P/shutdown.txt"))"
+			k=$(sed -n 's/^kind: //p' "$P/shutdown.txt")
+			echo "${P##*/}: orderly shutdown recorded (${k:+$k, }$(sed -n 's/^started: //p' "$P/shutdown.txt"))"
 		elif [ -d "$P" ]; then
 			echo "${P##*/}: no shutdown recorded: power loss, crash, hang, long press, or a reboot that bypassed init"
 		else
@@ -214,6 +237,7 @@ shutdown() {
 	{
 		echo "started: $(now) at uptime $(up) s"
 		echo "an orderly shutdown or reboot: procd is running the K scripts"
+		echo "kind: ${OAKMOSS_SHUTDOWN:-not passed (procd without oakMOSS patch 901)}"
 		echo
 		echo "== PMIC registers (AXP2202)"; pmic; echo
 		echo "== Power supplies"; supplies; echo
