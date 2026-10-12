@@ -39,7 +39,7 @@ scripts/build-openixcard.sh         # OpenixCard from source (Allwinner image ->
 scripts/unpack-sdk.sh --remove-zip  # stream the SDK out of its zip and verify it
 scripts/apply-sdk-mods.sh           # every SDK change (docs/sdk-mods.md); safe to rerun
 scripts/build.sh uboot              # our U-Boot with the Zero 40 and XU20 panels (after every SDK unpack)
-scripts/make-boot-resource.py --logo zero28 overlay/bootlogo.bmp   # optional: the oakMOSS boot logo
+scripts/make-boot-resource.py --logo zero28 overlay/bootlogo.bmp   # optional: redraw the logo (boards/<board>/boot-resource has each board's)
 scripts/build.sh all zero28 zero40 xu20   # the userland (~20-40 min on 8 cores), then one image per board
 ```
 

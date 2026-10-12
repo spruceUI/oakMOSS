@@ -101,6 +101,10 @@ apply_overlay() {
     if [ -f "$OAKMOSS_ROOT/boards/$board/sys_partition.fex" ] && [ -d "$OAKMOSS_ROOT/boards/$board/boot-resource" ]; then
         cp -a "$OAKMOSS_ROOT/boards/$board/boot-resource/." "$bres/"
     fi
+    # The SDK's own logo is Moss's (not ours to ship): every board brings oakMOSS's, from boards/<board>/boot-resource.
+    if [ -f "$logo.orig" ] && cmp -s "$logo" "$logo.orig"; then
+        die "$board would ship the SDK's original boot logo: add boards/$board/boot-resource/bootlogo.bmp"
+    fi
     cp -a "$ov/etc/rc.local" "$SDK_DIR/target/allwinner/a133-aw3/base-files/etc/rc.local"
     # The cards are mounted by oakmoss-cards.sh (docs/cards.md), not by block's hotplug: the SDK's two
     # /mnt/SDCARD entries go, so a card inserted later never lands on top of the host card.
