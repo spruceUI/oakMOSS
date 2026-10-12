@@ -1,10 +1,11 @@
-# The flip set: spruce/flip/lib, built for the oakMOSS image
+# The oakMOSS libraries: spruce/flip/lib, built for the oakMOSS image
 
 spruce puts `spruce/flip/lib` (libraries collected for the Miyoo Flip) on the MagicX library paths. Those are
 other distributions' builds, and on MagicX some of them fail: Westonpack picked up the Flip's SDL2, ScummVM's
 libcrypt and libssl clashed with the image's, `libvorbisidec.so.1` is an armhf file, `libwayland-client.so.0`
-needs a `libffi.so.8` that nothing provides, and `libavformat.so.58` needs OpenSSL 3. The flip set is the
-same libraries built for this image, so a MagicX image can carry its own and spruce can stop borrowing.
+needs a `libffi.so.8` that nothing provides, and `libavformat.so.58` needs OpenSSL 3. The oakMOSS libraries are
+the same libraries built for this image, so a MagicX image can carry its own and spruce can stop borrowing. The
+lane calls the set `PORTS_SET=flip`, after the list it reproduces.
 
 Scope (user, 2026-10-11): all 129 libraries of `spruce/flip/lib`, every one except the Flip's SDL2, whose
 place the vendor's PowerVR SDL2 in `/usr/magicx/lib` already takes.
@@ -13,7 +14,7 @@ place the vendor's PowerVR SDL2 in `/usr/magicx/lib` already takes.
 
 ```
 PORTS_SET=flip PORTS_TOOLCHAIN=armgnu13 scripts/run-userland-lane.sh     # -> builds/<stamp>-ports-userland-flipset/
-FLIPSET=builds/<stamp>-ports-userland-flipset scripts/build.sh all zero28 zero40 xu20
+OAKMOSS_LIBS=builds/<stamp>-ports-userland-flipset scripts/build.sh all zero28 zero40 xu20
 ```
 
 The set is the userland lane (`scripts/build-ports-userland.sh`) with a second package list. It builds with the
@@ -24,13 +25,14 @@ gate is 2.38 for this set (2.33 for the card lanes, which must load on TrimUI). 
 Docker. `scripts/fetch-userland.sh` downloads the sources named in `inputs/userland/urls.txt` and checks them
 against `inputs/userland/SHA256SUMS`.
 
-`build.sh` copies the set into each image as `/usr/lib/flipset` and writes `/usr/magicx/flipset`: its first
-line is that directory, then the set's `SHA256SUMS` hash and the oakMOSS version it was built from. After the
-rootfs is assembled, build.sh fails if any file of the set links a library that is neither in the set nor in
-the image's `/lib`, `/usr/lib` or `/usr/magicx/lib`.
+`build.sh` copies the set into each image as `/usr/lib/oakmoss`, with the lane's `BUILD-INFO` (the oakMOSS
+version it was built from) and a `SHA256SUMS` whose paths are relative to that folder. It is a folder of its
+own because 11 of its libraries share names with weaker copies in the image, which the base's programs keep.
+After the rootfs is assembled, build.sh fails if any library of the set links one that is neither in the set
+nor in the image's `/lib`, `/usr/lib` or `/usr/magicx/lib`.
 
-**spruce's side:** on a MagicX image with `/usr/magicx/flipset`, spruce puts the named directory where it
-puts `spruce/flip/lib` today. Images without the marker keep today's paths.
+**spruce's side:** on a MagicX image with `/usr/lib/oakmoss`, spruce puts that folder where it puts
+`spruce/flip/lib` and drops the other Flip folders; images without it keep `spruce/flip`'s paths.
 
 ## What ships
 

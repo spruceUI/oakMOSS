@@ -19,7 +19,7 @@
 #      KDEBUG_FTRACE=1 (ftrace + event tracing for trace-cmd; debug cards only),
 #      KDEBUG_HANG=0 (no lockup and hung-task detectors or 5 s panic timeout; on by default),
 #      OMUPD_BOOTCHAIN=1 (the update also carries boot0 and the U-Boot package; docs/updates.md),
-#      FLIPSET=<dir> (a built flip set, installed as /usr/lib/flipset; docs/flip-set.md).
+#      OAKMOSS_LIBS=<dir> (a built oakMOSS library set, installed as /usr/lib/oakmoss; docs/flip-set.md).
 # Everything runs inside the container except OpenixCard, which runs on the host.
 . "$(dirname "$0")/lib.sh"
 need_sdk; need_mods
@@ -113,15 +113,17 @@ apply_overlay() {
     cp -a "$ov/usr" "$SDK_DIR/package/add-rootfs-demo/usr"
     cp -a "$ov/etc" "$SDK_DIR/package/add-rootfs-demo/etc"
     [ -d "$bov" ] && cp -a "$bov/." "$SDK_DIR/package/add-rootfs-demo/"
-    # The flip set (PORTS_SET=flip in build-ports-userland.sh, docs/flip-set.md): FLIPSET names a built set, which
-    # goes to /usr/lib/flipset, and /usr/magicx/flipset tells spruce so. Without FLIPSET the image has none.
-    if [ -n "${FLIPSET:-}" ]; then
-        [ -f "$FLIPSET/SHA256SUMS" ] && [ -d "$FLIPSET/lib" ] || die "FLIPSET=$FLIPSET is not a built flip set"
-        (cd "$FLIPSET" && sha256sum -c --quiet SHA256SUMS) || die "FLIPSET=$FLIPSET does not match its SHA256SUMS"
-        mkdir -p "$SDK_DIR/package/add-rootfs-demo/usr/lib/flipset"
-        cp -a "$FLIPSET/lib/." "$SDK_DIR/package/add-rootfs-demo/usr/lib/flipset/"
-        { echo /usr/lib/flipset; echo "sha256sums=$(sha256_of "$FLIPSET/SHA256SUMS")"; grep -m1 '^oakmoss=' "$FLIPSET/BUILD-INFO"; } \
-            > "$SDK_DIR/package/add-rootfs-demo/usr/magicx/flipset"
+    # The oakMOSS libraries (the lane's PORTS_SET=flip, docs/flip-set.md): OAKMOSS_LIBS names a built set, installed as
+    # /usr/lib/oakmoss with its BUILD-INFO and SHA256SUMS (paths relative to that folder). Without it the image has none.
+    if [ -n "${OAKMOSS_LIBS:-}" ]; then
+        [ -f "$OAKMOSS_LIBS/SHA256SUMS" ] && [ -d "$OAKMOSS_LIBS/lib" ] || die "OAKMOSS_LIBS=$OAKMOSS_LIBS is not a built set"
+        (cd "$OAKMOSS_LIBS" && sha256sum -c --quiet SHA256SUMS) || die "OAKMOSS_LIBS=$OAKMOSS_LIBS does not match its SHA256SUMS"
+        local libs=$SDK_DIR/package/add-rootfs-demo/usr/lib/oakmoss
+        mkdir -p "$libs"
+        cp -a "$OAKMOSS_LIBS/lib/." "$libs/"
+        cp "$OAKMOSS_LIBS/BUILD-INFO" "$libs/BUILD-INFO"
+        sed -n 's,^\([0-9a-f]\{64\}\)  lib/,\1  ,p' "$OAKMOSS_LIBS/SHA256SUMS" > "$libs/SHA256SUMS"
+        (cd "$libs" && sha256sum -c --quiet SHA256SUMS) || die "the installed /usr/lib/oakmoss does not match its SHA256SUMS"
     fi
     # SD1's SPRUCEOS partition (src/sd1part.c): static, from the Arm toolchain, like diag's fbfill.
     local cc=$ARMGNU_DIR/bin/aarch64-none-linux-gnu-gcc
@@ -433,18 +435,18 @@ case $STEP in
     # check_shipped_modules): deletes this half-built record rather than leaving it to look done.
     check_shipped_modules "$BOARD" || { rm -rf "$OUT"; die "refusing $OUT: stale kernel module(s) above"; }
     ROOTFS=$SDK_DIR/out/a133-aw3/compile_dir/target/rootfs
-    if [ -n "${FLIPSET:-}" ]; then
-        # every file of the set finds what it links in the set or in this image (the lane's IMAGE_OK, checked for real)
+    if [ -n "${OAKMOSS_LIBS:-}" ]; then
+        # every library of the set finds what it links in the set or in this image (the lane's IMAGE_OK, checked for real)
         bad=0
-        for f in "$ROOTFS"/usr/lib/flipset/*; do
+        for f in "$ROOTFS"/usr/lib/oakmoss/*.so*; do
             [ -f "$f" ] && [ ! -L "$f" ] || continue
             for n in $(readelf -d "$f" 2>/dev/null | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p'); do
-                for dir in usr/lib/flipset lib usr/lib usr/magicx/lib; do [ -e "$ROOTFS/$dir/$n" ] && continue 2; done
-                echo "UNRESOLVED: flipset/$(basename "$f") needs $n" >&2; bad=1
+                for dir in usr/lib/oakmoss lib usr/lib usr/magicx/lib; do [ -e "$ROOTFS/$dir/$n" ] && continue 2; done
+                echo "UNRESOLVED: oakmoss/$(basename "$f") needs $n" >&2; bad=1
             done
         done
-        [ "$bad" = 0 ] || die "the flip set needs libraries this image does not have"
-        log "flip set closure ok: $(find "$ROOTFS/usr/lib/flipset" -maxdepth 1 -type f | wc -l) files resolve in the set or this image"
+        [ "$bad" = 0 ] || die "the oakMOSS libraries need libraries this image does not have"
+        log "oakMOSS libraries closure ok: $(find "$ROOTFS/usr/lib/oakmoss" -maxdepth 1 -type f -name '*.so*' | wc -l) files resolve in the set or this image"
     fi
     {
       echo "device=$BOARD"; echo "device_marker=$DEVICE_MARKER"; echo "built=$ST"; echo "oakmoss=$(oakmoss_version)"
@@ -459,7 +461,7 @@ case $STEP in
       echo "board_dts=$([ -f "$OAKMOSS_ROOT/boards/$BOARD/board.dts" ] && echo "boards/$BOARD/board.dts $(md5_of "$OAKMOSS_ROOT/boards/$BOARD/board.dts")" || echo "the SDK a133-aw3 (Zero 28) tree")"
       echo "libc=$(strings "$ROOTFS/lib/libc.so.6" 2>/dev/null | grep -m1 'GNU C Library')"
       echo "libstdcxx=$(for f in "$ROOTFS"/usr/lib/libstdc++.so.6.0.*; do [ -e "$f" ] && basename "$f" && break; done)"
-      echo "flipset=$([ -n "${FLIPSET:-}" ] && sed -n 2,3p "$SDK_DIR/package/add-rootfs-demo/usr/magicx/flipset" | tr '\n' ' ' || echo none)"
+      echo "oakmoss_libs=$([ -n "${OAKMOSS_LIBS:-}" ] && echo "sha256sums=$(sha256_of "$OAKMOSS_LIBS/SHA256SUMS") $(grep -m1 '^oakmoss=' "$OAKMOSS_LIBS/BUILD-INFO")" || echo none)"
       echo "batteryplus=$([ -x "$ROOTFS/usr/magicx/bin/batteryplus" ] && echo "knubat.components ${BATTERYPLUS_COMMIT:0:12}, voltage mode" || echo none)"
       echo "outputs=$(basename "$FINAL") (raw GPT image: dd or Etcher to SD1, whole card); $(basename "$UPDATE") (update for cards with two slots, docs/updates.md; bootchain=${OMUPD_BOOTCHAIN:-0}); $(basename "$IMG") (Allwinner PhoenixSuit image); $(basename "$IMG").dump/rootfs.fex (rootfs squashfs, used by the hybrid and diag images)"
       echo "debug=$DEBUG_INFO"
