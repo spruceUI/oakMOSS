@@ -1503,7 +1503,7 @@ pull up or pull down(default 0), driver level(default 1), data>
 
 			BTN_G {
 				gpios = <&pio PH 14 0 1 1 1>;
-				linux,code = <158>;
+				linux,code = <172>;	/* oakMOSS: KEY_HOMEPAGE, spruce's Home key (user 2026-10-18: G and switch-key swapped) */
 				label = "BTN_G";
 				debounce-interval = <10>;
 			};
@@ -1554,7 +1554,7 @@ pull up or pull down(default 0), driver level(default 1), data>
 				dpad_to_joystick;
 				gpios = <&pio PH 11 0 1 1 1>;
 				led_joy = <&pio PE 2 1 0 3 1>;
-				linux,code = <172>;	/* oakMOSS: KEY_HOMEPAGE, the TrimUI Smart Pro S's Home key; stock's 0 never reaches userspace */
+				linux,code = <158>;	/* oakMOSS: MENU (158); stock's 0 never reaches userspace */
 				label = "switch-key";
 				debounce-interval = <10>;
 			};

@@ -232,10 +232,12 @@ def main(stock_path, aw3_path, out_path, board):
             if t.startswith("linux,code2"):
                 continue
             # The XU20's extra face button (switch-key) is code 0 in the stock tree: the kernel
-            # drops KEY_RESERVED, so it never reached userspace. Give it KEY_HOMEPAGE (172), the
-            # TrimUI Smart Pro S's Home key, so spruce's Home action works on it; 172 sorts after
-            # MENU (158), so SDL appends it as the last button and nothing is renumbered.
+            # drops KEY_RESERVED, so it never reached userspace. User 2026-10-18: it is MENU (158)
+            # and the G button is KEY_HOMEPAGE (172, spruce's Home key, as on the Smart Pro S).
+            # The pair of codes is unchanged, so SDL numbers the pad exactly as before.
             if key_node == "switch-key" and re.fullmatch(r"linux,code = <(0|0x0)>;", t):
+                t = "linux,code = <158>;"
+            if board == "xu20" and key_node == "BTN_G" and re.fullmatch(r"linux,code = <(158|0x9e)>;", t):
                 t = "linux,code = <172>;"
             t = swap_face_code(key_node, t)
             out.append(ind + "\t" * depth + convert(t, pio, rpio))

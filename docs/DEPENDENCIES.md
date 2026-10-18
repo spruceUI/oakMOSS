@@ -362,8 +362,8 @@ Added after the study, from bench work with spruceOS on all three boards:
 - **One key code per press.** Images from 2026-09-26 on no longer give A a second code
   (353), nor the XU20's B and MENU (158, 256). spruce checks the pad's key bitmap at run
   time: if 353 is still listed, it is running on an older image and also accepts the second
-  codes, so one spruce card works on both. The XU20's extra face button is `KEY_HOMEPAGE`
-  (172).
+  codes, so one spruce card works on both. On the XU20 the G button is `KEY_HOMEPAGE` (172,
+  spruce's Home key) and the extra face button is MENU (158), swapped on 2026-10-18.
 - **Rumble through sysfs GPIO.** spruce drives the motor on PH3 through `/sys/class/gpio`,
   which needs `CONFIG_GPIO_SYSFS` (on since 2026-09-26). The Zero 28 has no motor.
 - **Real suspend-to-RAM.** spruce's platform files choose it per board
