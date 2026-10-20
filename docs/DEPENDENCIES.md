@@ -147,7 +147,7 @@ also rotates the framebuffer in hardware (see the last point).
   `libGLES_CM.so(.1)` (ES1.1), `libGLESv2.so(.2)`, `libIMGegl.so`, `libglslcompiler.so`,
   `libsrv_um.so`, `libusc.so`, `libtqvalidate.so`, `libufwriter.so`, `libpvrNULL_WSEGL.so`,
   `libPVROCL.so(.1)` + `libOpenCL.so` symlink, `libPVRScopeServices.so`, `libVK_IMG.so(.1)`,
-  `libvulkan.so(.1)` (PowerVR's loader, Vulkan 1.3.225; the Khronos loader can sit beside it, docs/vulkan.md); `bin/{pvrsrvctl,ocl_unit_test}`;
+  `libvulkan.so(.1)` (Vulkan 1.x present); `bin/{pvrsrvctl,ocl_unit_test}`;
   `firmware/{rgx.fw.22.102.54.38,rgx.sh.22.102.54.38}` -> `/lib/firmware`. DDK per `aw_version`:
   "img-rgx: add 1.19 ddk". OpenCL is off.
 - **The SDL2 that spruce, PyUI and RetroArch need**, cross-validated against an independent port
