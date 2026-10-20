@@ -1051,6 +1051,22 @@ build_one() {
         d=$(src EGL-Registry-db3425b8246136faccb5e2782b5694960bd6edf1.tar.gz EGL-Registry-db3425b8246136faccb5e2782b5694960bd6edf1)
         mkdir -p "$STAGE/usr/include/EGL" "$STAGE/usr/include/KHR" && cp -f "$d"/api/EGL/*.h "$STAGE/usr/include/EGL/" &&
         cp -f "$d"/api/KHR/*.h "$STAGE/usr/include/KHR/" || die "eglheaders: copy failed" ;;
+    vulkanheaders)  # build dependency only: the API headers and registry of the loader's own tag
+        d=$(src Vulkan-Headers-1.3.290.tar.gz Vulkan-Headers-1.3.290)
+        (cmake_cross "$d" >/dev/null && cmake_make "$d" DESTDIR="$STAGE" install >/dev/null) || die "vulkanheaders: install failed" ;;
+    vulkanloader)   # the Khronos loader beside the image's PowerVR one (docs/vulkan.md): a run of its own, not in FLIP_PKGS,
+                    # shipped in lib/vulkan. No X11/Wayland WSI: the driver offers only VK_KHR_display and headless.
+        [ "$PORTS_SET" = flip ] || die "vulkanloader ships only in the oakMOSS image (PORTS_SET=flip)"
+        d=$(src Vulkan-Loader-1.3.290.tar.gz Vulkan-Loader-1.3.290)
+        (cmake_cross "$d" -DVulkanHeaders_DIR="$STAGE/usr/share/cmake/VulkanHeaders" -DBUILD_TESTS=OFF \
+            -DBUILD_WSI_XCB_SUPPORT=OFF -DBUILD_WSI_XLIB_SUPPORT=OFF -DBUILD_WSI_WAYLAND_SUPPORT=OFF >/dev/null &&
+         cmake_make "$d" -j"$JOBS" >/dev/null && cmake_make "$d" DESTDIR="$STAGE" install >/dev/null) || die "vulkanloader: build failed"
+        real=$(readlink -f "$STAGE/usr/lib/libvulkan.so.1")
+        [ -f "$real" ] && [ "$real" -nt "$WORK/.package-start" ] || die "vulkanloader: libvulkan.so.1 was not built"
+        # one regular file under its soname, the name apps dlopen; the loader's licence beside it
+        mkdir -p "$OUT/lib/vulkan" && cp -f "$real" "$OUT/lib/vulkan/libvulkan.so.1" && chmod u+w "$OUT/lib/vulkan/libvulkan.so.1" &&
+            "$STRIP" --strip-unneeded "$OUT/lib/vulkan/libvulkan.so.1" && cp -f "$d/LICENSE.txt" "$OUT/lib/vulkan/LICENSE.txt" ||
+            die "vulkanloader: ship failed" ;;
     waylandpp)  # libwayland-egl++.so.1. wayland-scanner++ is built for the build host first.
         d=$(src waylandpp-1.0.0.tar.gz waylandpp-1.0.0)
         # GCC 13's libstdc++ no longer brings <cstdint> in through other headers; 1.0.0's use std::uint32_t bare
@@ -1344,6 +1360,7 @@ IMAGE_OK="libexpat.so.1 libglib-2.0.so.0 libsqlite3.so.0 libsndfile.so.1 libuuid
 libnsl.so.1 libresolv.so.2 libutil.so.1 libfreetype.so.6 libasound.so.2 libSDL2-2.0.so.0 libatomic.so.1 libdbus-1.so.3"
 if [ "$PORTS_SET" = flip ]; then
     for f in "$OUT"/lib/*; do
+        [ -d "$f" ] && continue    # lib/vulkan (vulkanloader) is not one of the Flip's libraries
         case " $(echo $FLIP_SHIP) " in *" $(basename "$f") "*) ;; *) rm -f "$f" ;; esac
     done
     for l in $FLIP_LINKS; do
@@ -1364,7 +1381,7 @@ fi
 
 log "checking every shipped file loads on glibc 2.$GLIBC_CEILING or older"
 bad=0
-for f in "$OUT"/bin/* "$OUT"/lib/*; do
+for f in "$OUT"/bin/* "$OUT"/lib/* "$OUT"/lib/vulkan/*; do
     [ -f "$f" ] || continue
     # a file with no glibc versions at all (ICU's data library) leaves grep without a match: not a failure
     v=$(readelf -V "$f" 2>/dev/null | grep -oE 'GLIBC_2\.[0-9]+' | sort -t. -k2 -n | tail -1 || true)

@@ -19,7 +19,8 @@
 #      KDEBUG_FTRACE=1 (ftrace + event tracing for trace-cmd; debug cards only),
 #      KDEBUG_HANG=0 (no lockup and hung-task detectors or 5 s panic timeout; on by default),
 #      OMUPD_BOOTCHAIN=1 (the update also carries boot0 and the U-Boot package; docs/updates.md),
-#      OAKMOSS_LIBS=<dir> (a built oakMOSS library set, installed as /usr/lib/oakmoss; docs/flip-set.md).
+#      OAKMOSS_LIBS=<dir> (a built oakMOSS library set, installed as /usr/lib/oakmoss; docs/flip-set.md),
+#      OAKMOSS_VULKAN=<dir> (a lane run of vulkanheaders + vulkanloader: the Khronos loader; docs/vulkan.md).
 # Everything runs inside the container except OpenixCard, which runs on the host.
 . "$(dirname "$0")/lib.sh"
 need_sdk; need_mods
@@ -128,6 +129,20 @@ apply_overlay() {
         cp "$OAKMOSS_LIBS/BUILD-INFO" "$libs/BUILD-INFO"
         sed -n 's,^\([0-9a-f]\{64\}\)  lib/,\1  ,p' "$OAKMOSS_LIBS/SHA256SUMS" > "$libs/SHA256SUMS"
         (cd "$libs" && sha256sum -c --quiet SHA256SUMS) || die "the installed /usr/lib/oakmoss does not match its SHA256SUMS"
+    fi
+    # The Khronos Vulkan loader beside the PowerVR one (docs/vulkan.md): /usr/lib/oakmoss/vulkan is on no default
+    # library path, so an app opts in; the driver's manifest goes where that loader looks, which PowerVR's ignores.
+    if [ -n "${OAKMOSS_VULKAN:-}" ]; then
+        [ -f "$OAKMOSS_VULKAN/SHA256SUMS" ] && [ -f "$OAKMOSS_VULKAN/lib/vulkan/libvulkan.so.1" ] ||
+            die "OAKMOSS_VULKAN=$OAKMOSS_VULKAN is not a lane run of vulkanloader"
+        (cd "$OAKMOSS_VULKAN" && sha256sum -c --quiet SHA256SUMS) || die "OAKMOSS_VULKAN=$OAKMOSS_VULKAN does not match its SHA256SUMS"
+        local vk=$SDK_DIR/package/add-rootfs-demo/usr/lib/oakmoss/vulkan
+        mkdir -p "$vk" "$SDK_DIR/package/add-rootfs-demo/usr/share/vulkan/icd.d"
+        cp -a "$OAKMOSS_VULKAN/lib/vulkan/." "$vk/"
+        cp "$OAKMOSS_VULKAN/BUILD-INFO" "$vk/BUILD-INFO"
+        sed -n 's,^\([0-9a-f]\{64\}\)  lib/vulkan/,\1  ,p' "$OAKMOSS_VULKAN/SHA256SUMS" > "$vk/SHA256SUMS"
+        (cd "$vk" && sha256sum -c --quiet SHA256SUMS) || die "the installed /usr/lib/oakmoss/vulkan does not match its SHA256SUMS"
+        cp "$OAKMOSS_ROOT/assets/vulkan/powervr_icd.json" "$SDK_DIR/package/add-rootfs-demo/usr/share/vulkan/icd.d/"
     fi
     # SD1's SPRUCEOS partition (src/sd1part.c): static, from the Arm toolchain, like diag's fbfill.
     local cc=$ARMGNU_DIR/bin/aarch64-none-linux-gnu-gcc
@@ -452,6 +467,16 @@ case $STEP in
         [ "$bad" = 0 ] || die "the oakMOSS libraries need libraries this image does not have"
         log "oakMOSS libraries closure ok: $(find "$ROOTFS/usr/lib/oakmoss" -maxdepth 1 -type f -name '*.so*' | wc -l) files resolve in the set or this image"
     fi
+    if [ -n "${OAKMOSS_VULKAN:-}" ]; then
+        # the loader links only the base system, and its manifest names a driver the image has
+        vkl=$ROOTFS/usr/lib/oakmoss/vulkan/libvulkan.so.1
+        [ -f "$vkl" ] && [ -f "$ROOTFS/usr/share/vulkan/icd.d/powervr_icd.json" ] && [ -e "$ROOTFS/usr/lib/libVK_IMG.so" ] ||
+            { rm -rf "$OUT"; die "refusing $OUT: the Khronos loader, its manifest or libVK_IMG.so is missing"; }
+        for n in $(readelf -d "$vkl" 2>/dev/null | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p'); do
+            [ -e "$ROOTFS/lib/$n" ] || [ -e "$ROOTFS/usr/lib/$n" ] || { rm -rf "$OUT"; die "refusing $OUT: the Khronos loader needs $n"; }
+        done
+        log "Khronos Vulkan loader ok: $(sha256_of "$vkl" | cut -c1-12), manifest -> /usr/lib/libVK_IMG.so"
+    fi
     {
       echo "device=$BOARD"; echo "device_marker=$DEVICE_MARKER"; echo "built=$ST"; echo "oakmoss=$(oakmoss_version)"
       echo "sdk=mplus_a133_tina_v1.0 (Linux_SDK.zip) board a133-aw3, kernel 4.9.191, u-boot 2018"
@@ -466,6 +491,7 @@ case $STEP in
       echo "libc=$(strings "$ROOTFS/lib/libc.so.6" 2>/dev/null | grep -m1 'GNU C Library')"
       echo "libstdcxx=$(for f in "$ROOTFS"/usr/lib/libstdc++.so.6.0.*; do [ -e "$f" ] && basename "$f" && break; done)"
       echo "oakmoss_libs=$([ -n "${OAKMOSS_LIBS:-}" ] && echo "sha256sums=$(sha256_of "$OAKMOSS_LIBS/SHA256SUMS") $(grep -m1 '^oakmoss=' "$OAKMOSS_LIBS/BUILD-INFO")" || echo none)"
+      echo "vulkan_loader=$([ -n "${OAKMOSS_VULKAN:-}" ] && echo "Khronos 1.3.290 in /usr/lib/oakmoss/vulkan, sha256sums=$(sha256_of "$OAKMOSS_VULKAN/SHA256SUMS")" || echo "PowerVR's only")"
       echo "batteryplus=$([ -x "$ROOTFS/usr/magicx/bin/batteryplus" ] && echo "knubat.components ${BATTERYPLUS_COMMIT:0:12}, voltage mode" || echo none)"
       echo "outputs=$(basename "$FINAL") (raw GPT image: dd or Etcher to SD1, whole card); $(basename "$UPDATE") (update for cards with two slots, docs/updates.md; bootchain=${OMUPD_BOOTCHAIN:-0}); $(basename "$IMG") (Allwinner PhoenixSuit image); $(basename "$IMG").dump/rootfs.fex (rootfs squashfs, used by the hybrid and diag images)"
       echo "debug=$DEBUG_INFO"

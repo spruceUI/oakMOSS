@@ -222,6 +222,15 @@ configuration and init script in `overlay/etc/` are oakMOSS's own
 ([docs/batteryplus.md](docs/batteryplus.md)). An image that carries the binary carries a
 GPL-2.0 program; its source is that commit.
 
+## Khronos: the Vulkan loader
+
+**[Vulkan-Loader](https://github.com/KhronosGroup/Vulkan-Loader)** v1.3.290 (The Khronos Group, Apache-2.0),
+built against **[Vulkan-Headers](https://github.com/KhronosGroup/Vulkan-Headers)** v1.3.290 (Apache-2.0 / MIT;
+build input only). `scripts/fetch-userland.sh` fetches both tag archives (sha256 in `inputs/userland/SHA256SUMS`)
+and the userland lane builds the loader unmodified. An image built with `OAKMOSS_VULKAN` carries it as
+`/usr/lib/oakmoss/vulkan/libvulkan.so.1`, with the loader's `LICENSE.txt` beside it
+([docs/vulkan.md](docs/vulkan.md)); `assets/vulkan/powervr_icd.json` is oakMOSS's own.
+
 ## spruceOS
 
 [spruceOS](https://github.com/spruceUI/spruceOS) (CC BY-NC 4.0) is the launcher
