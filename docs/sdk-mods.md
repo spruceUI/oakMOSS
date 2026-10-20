@@ -492,7 +492,8 @@ power-off mark (0x67), but PMIC 0x21 named the power key held as what switched i
 software (0x02), and the battery went from 65% to 6% in 23 h. The power-off is PSCI's, carried out
 by the firmware (`docs/hardware-notes.md`, "Power-off that left the PMIC on"), so oakMOSS now
 switches the AXP2202 off itself first, as MinUI and NextUI fixed the same "limbo" state on the
-TrimUI Brick (the same SoC and PMIC). Not yet tested on hardware.
+TrimUI Brick (the same SoC and PMIC). Tested once on each board on 2026-10-20: every power-off
+completed (`docs/hardware-notes.md`).
 
 | what | where | why |
 |---|---|---|

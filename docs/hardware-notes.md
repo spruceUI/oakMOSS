@@ -781,4 +781,7 @@ AXP2202 regmap has no cache); NextUI's raw `/dev/i2c-6` writes are blamed for st
 its open issue #835. With USB in it leaves the power-off to the firmware, whose reset into charge
 mode needs the PMIC on. `touch /etc/oakmoss-no-pmic-off` turns it off. `poweroff -f` and the
 kernel's own power-offs bypass procd and still take the firmware's path. 0x21's bits are the
-AXP717C datasheet's (V1.1), whose 0x20 bits match the AXP2202's. Not yet tested on hardware.
+AXP717C datasheet's (V1.1), whose 0x20 bits match the AXP2202's. Tested once on each board on
+2026-10-20: every power-off completed, read 0x21 = 0x02 with a last mark short of 0x67, and one
+short press booted it. Completed power-offs read 0x02 before the fix as well, so these are
+samples, not proof that the fix made the cut.

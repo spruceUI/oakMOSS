@@ -6,6 +6,17 @@ below that is not marked as tested as untested.
 
 ## Releases and spruceOS
 
+v0.6.0-beta.1 (2026-10-20) switches the AXP2202 off itself at a power-off from spruce's menu, so
+the board no longer stays on, dark and warm, until the power key is held (`docs/sdk-mods.md` round
+28). Tested once on each board on 2026-10-20: each power-off completed and one short press booted
+it. The fault was intermittent, so that is a sample, not proof. It adds BatteryPlus (the battery
+percent from the cell's voltage), the oakMOSS library set at `/usr/lib/oakmoss` in place of
+spruce's Flip libraries, the backlight off on the dark charge screen, oakMOSS's own boot logo on
+the Zero 28 and libgomp again. On the XU20 the G button is now Home and the extra face button
+MENU (tested in person). It needs a spruceOS with the MagicX changes of 2026-10-20 (the XU20's
+button names, the oakMOSS library paths); until a nightly has them, stay on v0.5.0-beta.2. The
+bench boards were written fresh, so the update over v0.5.0-beta.2 is not yet tested.
+
 v0.5.0-beta.2 (2026-10-09) fixes debug mode with spruce on the system card: the full records
 now go to `oakmoss-debug-records/` on the card spruce runs from. v0.5.0-beta.1 wrote them to
 `oakmoss-debug/`, which is the switch file itself when SD1 hosts, so it kept none there
