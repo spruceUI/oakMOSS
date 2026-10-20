@@ -13,9 +13,10 @@ it. The fault was intermittent, so that is a sample, not proof. It adds BatteryP
 percent from the cell's voltage), the oakMOSS library set at `/usr/lib/oakmoss` in place of
 spruce's Flip libraries, the backlight off on the dark charge screen, oakMOSS's own boot logo on
 the Zero 28 and libgomp again. On the XU20 the G button is now Home and the extra face button
-MENU (tested in person). It needs a spruceOS with the MagicX changes of 2026-10-20 (the XU20's
-button names, the oakMOSS library paths); until a nightly has them, stay on v0.5.0-beta.2. The
-bench boards were written fresh, so the update over v0.5.0-beta.2 is not yet tested.
+MENU (tested in person). It pairs with spruceOS v4.5.5-20261020 (nightly) or newer; spruce uses
+the oakMOSS libraries from the first nightly after it, which has the MagicX changes of 2026-10-20,
+and keeps its Flip libraries before that. The bench boards were written fresh, so the update over
+v0.5.0-beta.2 is not yet tested.
 
 v0.5.0-beta.2 (2026-10-09) fixes debug mode with spruce on the system card: the full records
 now go to `oakmoss-debug-records/` on the card spruce runs from. v0.5.0-beta.1 wrote them to
