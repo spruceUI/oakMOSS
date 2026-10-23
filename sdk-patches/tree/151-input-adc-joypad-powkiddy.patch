@@ -1,0 +1,501 @@
+diff -ruN a/lichee/linux-4.9/drivers/input/joystick/Kconfig b/lichee/linux-4.9/drivers/input/joystick/Kconfig
+--- a/lichee/linux-4.9/drivers/input/joystick/Kconfig	2024-12-15 20:26:26
++++ b/lichee/linux-4.9/drivers/input/joystick/Kconfig	2026-10-23 16:44:51
+@@ -330,4 +330,13 @@
+ 	  To compile this as a module choose M here: the module will be called
+ 	  maplecontrol.
+ 
++config JOYSTICK_ADC_JOYPAD
++	tristate "GPIO and GPADC gamepad (Powkiddy V90S and V20)"
++	depends on ARCH_SUNXI && OF_GPIO && SENSORS_GPADC
++	default y
++	help
++	  The pad of the Powkiddy V90S and V20 in their stock device tree's
++	  "adc-joypad" binding: buttons on GPIOs, sticks behind an analog
++	  multiplexer on one GPADC channel, rumble on a PWM channel.
++
+ endif
+diff -ruN a/lichee/linux-4.9/drivers/input/joystick/Makefile b/lichee/linux-4.9/drivers/input/joystick/Makefile
+--- a/lichee/linux-4.9/drivers/input/joystick/Makefile	2024-12-15 20:26:26
++++ b/lichee/linux-4.9/drivers/input/joystick/Makefile	2026-10-23 16:44:51
+@@ -5,6 +5,7 @@
+ # Each configuration option enables a list of files.
+ 
+ obj-$(CONFIG_JOYSTICK_A3D)		+= a3d.o
++obj-$(CONFIG_JOYSTICK_ADC_JOYPAD)	+= adc-joypad.o
+ obj-$(CONFIG_JOYSTICK_ADI)		+= adi.o
+ obj-$(CONFIG_JOYSTICK_AMIGA)		+= amijoy.o
+ obj-$(CONFIG_JOYSTICK_AS5011)		+= as5011.o
+diff -ruN a/lichee/linux-4.9/drivers/input/joystick/adc-joypad.c b/lichee/linux-4.9/drivers/input/joystick/adc-joypad.c
+--- a/lichee/linux-4.9/drivers/input/joystick/adc-joypad.c	1969-12-31 18:00:00
++++ b/lichee/linux-4.9/drivers/input/joystick/adc-joypad.c	2026-10-23 16:44:33
+@@ -0,0 +1,457 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * adc-joypad: the Powkiddy V90S and V20 pad on the 4.9 sunxi kernel, in the stock
++ * device tree's own binding. Buttons are GPIO child nodes (EV_KEY, or EV_ABS with
++ * linux,input-value for the hat d-pad); up to four stick axes sit behind an analog
++ * multiplexer on one GPADC channel; rumble is a PWM channel.
++ *
++ * The stock kernel's driver is a port of ROCKNIX's rocknix-singleadc-joypad
++ * (GPL-2.0, github.com/ROCKNIX). The axis maths and defaults here follow that
++ * driver (mux channel table, calibration at open, scaled radial deadzone, tuning
++ * in percent), so the stock tree's tuning values mean the same thing. The GPIO,
++ * GPADC and PWM calls are the 4.9 BSP's. oakMOSS, 2026-10-23.
++ */
++#include <linux/delay.h>
++#include <linux/input.h>
++#include <linux/kernel.h>
++#include <linux/math64.h>
++#include <linux/module.h>
++#include <linux/mutex.h>
++#include <linux/of.h>
++#include <linux/of_gpio.h>
++#include <linux/pinctrl/consumer.h>
++#include <linux/pinctrl/pinconf-generic.h>
++#include <linux/platform_device.h>
++#include <linux/pwm.h>
++#include <linux/slab.h>
++#include <linux/sunxi-gpio.h>
++#include <linux/workqueue.h>
++
++#define DRV_NAME		"adc-joypad"
++#define ADC_HALF_RANGE		900	/* mV: half the GPADC's 1800 mV span */
++#define ADC_MAX_MV		1800
++#define ADC_TUNING_DEFAULT	180	/* percent, as in rocknix-singleadc-joypad */
++#define AMUX_SETTLE_US		60	/* > one sample at the stock 50 kHz rate */
++#define POLL_MS_DEFAULT		10
++
++/* drivers/input/sensor/sunxi_gpadc.c: millivolts, or more than 1800 when the channel is off */
++extern u32 sunxi_gpadc_read_channel_data(u8 channel);
++
++struct jp_button {
++	int gpio;
++	bool active_low;
++	unsigned int type;	/* EV_KEY or EV_ABS */
++	unsigned int code;
++	int value;		/* reported while pressed (EV_ABS: -1 or 1) */
++};
++
++struct jp_axis {
++	unsigned int code;
++	int amux_ch;
++	int cal;
++	int min, max;
++	bool invert;
++	int tuning_p, tuning_n;
++};
++
++struct joypad {
++	struct device *dev;
++	struct input_dev *input;
++	struct delayed_work poll_work;
++	unsigned int poll_ms;
++
++	struct jp_button *buttons;
++	int nbuttons;
++
++	struct jp_axis axes[4];
++	int naxes;
++	int scale, deadzone, fuzz, flat;
++	u32 gpadc_ch;
++	int amux_a, amux_b, amux_en;
++
++	struct pwm_device *pwm;
++	u32 pwm_period;
++	bool rumble_invert;
++	u32 boost_weak, boost_strong;
++	u16 level;
++	struct work_struct rumble_work;
++};
++
++/* rocknix-singleadc-joypad's report order for mux channels 0..3 */
++static const unsigned int jp_axis_codes[4] = { ABS_RY, ABS_RX, ABS_Y, ABS_X };
++static const char * const jp_axis_names[4] = { "ry", "rx", "y", "x" };
++
++/* One sunxi GPIO spec (bank, pin, function, pull, drive, data): input or output,
++ * with the spec's pull applied to an input. Returns the GPIO number. */
++static int jp_gpio(struct device *dev, struct device_node *np, const char *prop,
++		   const char *label, unsigned long flags, struct gpio_config *out)
++{
++	struct gpio_config cfg = { 0 };
++	char pin[16];
++	int gpio, err;
++
++	gpio = of_get_named_gpio_flags(np, prop, 0, (enum of_gpio_flags *)&cfg);
++	if (!gpio_is_valid(gpio))
++		return gpio < 0 ? gpio : -EINVAL;
++	err = devm_gpio_request_one(dev, gpio, flags, label);
++	if (err)
++		return err;
++	if (flags == GPIOF_IN && !sunxi_gpio_to_name(gpio, pin))
++		pin_config_set(gpio < SUNXI_PL_BASE ? SUNXI_PINCTRL : SUNXI_R_PINCTRL, pin,
++			       SUNXI_PINCFG_PACK(SUNXI_PINCFG_TYPE_PUD, cfg.pull));
++	if (out)
++		*out = cfg;
++	return gpio;
++}
++
++static int jp_adc_read(struct joypad *jp, int ch)
++{
++	u32 mv;
++
++	gpio_set_value(jp->amux_en, 0);
++	gpio_set_value(jp->amux_a, (ch >> 1) & 1);
++	gpio_set_value(jp->amux_b, ch & 1);
++	usleep_range(AMUX_SETTLE_US, AMUX_SETTLE_US + 40);
++	mv = sunxi_gpadc_read_channel_data(jp->gpadc_ch);
++	if (mv > ADC_MAX_MV)
++		return -EIO;
++	return mv * jp->scale;
++}
++
++static int jp_tune(const struct jp_axis *a, int v)
++{
++	int t = v < 0 ? a->tuning_n : a->tuning_p;
++
++	return t ? v * t / 100 : v;
++}
++
++/* Axis pairs (ry, rx) and (y, x), as rocknix-singleadc-joypad pairs them */
++static void jp_report_axes(struct joypad *jp)
++{
++	int i;
++
++	for (i = 0; i + 1 < jp->naxes; i += 2) {
++		struct jp_axis *ax = &jp->axes[i], *ay = &jp->axes[i + 1];
++		int rx = jp_adc_read(jp, ax->amux_ch), ry = jp_adc_read(jp, ay->amux_ch);
++		int vx, vy, mag;
++
++		if (rx < 0 || ry < 0)
++			continue;
++		vx = rx - ax->cal;
++		vy = ry - ay->cal;
++		mag = int_sqrt(vx * vx + vy * vy);
++		if (jp->deadzone) {
++			if (mag <= jp->deadzone) {
++				vx = vy = 0;
++			} else {
++				vx = ((ax->max * vx / mag) * (mag - jp->deadzone)) / (ax->max - jp->deadzone);
++				vy = ((ay->max * vy / mag) * (mag - jp->deadzone)) / (ay->max - jp->deadzone);
++			}
++		}
++		vx = clamp(jp_tune(ax, vx), ax->min, ax->max);
++		vy = clamp(jp_tune(ay, vy), ay->min, ay->max);
++		input_report_abs(jp->input, ax->code, ax->invert ? -vx : vx);
++		input_report_abs(jp->input, ay->code, ay->invert ? -vy : vy);
++	}
++}
++
++static void jp_report_buttons(struct joypad *jp)
++{
++	int hat[2] = { 0, 0 };	/* ABS_HAT0X, ABS_HAT0Y */
++	bool has_hat[2] = { false, false };
++	int i;
++
++	for (i = 0; i < jp->nbuttons; i++) {
++		struct jp_button *b = &jp->buttons[i];
++		int raw = gpio_get_value(b->gpio);
++		bool down = b->active_low ? !raw : !!raw;
++
++		if (b->type == EV_ABS && (b->code == ABS_HAT0X || b->code == ABS_HAT0Y)) {
++			has_hat[b->code - ABS_HAT0X] = true;
++			if (down)
++				hat[b->code - ABS_HAT0X] += b->value;
++		} else if (b->type == EV_ABS) {
++			input_report_abs(jp->input, b->code, down ? b->value : 0);
++		} else {
++			input_report_key(jp->input, b->code, down);
++		}
++	}
++	for (i = 0; i < 2; i++)
++		if (has_hat[i])
++			input_report_abs(jp->input, ABS_HAT0X + i, clamp(hat[i], -1, 1));
++}
++
++static void jp_poll(struct work_struct *work)
++{
++	struct joypad *jp = container_of(to_delayed_work(work), struct joypad, poll_work);
++
++	jp_report_axes(jp);
++	jp_report_buttons(jp);
++	input_sync(jp->input);
++	queue_delayed_work(system_freezable_wq, &jp->poll_work, msecs_to_jiffies(jp->poll_ms));
++}
++
++static int jp_open(struct input_dev *input)
++{
++	struct joypad *jp = input_get_drvdata(input);
++	int i, v;
++
++	/* the stick rests where it is when the device opens: that is its centre */
++	for (i = 0; i < jp->naxes; i++) {
++		v = jp_adc_read(jp, jp->axes[i].amux_ch);
++		jp->axes[i].cal = v < 0 ? ADC_HALF_RANGE * jp->scale : v;
++	}
++	queue_delayed_work(system_freezable_wq, &jp->poll_work, 0);
++	return 0;
++}
++
++static void jp_rumble_stop(struct joypad *jp)
++{
++	if (jp->pwm) {
++		cancel_work_sync(&jp->rumble_work);
++		pwm_disable(jp->pwm);
++	}
++}
++
++static void jp_close(struct input_dev *input)
++{
++	struct joypad *jp = input_get_drvdata(input);
++
++	cancel_delayed_work_sync(&jp->poll_work);
++	jp_rumble_stop(jp);
++}
++
++static void jp_rumble_work(struct work_struct *work)
++{
++	struct joypad *jp = container_of(work, struct joypad, rumble_work);
++	u16 level = READ_ONCE(jp->level);
++	u32 duty;
++
++	if (!level) {
++		pwm_disable(jp->pwm);
++		return;
++	}
++	duty = (u32)div_u64((u64)jp->pwm_period * level, 0xffff);
++	if (jp->rumble_invert)
++		duty = jp->pwm_period - duty;
++	pwm_config(jp->pwm, duty, jp->pwm_period);
++	pwm_enable(jp->pwm);
++}
++
++static int jp_play_effect(struct input_dev *dev, void *data, struct ff_effect *effect)
++{
++	struct joypad *jp = data;
++	u32 level = 0;
++
++	if (effect->type != FF_RUMBLE)
++		return 0;
++	if (effect->u.rumble.strong_magnitude)
++		level = effect->u.rumble.strong_magnitude + jp->boost_strong;
++	else if (effect->u.rumble.weak_magnitude)
++		level = effect->u.rumble.weak_magnitude + jp->boost_weak;
++	WRITE_ONCE(jp->level, (u16)min_t(u32, level, 0xffff));
++	schedule_work(&jp->rumble_work);
++	return 0;
++}
++
++static void jp_pwm_free(void *pwm)
++{
++	pwm_free(pwm);
++}
++
++static int jp_setup_rumble(struct joypad *jp, struct device_node *np)
++{
++	const char *used = NULL;
++	u32 id;
++	int err;
++
++	of_property_read_string(np, "rumble_used", &used);
++	if (!used || strcmp(used, "enable") || of_property_read_u32(np, "pwm-id", &id))
++		return 0;
++	if (of_property_read_u32(np, "pwm-period", &jp->pwm_period) || !jp->pwm_period)
++		jp->pwm_period = 200000;
++	jp->rumble_invert = of_property_read_bool(np, "invert-rumble");
++	of_property_read_u32(np, "rumble-boost-weak", &jp->boost_weak);
++	of_property_read_u32(np, "rumble-boost-strong", &jp->boost_strong);
++
++	jp->pwm = pwm_request(id, DRV_NAME " rumble");
++	if (IS_ERR(jp->pwm)) {
++		dev_warn(jp->dev, "pwm %u: %ld, no rumble\n", id, PTR_ERR(jp->pwm));
++		jp->pwm = NULL;
++		return 0;
++	}
++	err = devm_add_action_or_reset(jp->dev, jp_pwm_free, jp->pwm);
++	if (err)
++		return err;
++	INIT_WORK(&jp->rumble_work, jp_rumble_work);
++	pwm_disable(jp->pwm);
++	input_set_capability(jp->input, EV_FF, FF_RUMBLE);
++	return input_ff_create_memless(jp->input, jp, jp_play_effect);
++}
++
++static int jp_setup_axes(struct joypad *jp, struct device_node *np)
++{
++	u32 count = 0, map[4] = { 0, 1, 2, 3 };
++	char prop[24];
++	int i;
++
++	of_property_read_u32(np, "amux-count", &count);
++	if (count == 0)
++		return 0;
++	if (count > 4 || count % 2) {
++		dev_err(jp->dev, "amux-count %u: 2 or 4 axes\n", count);
++		return -EINVAL;
++	}
++	of_property_read_u32_array(np, "amux-channel-mapping", map, 4);
++	of_property_read_u32(np, "gpadc-channel", &jp->gpadc_ch);
++
++	jp->amux_a = jp_gpio(jp->dev, np, "amux-a-gpios", "amux-sel-a", GPIOF_OUT_INIT_LOW, NULL);
++	jp->amux_b = jp_gpio(jp->dev, np, "amux-b-gpios", "amux-sel-b", GPIOF_OUT_INIT_LOW, NULL);
++	jp->amux_en = jp_gpio(jp->dev, np, "amux-en-gpios", "amux-en", GPIOF_OUT_INIT_LOW, NULL);
++	if (jp->amux_a < 0 || jp->amux_b < 0 || jp->amux_en < 0) {
++		dev_err(jp->dev, "amux gpios: %d %d %d\n", jp->amux_a, jp->amux_b, jp->amux_en);
++		return -EINVAL;
++	}
++
++	for (i = 0; i < count; i++) {
++		struct jp_axis *a = &jp->axes[i];
++		u32 t;
++
++		a->code = jp_axis_codes[i];
++		a->amux_ch = map[i] & 3;
++		a->max = ADC_HALF_RANGE * jp->scale;
++		a->min = -a->max;
++		snprintf(prop, sizeof(prop), "invert-abs%s", jp_axis_names[i]);
++		a->invert = of_property_read_bool(np, prop);
++		snprintf(prop, sizeof(prop), "abs_%s-p-tuning", jp_axis_names[i]);
++		a->tuning_p = of_property_read_u32(np, prop, &t) ? ADC_TUNING_DEFAULT : t;
++		snprintf(prop, sizeof(prop), "abs_%s-n-tuning", jp_axis_names[i]);
++		a->tuning_n = of_property_read_u32(np, prop, &t) ? ADC_TUNING_DEFAULT : t;
++		input_set_abs_params(jp->input, a->code, a->min, a->max, jp->fuzz, jp->flat);
++	}
++	jp->naxes = count;
++	return 0;
++}
++
++static int jp_setup_buttons(struct joypad *jp, struct device_node *np)
++{
++	struct device_node *pp;
++	int i = 0, n = of_get_available_child_count(np);
++
++	if (n == 0)
++		return -EINVAL;
++	jp->buttons = devm_kcalloc(jp->dev, n, sizeof(*jp->buttons), GFP_KERNEL);
++	if (!jp->buttons)
++		return -ENOMEM;
++
++	for_each_available_child_of_node(np, pp) {
++		struct jp_button *b = &jp->buttons[i];
++		struct gpio_config cfg;
++		const char *label = NULL;
++		u32 v;
++
++		/* the stock tree spells it "lable" */
++		if (of_property_read_string(pp, "label", &label))
++			of_property_read_string(pp, "lable", &label);
++		b->gpio = jp_gpio(jp->dev, pp, "gpios", label ? label : DRV_NAME, GPIOF_IN, &cfg);
++		if (b->gpio < 0 || of_property_read_u32(pp, "linux,code", &b->code)) {
++			dev_err(jp->dev, "%s: gpio %d, no usable button\n", pp->name, b->gpio);
++			of_node_put(pp);
++			return b->gpio < 0 ? b->gpio : -EINVAL;
++		}
++		/* the buttons pull up and press to ground; a pull-down spec means active high */
++		b->active_low = cfg.pull != 2;
++		b->type = of_property_read_u32(pp, "linux,input-type", &v) ? EV_KEY : v;
++		b->value = of_property_read_u32(pp, "linux,input-value", &v) ? 1 : (int)v;
++		if (b->type == EV_ABS)
++			input_set_abs_params(jp->input, b->code, -1, 1, 0, 0);
++		else
++			input_set_capability(jp->input, EV_KEY, b->code);
++		i++;
++	}
++	jp->nbuttons = i;
++	return 0;
++}
++
++static int jp_probe(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	struct device_node *np = dev->of_node;
++	struct joypad *jp;
++	const char *name = DRV_NAME;
++	u32 v;
++	int err;
++
++	jp = devm_kzalloc(dev, sizeof(*jp), GFP_KERNEL);
++	if (!jp)
++		return -ENOMEM;
++	jp->dev = dev;
++	jp->input = devm_input_allocate_device(dev);
++	if (!jp->input)
++		return -ENOMEM;
++
++	jp->poll_ms = of_property_read_u32(np, "poll-interval", &v) || !v ? POLL_MS_DEFAULT : v;
++	jp->scale = of_property_read_u32(np, "button-adc-scale", &v) || !v ? 1 : v;
++	jp->deadzone = of_property_read_u32(np, "button-adc-deadzone", &v) ? 0 : v;
++	jp->fuzz = of_property_read_u32(np, "button-adc-fuzz", &v) ? 0 : v;
++	jp->flat = of_property_read_u32(np, "button-adc-flat", &v) ? 0 : v;
++	INIT_DELAYED_WORK(&jp->poll_work, jp_poll);
++
++	of_property_read_string(np, "joypad-name", &name);
++	jp->input->name = name;
++	jp->input->phys = DRV_NAME "/input0";
++	jp->input->id.bustype = BUS_HOST;
++	if (!of_property_read_u32(np, "joypad-vendor", &v))
++		jp->input->id.vendor = v;
++	if (!of_property_read_u32(np, "joypad-product", &v))
++		jp->input->id.product = v;
++	/* the stock tree spells it "joypad-revison" */
++	if (!of_property_read_u32(np, "joypad-revision", &v) || !of_property_read_u32(np, "joypad-revison", &v))
++		jp->input->id.version = v;
++	jp->input->open = jp_open;
++	jp->input->close = jp_close;
++	input_set_drvdata(jp->input, jp);
++
++	err = jp_setup_buttons(jp, np);
++	if (!err)
++		err = jp_setup_axes(jp, np);
++	if (!err)
++		err = jp_setup_rumble(jp, np);
++	if (err)
++		return err;
++
++	err = input_register_device(jp->input);
++	if (err)
++		return err;
++	platform_set_drvdata(pdev, jp);
++	dev_info(dev, "%s: %d buttons, %d axes (scale %d, deadzone %d), rumble %s\n", name,
++		 jp->nbuttons, jp->naxes, jp->scale, jp->deadzone, jp->pwm ? "pwm" : "none");
++	return 0;
++}
++
++static int __maybe_unused jp_suspend(struct device *dev)
++{
++	jp_rumble_stop(dev_get_drvdata(dev));
++	return 0;
++}
++
++static SIMPLE_DEV_PM_OPS(jp_pm_ops, jp_suspend, NULL);
++
++static const struct of_device_id jp_of_match[] = {
++	{ .compatible = "adc-joypad" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, jp_of_match);
++
++static struct platform_driver jp_driver = {
++	.probe = jp_probe,
++	.driver = {
++		.name = DRV_NAME,
++		.of_match_table = jp_of_match,
++		.pm = &jp_pm_ops,
++	},
++};
++module_platform_driver(jp_driver);
++
++MODULE_DESCRIPTION("GPIO and GPADC gamepad in the Powkiddy V90S/V20 stock binding");
++MODULE_LICENSE("GPL");
+diff -ruN a/lichee/linux-4.9/drivers/input/sensor/sunxi_gpadc.c b/lichee/linux-4.9/drivers/input/sensor/sunxi_gpadc.c
+--- a/lichee/linux-4.9/drivers/input/sensor/sunxi_gpadc.c	2024-12-15 20:26:26
++++ b/lichee/linux-4.9/drivers/input/sensor/sunxi_gpadc.c	2026-10-23 16:44:51
+@@ -1621,7 +1621,7 @@
+ 	data = ((VOL_RANGE / 4096)*data);	/* 12bits sample rate */
+ 	vol_data = data / 1000;			//data to val_data
+ 
+-	printk("vol_data: %d\n", vol_data);
++	pr_debug("vol_data: %d\n", vol_data);
+ 
+ 	return vol_data;
+ }

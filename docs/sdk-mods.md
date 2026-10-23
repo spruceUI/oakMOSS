@@ -504,3 +504,25 @@ completed (`docs/hardware-notes.md`).
 
 On an existing tree: `scripts/apply-sdk-mods.sh` installs 901 beside 900, and procd rebuilds at the
 next `image`. The stamp moves, which wipes the kernel build tree. `mods_version` 20 -> 21.
+
+## Round 31 (2026-10-23): the Powkiddy V90S and V20 panel and pad
+
+Two new boards on the same A133P, from the stock firmware the V90S and V20 share
+(`boards/v90s`, `boards/v20`; the V20 is carried untested). Their stock tree is a complete 4.9
+Tina tree that our kernel binds except for two things this round adds: the panel and the pad.
+Numbered 31 and stamped 24 to stay clear of `fix/pmf`'s rounds 29-30 (stamps 22-23): whichever
+of the two merges second renumbers.
+
+| what | where | why |
+|---|---|---|
+| `150-lcd-panel-rgp35-nv3051.patch` | `lichee/linux-4.9/drivers/video/fbdev/sunxi/disp2/disp/lcd/` (`rgp35_nv3051.c/.h`, `panels.c/.h`, `Kconfig`, `../Makefile`) | The 640x480 4-lane DSI NV3051 panel the stock tree names (`lcd_driver_name = "RGP35_NV3051"`). No source was released: the power sequence and 27-entry init table are Knulli's reconstruction from the stock V90s kernel (GPL-2.0), on the 4.9 disp2 calls 070 uses. `default y`, like 070. |
+| `151-input-adc-joypad-powkiddy.patch` | `lichee/linux-4.9/drivers/input/joystick/` (`adc-joypad.c`, `Kconfig`, `Makefile`), `drivers/input/sensor/sunxi_gpadc.c` | The stock tree's `adc-joypad` binding: GPIO buttons (EV_KEY, or the hat d-pad as EV_ABS), up to four stick axes behind an analog multiplexer on GPADC channel 0, rumble on a PWM channel. Follows ROCKNIX's rocknix-singleadc-joypad (the driver the vendor ported) for the axis maths and defaults. Polls from a freezable work item: the SDK has `INPUT_POLLDEV` only as a module. In `sunxi_gpadc.c`, the channel read's unconditional `printk` becomes `pr_debug`: the pad reads it per axis, every poll. `default y` (needs `SENSORS_GPADC`, which the SDK config has). |
+| `scripts/lib.sh` `OAKMOSS_MODS_VERSION` | `build.sh` | refuses a tree without 150-151 |
+
+Compile-checked 2026-10-23 against a prepared SDK 4.9 tree with its own cross compiler: both
+files build with no warnings; the pad module resolves every symbol (GPADC, PWM, GPIO, pinconf);
+the panel's disp2 calls resolve in-tree only, as for the other built-in panels. Not yet on
+hardware.
+
+On an existing tree: `scripts/apply-sdk-mods.sh` (150 and 151 report `patched`). The stamp moves,
+which wipes the kernel build tree. `mods_version` 21 -> 24.
