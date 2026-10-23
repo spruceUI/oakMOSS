@@ -61,6 +61,7 @@ brought up, and stay in the repository for reference.
 | `oakmoss-zero40-stock-<stamp>-sd1.img` | Zero 40 | The Zero 40's stock firmware chain and Android kernel with our root filesystem (`scripts/make-hybrid-zero40-stock.sh`). |
 | `oakmoss-xu20-hybrid-<stamp>-sd1.img` | XU20 V32 | The XU20's stock boot chain and Android kernel with the Zero 40 root filesystem (`scripts/make-hybrid-xu20.sh`). Never booted on a unit. |
 | `oakmoss-zero40-hybrid-<stamp>-sd1.img` | Zero 40 | main-zero40's boot chain with our root filesystem and MagicX's kernel modules (`scripts/make-hybrid-zero40.sh`). |
+| `oakmoss-v90s-own-<stamp>-sd1.img`, `oakmoss-v20-own-<stamp>-sd1.img` | Powkiddy V90S, V20 (untested) | The boards' shared stock boot0 (DDR3) and U-Boot in front of our kernel, device tree and root filesystem (`scripts/make-own-kernel-stock.sh v90s`, inputs from `scripts/unpack-powkiddy-stock.sh`). The first lane for these boards, 2026-10-23; no charge mode, no update slot. |
 
 The older lanes, from a finished build:
 

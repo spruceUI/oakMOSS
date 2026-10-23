@@ -27,6 +27,10 @@ really sleep and wake. From v0.4.1-beta.1 on, the images pair with spruceOS v4.5
 newer nightly. It is bench-tested on one of each board; the releases are betas. Details
 and known gaps: [docs/status.md](docs/status.md).
 
+In progress (not in a release): the **Powkiddy V90S** and **V20**, A133P boards on their own stock
+boot chain (`boards/v90s`, `boards/v20`; the V20 untested). See `docs/hardware-notes.md`,
+"Powkiddy V90S and V20".
+
 ## Documentation
 
 | | |

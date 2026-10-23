@@ -785,3 +785,41 @@ AXP717C datasheet's (V1.1), whose 0x20 bits match the AXP2202's. Tested once on 
 2026-10-20: every power-off completed, read 0x21 = 0x02 with a last mark short of 0x67, and one
 short press booted it. Completed power-offs read 0x02 before the fix as well, so these are
 samples, not proof that the fix made the cut.
+
+## Powkiddy V90S and V20 (2026-10-23)
+
+Two more A133P boards, from one stock firmware: the V90S (clamshell, no sticks, rumble) and the
+V20 (vertical, two sticks, L3/R3, no rumble). Their stock card's boot0, U-Boot package, env and
+device tree are byte-identical; a strap pin tells them apart (PE3, high on the V20). The V20 is
+carried untested; the lab has a V90S. Read from the stock blobs, not yet confirmed on a unit:
+
+- **DRAM:** DDR3 at 576 MHz (boot0 `dram_type` 3, and the stock tree's `/dram` node), not the
+  MagicX boards' DDR4 at 792 MHz. The SDK's boot0 is set up for the latter, which is why the
+  first images run the stock boot0 (`make-own-kernel-stock.sh v90s`). The SDK pack writes
+  `sys_config.fex`'s `[dram_para]` into boot0 word for word (checked on the Zero 28 build), so
+  the SDK chain is a matter of these boards' values, which `boards/v90s/sys_config.fex` carries.
+- **Panel:** `RGP35_NV3051`, 640x480, 4-lane DSI, landscape-native: no rotation. dclk 25 MHz,
+  ht 825, vt 514 (58.96 Hz if disp2 hits the clock). Driver: `sdk-patches/tree/150`.
+- **Pad:** the stock `adc-joypad` binding (driver: `sdk-patches/tree/151`), which comes from
+  ROCKNIX's singleadc joypad: buttons on GPIOs, the d-pad as a hat, the V20's sticks behind a
+  4-channel multiplexer on GPADC channel 0 (select PH1/PH0, enable PH5), rumble on PWM2 (PD20,
+  V90S). The board trees put the face buttons on the A133P line's codes (A 305, B 304, X 308,
+  Y 307) and name the pad per board (`Powkiddy V90S Gamepad`, `Powkiddy V20 Gamepad`).
+- **Volume keys** on the LRADC (KEY_VOLUMEUP at 720 mV, KEY_VOLUMEDOWN at 1080 mV); power key
+  on the AXP2202.
+- **Cards:** TF1 is sdc0 (card detect PF6, the boot slot), TF2 is sdc1 (card detect PG6); the
+  eMMC controller is off. Both slots have a card-detect switch, so `board.conf` names SD2's
+  (`SD2_CD_PIN`) for `oakmoss-cards.sh`.
+- **Rails:** bldo1 feeds port G (the shoulder buttons and the second slot) and is kept always on
+  in the board tree; the stock tree lists it only as the panel's third rail. The stock rails
+  differ from the MagicX ones (bldo3, the panel's, at 2.8 V, not 3.3 V), and `sys_config.fex`
+  carries the stock values because the pack merges it into the tree that U-Boot reads.
+- **Radio:** none on the V90S. The V20's stock tree keeps the SDIO radio off too.
+- **Battery:** the shared tree says 3000 mAh, the V90S's cell; the V20's is sold as 5000 mAh.
+- **Stock kernel:** Tina 4.9.191, PowerVR DDK 1.19@6345021 (our userland's). It carries a vendor
+  board-check driver (`ENC_SW2001`, an I2C device on TWI1); we build none, and the board trees
+  disable its node. The stock tree's other nodes all bind in our kernel.
+
+`boards/v90s/board.dts` and `boards/v20/board.dts` are the stock tree (decompiled) with the edits
+in `scripts/make-board-dts-powkiddy.py`; `sys_config.fex` is the Zero 28's with the stock values
+(`scripts/make-sys-config-powkiddy.py`). Both scripts take the decompiled stock tree as input.

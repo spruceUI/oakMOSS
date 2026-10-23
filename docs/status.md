@@ -4,6 +4,12 @@ oakMOSS is bench-tested on one of each board, a Zero 28, a Zero 40 and an XU20 V
 spruceOS on the user card (September 2026). The releases on GitHub are betas. Treat anything
 below that is not marked as tested as untested.
 
+## Powkiddy V90S and V20 (in progress)
+
+Branch work of 2026-10-23, in no release: board trees, the panel and pad drivers (`docs/sdk-mods.md`
+round 31) and the stock-chain image (`docs/building.md`). Not yet booted on the lab V90S; the V20 is
+carried untested. `docs/hardware-notes.md`, "Powkiddy V90S and V20", lists what is known.
+
 ## Releases and spruceOS
 
 v0.6.0-beta.1 (2026-10-20) switches the AXP2202 off itself at a power-off from spruce's menu, so
