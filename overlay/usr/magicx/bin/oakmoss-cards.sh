@@ -19,6 +19,7 @@ MEDIA=${MEDIA:-/media}
 SD2_GLOB=${SD2_GLOB:-/sys/block/mmcblk*}
 DEV_GLOB=${DEV_GLOB:-mmcblk*}
 CD_FILE=${CD_FILE:-/sys/kernel/debug/gpio}
+SD2_CD_GPIO_FILE=${SD2_CD_GPIO_FILE:-/usr/magicx/sd2-cd-gpio}
 log() { echo "$(cut -d' ' -f1 /proc/uptime) cards: $*" >> "$LOG" 2>/dev/null; }
 mounted() { grep -q " $1 " /proc/mounts; }
 
@@ -75,8 +76,14 @@ sd1() {
 
 # The SD2 slot's card-detect switch, where debugfs lists it: one "cd" line, "hi" with no card (PF6
 # on these boards is pulled up and a card pulls it low). Without exactly one such line: unknown.
+# A board with a switch on both slots (Powkiddy V90S/V20: TF1 PF6, TF2 PG6) names SD2's GPIO in
+# $SD2_CD_GPIO_FILE (build.sh, from board.conf's SD2_CD_PIN), and the test reads that line alone.
 slot_empty() {
     [ -e "$CD_FILE" ] || mount -t debugfs none "${CD_FILE%/*}" 2>/dev/null
+    if [ -r "$SD2_CD_GPIO_FILE" ]; then
+        grep "gpio-$(cat "$SD2_CD_GPIO_FILE") " "$CD_FILE" 2>/dev/null | grep '|cd ' | grep -q ' in *hi'
+        return
+    fi
     [ "$(grep -c '|cd ' "$CD_FILE" 2>/dev/null)" = 1 ] && grep '|cd ' "$CD_FILE" | grep -q ' in *hi'
 }
 

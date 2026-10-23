@@ -28,16 +28,18 @@ The bitmaps are 24-bit BMP; U-Boot's parser takes 24/32 bpp, bottom-up rows.
 import os, subprocess, sys
 from PIL import Image, ImageDraw, ImageFont
 
-BOARDS = {"xu20": (1024, 768, 180), "zero40": (480, 800, 0), "zero28": (480, 640, 90)}
+BOARDS = {"xu20": (1024, 768, 180), "zero40": (480, 800, 0), "zero28": (480, 640, 90),
+          "v90s": (640, 480, 0), "v20": (640, 480, 0)}
 # How the boot logo is turned for each panel (PIL rotate, counter-clockwise): the XU20's
 # panel scans upside down, the Zero 40's is upright, and the Zero 28's is mounted portrait
 # with the picture turned 90 degrees clockwise - the way its long-standing overlay logo
-# (the SDK original rotated 270) has always been drawn.
-LOGO_ROT = {"xu20": 180, "zero40": 0, "zero28": 270}
+# (the SDK original rotated 270) has always been drawn. The Powkiddy panels are landscape
+# and upright (640x480, no rotation).
+LOGO_ROT = {"xu20": 180, "zero40": 0, "zero28": 270, "v90s": 0, "v20": 0}
 # Logo side in pixels. The Zero 28's own boot chain gives its boot-resource partition
 # only 512 sectors (256 KiB); a 400 px 32-bit logo (640 KB) made the SDK pack fail with
 # "dl file boot-resource.fex size too large" (2026-09-18), so it gets 200 px (160 KB).
-LOGO_SIZE = {"xu20": 400, "zero40": 400, "zero28": 200}
+LOGO_SIZE = {"xu20": 400, "zero40": 400, "zero28": 200, "v90s": 200, "v20": 200}
 TREE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets", "spruce-tree.png")
 FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 FONTB = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"

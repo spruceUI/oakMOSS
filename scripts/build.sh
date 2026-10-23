@@ -145,6 +145,14 @@ apply_overlay() {
         warn "no Arm toolchain at $ARMGNU_DIR: the image gets no oakmoss-sd1part (no SD1 installs), no oakmoss-backlight (the charge screen's backlight stays on while dark) and no BatteryPlus"
     fi
     printf '%s\n' "$DEVICE_MARKER" > "$SDK_DIR/package/add-rootfs-demo/usr/magicx/device"
+    # A board whose first slot has a card-detect switch too (the Powkiddy boards: TF1 PF6, TF2 PG6)
+    # names its second slot's, as a GPIO number, for oakmoss-cards.sh's empty-slot test. Boards
+    # without SD2_CD_PIN get no file and keep the one-switch test.
+    if [ -n "${SD2_CD_PIN:-}" ]; then
+        [[ $SD2_CD_PIN =~ ^P([A-M])([0-9]+)$ ]] || die "boards/$board/board.conf: SD2_CD_PIN=$SD2_CD_PIN is not a pin like PG6"
+        local bank=${BASH_REMATCH[1]} pin=${BASH_REMATCH[2]}
+        printf '%s\n' $(( ($(printf '%d' "'$bank") - 65) * 32 + pin )) > "$SDK_DIR/package/add-rootfs-demo/usr/magicx/sd2-cd-gpio"
+    fi
     oakmoss_version > "$SDK_DIR/package/add-rootfs-demo/usr/magicx/version"
     oakmoss_build > "$SDK_DIR/package/add-rootfs-demo/usr/magicx/build"
     chmod 0755 "$SDK_DIR/package/add-rootfs-demo/usr/magicx/bin/"*
@@ -389,7 +397,7 @@ case $STEP in
   cont)
     run_make cont "cp target/allwinner/a133-aw3/defconfig .config;" ;;
   overlay)
-    apply_overlay "${1:?board: zero28|zero40|xu20}"; log "overlay for $1 staged in $SDK_DIR" ;;
+    apply_overlay "${1:?board: zero28|zero40|xu20|v90s|v20}"; log "overlay for $1 staged in $SDK_DIR" ;;
   phase1)
     TOOLCHAIN=vendor; export TOOLCHAIN; apply_overlay zero28
     run_make phase1 "$(install_config phase1.config)" ;;
@@ -403,7 +411,7 @@ case $STEP in
         die "U-Boot build failed"
     check_uboot; log "U-Boot installed: $UBOOT_BIN ($(md5_of "$UBOOT_BIN"))" ;;
   image)
-    BOARD=${1:?board: zero28|zero40|xu20}
+    BOARD=${1:?board: zero28|zero40|xu20|v90s|v20}
     [ -x "$OPENIXCARD_BIN" ] || die "OpenixCard not found at $OPENIXCARD_BIN (scripts/build-openixcard.sh)"
     check_uboot
     apply_overlay "$BOARD"
