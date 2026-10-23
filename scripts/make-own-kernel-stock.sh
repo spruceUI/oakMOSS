@@ -74,7 +74,8 @@ OURPKG=$(ls "$BUILD"/*.img.dump/boot_package.fex 2>/dev/null | head -1)
 grep -q "^device=$BOARD" "$BUILD/BUILD-INFO.txt" 2>/dev/null || die "$BUILD is not a $BOARD build"
 [ -d "$DUMP" ] || die "stock firmware not unpacked at $STOCK_DIR (scripts/$UNPACKER)"
 squashfs_tools; mkenvimage_tool
-MKE2FS=$(command -v mke2fs || true); [ -n "$MKE2FS" ] || die "need mke2fs (e2fsprogs)"
+# Debian keeps mke2fs in /usr/sbin, which a non-login shell's PATH lacks (B169, 2026-10-23).
+MKE2FS=$(command -v mke2fs || command -v /usr/sbin/mke2fs || command -v /sbin/mke2fs || true); [ -n "$MKE2FS" ] || die "need mke2fs (e2fsprogs)"
 D=$OAKMOSS_ROOT/diag
 FBFILL=$BUILDS_DIR/fbfill
 if [ "$DIAG" = 1 ] && [ ! -x "$FBFILL" ]; then
