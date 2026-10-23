@@ -1,0 +1,21 @@
+--- a/device/config/chips/a133/configs/aw3/linux/config-4.9
++++ b/device/config/chips/a133/configs/aw3/linux/config-4.9
+@@ -1365,6 +1365,9 @@
+ # CONFIG_KEYBOARD_CAP11XX is not set
+ # CONFIG_KEYBOARD_BCM is not set
+ CONFIG_KEYBOARD_SUNXI=y
++# round 31: the Powkiddy V90S/V20 pad (tree patch 151), answered here: the build's silentoldconfig
++# stops at any new symbol, whatever its default
++CONFIG_JOYSTICK_ADC_JOYPAD=y
+ # CONFIG_GPIO_IR_RX_SUNXI is not set
+ # CONFIG_GPIO_IR_TX_SUNXI is not set
+ CONFIG_SIMPLE_GAMEPAD=m
+@@ -2460,6 +2463,8 @@
+ CONFIG_LCD_SUPPORT_WILLIAMLCD=y
+ CONFIG_LCD_SUPPORT_LQ101R1SX03=y
+ CONFIG_LCD_SUPPORT_INET_DSI_PANEL=y
++# round 31: the Powkiddy V90S/V20 panel (tree patch 150)
++CONFIG_LCD_SUPPORT_RGP35_NV3051=y
+ # CONFIG_LCD_SUPPORT_WTL096601G03 is not set
+ # CONFIG_LCD_SUPPORT_RT13QV005D is not set
+ # CONFIG_LCD_SUPPORT_ST7789V_CPU is not set
