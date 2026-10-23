@@ -8,7 +8,11 @@
 # hands the kernel, it is ours), and OUR rootfs squashfs in the rootfs partition
 # - the same kernel, modules, PowerVR 1.19 stack and userland the Zero 28 runs.
 #
-#   scripts/make-own-kernel-stock.sh <board> <build dir> [out dir]     board: xu20 | zero40
+#   scripts/make-own-kernel-stock.sh <board> <build dir> [out dir]     board: xu20 | zero40 | v90s | v20
+#
+# The Powkiddy V90S and V20 share one stock card (Tina Linux, not Android): its boot0 (DDR3 at
+# 576 MHz, which the SDK's boot0 is not set up for), its U-Boot package and its v0 boot image
+# header. No dtbo or vbmeta exist there; the partitions keep their places, blank.
 #
 # Why not the Android kernel (scripts/make-hybrid-stock.sh): its 1.11 GPU driver
 # exports no display-class API, so no Linux GPU userland can initialize on it
@@ -32,13 +36,16 @@
 # PSTORE=1 captures panics/oopses to the card's pstore partition, readable after the
 # next good boot with: mount -t pstore pstore /sys/fs/pstore; cat /sys/fs/pstore/*
 . "$(dirname "$0")/lib.sh"
-BOARD=${1:?board: xu20 | zero40}; shift || true
+BOARD=${1:?board: xu20 | zero40 | v90s | v20}; shift || true
+STOCK=android
 case "$BOARD" in
     xu20)   STOCK_DIR=$XU20_STOCK_DIR;   DUMP=$STOCK_DIR/$XU20_STOCK_IMG.dump;   CHAIN_SHA=$XU20_STOCK_IMG_SHA256;   UNPACKER=unpack-xu20-stock.sh
             CHAIN="XU20 V32 stock firmware (github.com/Magicx-Breeze/XU20_V32, Developers release)" ;;
     zero40) STOCK_DIR=$ZERO40_STOCK_DIR; DUMP=$STOCK_DIR/$ZERO40_STOCK_IMG.dump; CHAIN_SHA=$ZERO40_STOCK_IMG_SHA256; UNPACKER=unpack-zero40-stock.sh
             CHAIN="Zero 40 stock firmware (github.com/Magicx-Breeze/Zero40, release Zero40_V1, adb.img)" ;;
-    *) die "unknown board $BOARD (xu20 | zero40)" ;;
+    v90s|v20) STOCK_DIR=$POWKIDDY_STOCK_DIR; DUMP=$STOCK_DIR/items; CHAIN_SHA=$POWKIDDY_STOCK_SHA256; UNPACKER=unpack-powkiddy-stock.sh; STOCK=tina
+            CHAIN="Powkiddy V90S/V20 stock card (Tina Linux; the two boards share it)" ;;
+    *) die "unknown board $BOARD (xu20 | zero40 | v90s | v20)" ;;
 esac
 BUILD=${1:?build directory (builds/<stamp>-$BOARD)}; shift || true
 ST=$(stamp); OUT=${1:-$BUILDS_DIR/$ST-$BOARD-own}
@@ -80,9 +87,19 @@ BOOT0=$(f '12345678_1234567890BOOT_0'); BOOT0_NAND=$DUMP/'BOOT    _BOOT0_0000000
 # BOOTRES=<file> replaces the stock boot-resource partition (bootloader, p1): the
 # output of scripts/make-boot-resource.py, whose bootloader screens fit this panel.
 BOOTPKG=$(f '12345678_BOOTPKG-00000000'); BOOTIMG=$(f 'RFSFAT16_BOOT_FEX00000000')
-if [ -n "${BOOTRES:-}" ]; then [ -f "$BOOTRES" ] || die "BOOTRES=$BOOTRES: no such file"; log "boot-resource: $BOOTRES (board-sized bootloader screens)"; else BOOTRES=$(f 'RFSFAT16_BOOT-RESOURCE_FE'); fi
-DTBO=$(f 'RFSFAT16_DTBO_FEX00000000'); ENVSTOCK=$(f 'RFSFAT16_ENV_FEX000000000')
-VBMETA=$(f 'RFSFAT16_VBMETA_FEX000000'); VBMETA_SYS=$(f 'RFSFAT16_VBMETA_SYSTEM_FE'); VBMETA_VEN=$(f 'RFSFAT16_VBMETA_VENDOR_FE')
+if [ -n "${BOOTRES:-}" ]; then [ -f "$BOOTRES" ] || die "BOOTRES=$BOOTRES: no such file"; log "boot-resource: $BOOTRES (board-sized bootloader screens)"
+elif [ "$STOCK" = tina ] && [ ! -f "$DUMP/RFSFAT16_BOOT-RESOURCE_FE" ]; then
+    # the Tina stock chain is public without its logo partition: take this build's (our logo)
+    BOOTRES=$(ls "$BUILD"/*.img.dump/boot-resource.fex 2>/dev/null | head -1); [ -f "$BOOTRES" ] || die "no boot-resource.fex under $BUILD"
+    log "boot-resource: this build's ($BOOTRES)"
+else BOOTRES=$(f 'RFSFAT16_BOOT-RESOURCE_FE'); fi
+ENVSTOCK=$(f 'RFSFAT16_ENV_FEX000000000')
+if [ "$STOCK" = android ]; then
+    DTBO=$(f 'RFSFAT16_DTBO_FEX00000000')
+    VBMETA=$(f 'RFSFAT16_VBMETA_FEX000000'); VBMETA_SYS=$(f 'RFSFAT16_VBMETA_SYSTEM_FE'); VBMETA_VEN=$(f 'RFSFAT16_VBMETA_VENDOR_FE')
+else
+    DTBO=; VBMETA=; VBMETA_SYS=; VBMETA_VEN=      # Tina stock: these stay blank
+fi
 [ "$(head -c 8 "$BOOT0" | tail -c 4)" = "eGON" ] || die "boot0 magic missing"
 [ "$(basename "$BOOT0")" = "12345678_1234567890BOOT_0" ] || die "wrong boot0 item: need the card one"
 if [ -f "$BOOT0_NAND" ] && cmp -s "$BOOT0" "$BOOT0_NAND"; then die "boot0 sanity check failed: the card and NAND boot0 items are identical"; fi
@@ -191,19 +208,20 @@ python3 "$OAKMOSS_ROOT/scripts/toc1-checksum.py" --fix "$W/boot_package.fex"
 # boot image: the stock header (addresses, page size, its command line) with our
 # kernel, a placeholder ramdisk (our kernel mounts root= itself), our tree, and no
 # header command line of its own.
-python3 - "$BOOTIMG" "$OURBOOT" "$W/our.dtb" "$W/boot.img" <<'PY'
+python3 - "$BOOTIMG" "$OURBOOT" "$W/our.dtb" "$W/boot.img" "$STOCK" <<'PY'
 import struct, sys, hashlib
-stock, ours, dtb, out = sys.argv[1:5]
+stock, ours, dtb, out, kind = sys.argv[1:6]
 h = bytearray(open(stock, 'rb').read(2048))
 ps = struct.unpack_from('<I', h, 36)[0]; hv = struct.unpack_from('<I', h, 40)[0]
-assert h[:8] == b'ANDROID!' and hv == 2, "expected a header v2 stock boot image"
+assert h[:8] == b'ANDROID!' and hv == (2 if kind == 'android' else 0), f"expected a header v{2 if kind == 'android' else 0} stock boot image, got v{hv}"
 o = open(ours, 'rb').read(); oks, ops = struct.unpack_from('<I', o, 8)[0], struct.unpack_from('<I', o, 36)[0]
 kernel = o[ops:ops + oks]
 assert kernel[56:60] == b'ARM\x64', "our boot.fex does not carry an arm64 Image"
-ramdisk = b'\0' * 12; tree = open(dtb, 'rb').read()
+ramdisk = b'\0' * 12; tree = open(dtb, 'rb').read() if hv == 2 else b''
 pg = lambda n: (n + ps - 1) // ps * ps
 struct.pack_into('<I', h, 8, len(kernel)); struct.pack_into('<I', h, 16, len(ramdisk)); struct.pack_into('<I', h, 24, 0)
-struct.pack_into('<I', h, 1632, 0); struct.pack_into('<I', h, 1648, len(tree))
+if hv == 2:
+    struct.pack_into('<I', h, 1632, 0); struct.pack_into('<I', h, 1648, len(tree))
 body = kernel.ljust(pg(len(kernel)), b'\0') + ramdisk.ljust(pg(len(ramdisk)), b'\0') + tree.ljust(pg(len(tree)), b'\0')
 sha = hashlib.sha1(); 
 for part, n in ((kernel, len(kernel)), (ramdisk, len(ramdisk)), (b'', 0)):
@@ -211,7 +229,8 @@ for part, n in ((kernel, len(kernel)), (ramdisk, len(ramdisk)), (b'', 0)):
 h[576:576 + 20] = sha.digest(); h[596:608] = b'\0' * 12
 h[64:576] = b'\0' * 512   # no header command line: no Android firmware paths, no dtbo overlay request; bootargs are ours
 open(out, 'wb').write(bytes(h).ljust(ps, b'\0') + body)
-print(f"    boot.img: kernel {len(kernel)} B (ours), ramdisk placeholder, dtb {len(tree)} B (ours), header v2, header cmdline blank")
+print(f"    boot.img: kernel {len(kernel)} B (ours), ramdisk placeholder, "
+      + (f"dtb {len(tree)} B (ours), header v2" if hv == 2 else "header v0, the tree from the package") + ", header cmdline blank")
 PY
 
 log "env: stock variables, root and init pointed at our rootfs (squashfs, our kernel)"
@@ -356,16 +375,16 @@ python3 "$OAKMOSS_ROOT/scripts/toc1-checksum.py" --check "$IMG" 32800 || die "th
 [ "$(dd if="$IMG" bs=512 skip=241664 count=1 status=none | head -c 4)" = "hsqs" ] || die "rootfs partition is not our squashfs"
 {
   echo "device=$BOARD"; echo "kind=own-kernel-stock-chain"; echo "built=$ST"; echo "oakmoss=$(oakmoss_version)"
-  echo "boot_chain=$CHAIN: card boot0 (also mirrored at sector 256), boot package with OUR device tree in place of its dtb item (checksum redone), boot-resource, dtbo, vbmeta x3"
+  echo "boot_chain=$CHAIN: card boot0 (also mirrored at sector 256), boot package with OUR device tree in place of its dtb item (checksum redone), boot-resource$([ "$STOCK" = android ] && echo ", dtbo, vbmeta x3")"
   echo "boot_chain_sha256=$CHAIN_SHA"
-  echo "kernel=ours from $BUILD ($(grep -m1 '^kernel_encrypt_obj_md5' "$BUILD/BUILD-INFO.txt")), in a header-v2 boot image with our device tree; board_dts=$(grep -m1 '^board_dts' "$BUILD/BUILD-INFO.txt" | cut -d= -f2-)"
+  echo "kernel=ours from $BUILD ($(grep -m1 '^kernel_encrypt_obj_md5' "$BUILD/BUILD-INFO.txt")), in a $([ "$STOCK" = android ] && echo "header-v2 boot image with our device tree" || echo "header-v0 boot image (the tree comes from the package)"); board_dts=$(grep -m1 '^board_dts' "$BUILD/BUILD-INFO.txt" | cut -d= -f2-)"
   echo "rootfs=our $BOARD rootfs squashfs from $BUILD (md5 $(md5_of "$ROOTFS") before the hand-off/probe repack; our modules, PowerVR 1.19)"
   echo "handoff=$([ "$DIAG" = 1 ] && echo "DIAGNOSTIC (init=$INIT, experiments: ${EXPERIMENTS:-none})" || echo stock)"
-  echo "layout=bootloader env boot misc dtbo rootfs(p6, squashfs) rootfs_data UDISK vbmeta vbmeta_system vbmeta_vendor; GPT layout ${GPT_LAYOUT:-sdk}; root=PARTUUID via mmc_root"
+  echo "layout=bootloader env boot misc dtbo rootfs(p6, squashfs) rootfs_data UDISK vbmeta vbmeta_system vbmeta_vendor$([ "$STOCK" = tina ] && echo " (dtbo and vbmeta blank)"); GPT layout ${GPT_LAYOUT:-sdk}; root=PARTUUID via mmc_root"
   e=$(tr '\n' ';' < "$W/env.txt")
   if [ ${#e} -gt 400 ]; then e="${e:0:400}...[truncated]"; fi
   echo "env=$e"
-  echo "outputs=$(basename "$IMG") (raw GPT image: write raw, eject, boot; system card in the sdc2 slot, user card in the sdc0 slot)"
+  echo "outputs=$(basename "$IMG") (raw GPT image: write raw, eject, boot; $([ "$STOCK" = tina ] && echo "system card in TF1 (sdc0), user card in TF2 (sdc1)" || echo "system card in the sdc2 slot, user card in the sdc0 slot"))"
 } > "$OUT/BUILD-INFO.txt"
 cp "$W/env.txt" "$OUT/env.txt"; ( cd "$OUT" && md5sum ./*.img > md5sums.txt )
 log "$BOARD own-kernel image ready: $OUT"; ls -la "$OUT" >&2
