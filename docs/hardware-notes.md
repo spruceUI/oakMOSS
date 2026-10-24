@@ -819,6 +819,13 @@ carried untested; the lab has a V90S. Read from the stock blobs, not yet confirm
 - **Stock kernel:** Tina 4.9.191, PowerVR DDK 1.19@6345021 (our userland's). It carries a vendor
   board-check driver (`ENC_SW2001`, an I2C device on TWI1); we build none, and the board trees
   disable its node. The stock tree's other nodes all bind in our kernel.
+- **U-Boot env (on a unit, 2026-10-23):** the stock U-Boot reads a REDUNDANT env (`env` and
+  `env-redund`, a flag byte after the CRC). The first V90S card carried a plain one: no logo,
+  backlight on, nothing written to either card. The U-Boot carries a built-in fallback env
+  (`bootcmd=run distro_bootcmd`), which boots nothing of ours. The own lane now writes both copies.
+- **Boot logo:** the stock `bootlogo.bmp` is full-screen (640x480, 32 bpp) beside `bat/`, fonts
+  and `lcd_compatible_index.txt`; the first card's 200x200 logo is not known to display on the
+  stock U-Boot, so the next one takes the stock boot-resource (`BOOTRES=`).
 
 `boards/v90s/board.dts` and `boards/v20/board.dts` are the stock tree (decompiled) with the edits
 in `scripts/make-board-dts-powkiddy.py`; `sys_config.fex` is the Zero 28's with the stock values

@@ -236,9 +236,12 @@ PY
 
 log "env: stock variables, root and init pointed at our rootfs (squashfs, our kernel)"
 ROOT_UUID=$(python3 -c 'import uuid; print(uuid.uuid4())'); printf '%s' "$ROOT_UUID" > "$W/rootfs.uuid"
-python3 - "$ENVSTOCK" "$W/env.txt" "$ROOT_UUID" "$INIT" "${CONSOLE:-}" "${EXTRA_BOOTARGS:-}" <<'PY'
-import os, sys
-d = open(sys.argv[1], 'rb').read()[4:]; root_uuid, init, console, extra_args = sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6]
+STOCK=$STOCK python3 - "$ENVSTOCK" "$W/env.txt" "$ROOT_UUID" "$INIT" "${CONSOLE:-}" "${EXTRA_BOOTARGS:-}" <<'PY'
+import os, struct, sys, zlib
+raw = open(sys.argv[1], 'rb').read(); root_uuid, init, console, extra_args = sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6]
+# A redundant env (the Powkiddy cards) has a flag byte after the CRC; read as plain, it
+# prefixed the first variable's name (B169R's env had "\x01bootdelay").
+d = raw[5:] if zlib.crc32(raw[5:]) & 0xffffffff == struct.unpack_from('<I', raw)[0] else raw[4:]
 kv = dict(v.decode().split('=', 1) for v in d.split(b'\0') if v)
 kv['nand_root'] = kv['mmc_root'] = 'PARTUUID=' + root_uuid
 kv['init'] = init; kv['loglevel'] = '7'
@@ -256,6 +259,10 @@ kv['cma'] = '32M'
 kv['partitions'] = 'bootloader@mmcblk0p1:env@mmcblk0p2:boot@mmcblk0p3:misc@mmcblk0p4:dtbo@mmcblk0p5:rootfs@mmcblk0p6:rootfs_data@mmcblk0p7:UDISK@mmcblk0p8:vbmeta@mmcblk0p9:vbmeta_system@mmcblk0p10:vbmeta_vendor@mmcblk0p11'
 if extra_args and 'pstore_blk' in extra_args:
     kv['partitions'] += ':pstore@mmcblk0p12'
+# The redundant env's second copy (mkenvimage -r below) is the last GPT entry, so
+# /etc/fw_env.config's /dev/by-name/env-redund exists.
+if os.environ.get('STOCK') == 'tina':
+    kv['partitions'] += ':env-redund@mmcblk0p%d' % (13 if 'pstore@' in kv['partitions'] else 12)
 # ROOTDELAY=N (diagnostic) replaces rootwait: the kernel sleeps N s, tries the root
 # device once and panics if it is missing, so with panic=S a boot whose SD1 host never
 # enumerated reboots by itself instead of waiting on the logo forever (2026-09-18).
@@ -297,11 +304,14 @@ if os.environ.get('BOOTMARK') == '1':
 assert kv['init'] in ('/sbin/init', '/sbin/init-probe', '/sbin/init-stamp') and 'rdinit' not in kv['setargs_mmc'] and kv['bootcmd'].endswith('run setargs_mmc boot_normal')
 open(sys.argv[2], 'w').write(''.join(f'{k}={v}\n' for k, v in kv.items()))
 PY
-"$MKENVIMAGE" -s 131072 -p 0x00 -o "$W/env.fex" "$W/env.txt"
+# The Powkiddy stock U-Boot reads a redundant env (env + env-redund, a flag byte after the CRC) and
+# falls back to its built-in env on a plain one, which boots nothing (V90S, 2026-10-23).
+ENV_REDUND=; [ "$STOCK" = tina ] && ENV_REDUND=-r
+"$MKENVIMAGE" $ENV_REDUND -s 131072 -p 0x00 -o "$W/env.fex" "$W/env.txt"
 
 log "image: GPT layout ${GPT_LAYOUT:-sdk} (sdk: 128 entries @LBA 2048; stock: 16 @LBA 2), stock boot0 @16 and @256, our tree in the stock package @32800"
 IMG=$OUT/oakmoss-$BOARD-own-$ST-sd1.img
-python3 - "$IMG" "$W" "$BOOT0" "$W/boot_package.fex" "$BOOTRES" "$DTBO" "$VBMETA" "$VBMETA_SYS" "$VBMETA_VEN" "$PSTORE_PARTUUID" "$PSTORE" <<'PY'
+STOCK=$STOCK python3 - "$IMG" "$W" "$BOOT0" "$W/boot_package.fex" "$BOOTRES" "$DTBO" "$VBMETA" "$VBMETA_SYS" "$VBMETA_VEN" "$PSTORE_PARTUUID" "$PSTORE" <<'PY'
 import struct, sys, uuid, zlib, os
 img, W, boot0, bootpkg, bootres, dtbo, vbmeta, vbmeta_sys, vbmeta_ven, pstore_uuid, pstore = sys.argv[1:12]
 ROOT_UUID = uuid.UUID(open(f'{W}/rootfs.uuid').read().strip()); S = 512
@@ -317,6 +327,9 @@ parts = [('bootloader', 65536, bootres), ('env', 32768, f'{W}/env.fex'), ('boot'
 # block, and pstore records there would read as boot commands.
 if pstore == '1':
     parts.append(('pstore', 4096, None))
+# The redundant env's second copy, the same image, last for the same reason (256 KB, as on the stock card).
+if os.environ.get('STOCK') == 'tina':
+    parts.append(('env-redund', 512, f'{W}/env.fex'))
 start = 40960; ents = []
 for name, size, src in parts: ents.append((name, start, size, src)); start += size
 total = start + 2048 + 34
@@ -381,7 +394,7 @@ python3 "$OAKMOSS_ROOT/scripts/toc1-checksum.py" --check "$IMG" 32800 || die "th
   echo "kernel=ours from $BUILD ($(grep -m1 '^kernel_encrypt_obj_md5' "$BUILD/BUILD-INFO.txt")), in a $([ "$STOCK" = android ] && echo "header-v2 boot image with our device tree" || echo "header-v0 boot image (the tree comes from the package)"); board_dts=$(grep -m1 '^board_dts' "$BUILD/BUILD-INFO.txt" | cut -d= -f2-)"
   echo "rootfs=our $BOARD rootfs squashfs from $BUILD (md5 $(md5_of "$ROOTFS") before the hand-off/probe repack; our modules, PowerVR 1.19)"
   echo "handoff=$([ "$DIAG" = 1 ] && echo "DIAGNOSTIC (init=$INIT, experiments: ${EXPERIMENTS:-none})" || echo stock)"
-  echo "layout=bootloader env boot misc dtbo rootfs(p6, squashfs) rootfs_data UDISK vbmeta vbmeta_system vbmeta_vendor$([ "$STOCK" = tina ] && echo " (dtbo and vbmeta blank)"); GPT layout ${GPT_LAYOUT:-sdk}; root=PARTUUID via mmc_root"
+  echo "layout=bootloader env boot misc dtbo rootfs(p6, squashfs) rootfs_data UDISK vbmeta vbmeta_system vbmeta_vendor$([ "$STOCK" = tina ] && echo " (dtbo and vbmeta blank), env-redund last (redundant env)"); GPT layout ${GPT_LAYOUT:-sdk}; root=PARTUUID via mmc_root"
   e=$(tr '\n' ';' < "$W/env.txt")
   if [ ${#e} -gt 400 ]; then e="${e:0:400}...[truncated]"; fi
   echo "env=$e"
