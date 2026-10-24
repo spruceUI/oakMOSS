@@ -826,12 +826,14 @@ carried untested; the lab has a V90S. Read from the stock blobs, not yet confirm
 - **Boot logo:** the stock `bootlogo.bmp` is full-screen (640x480, 32 bpp) beside `bat/`, fonts
   and `lcd_compatible_index.txt`; the first card's 200x200 logo is not known to display on the
   stock U-Boot, so the next one takes the stock boot-resource (`BOOTRES=`).
-- **Partition table at 20 MiB (on a unit, 2026-10-24):** the stock U-Boot reads the partition
-  table at sector 40960, where the stock card keeps a byte copy of its MBR and GPT (entries at
-  LBA 2) and Allwinner's `softw411` table in copies 1-3 (40992, 41024, 41056; starts relative to
-  40960); its first partition starts at 41984. A card with its logo FAT at 40960 (the MagicX
-  own-lane shape) gave the backlight and nothing else, twice. `GPT_LAYOUT=powkiddy` writes the
-  stock shape; the MagicX U-Boots read the ordinary GPT and keep the SDK layout.
+- **Partition table (on a unit, 2026-10-24):** the stock U-Boot reads the GPT entries at LBA 2
+  whatever the header says. A card with them at LBA 2048 (the SDK layout) gave the backlight and
+  nothing else, twice, and came back with both GPT headers rewritten to the CRC of sectors 2-33
+  and the backup entries zeroed (read back, CARDS #58). The stock card has 8 entries at LBA 2,
+  plus a byte copy of its MBR and GPT at sector 40960 and Allwinner's `softw411` table in copies
+  1-3 (40992, 41024, 41056; starts relative to 40960), first partition at 41984. Whether U-Boot
+  reads those copies too is not known; `GPT_LAYOUT=powkiddy` writes all of the stock shape. The
+  MagicX U-Boots honour the header's entry LBA and keep the SDK layout.
 
 `boards/v90s/board.dts` and `boards/v20/board.dts` are the stock tree (decompiled) with the edits
 in `scripts/make-board-dts-powkiddy.py`; `sys_config.fex` is the Zero 28's with the stock values
