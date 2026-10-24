@@ -29,7 +29,7 @@ diff -ruN a/lichee/linux-4.9/drivers/input/joystick/Makefile b/lichee/linux-4.9/
 diff -ruN a/lichee/linux-4.9/drivers/input/joystick/adc-joypad.c b/lichee/linux-4.9/drivers/input/joystick/adc-joypad.c
 --- a/lichee/linux-4.9/drivers/input/joystick/adc-joypad.c	1969-12-31 18:00:00
 +++ b/lichee/linux-4.9/drivers/input/joystick/adc-joypad.c	2026-10-23 16:44:33
-@@ -0,0 +1,457 @@
+@@ -0,0 +1,476 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * adc-joypad: the Powkiddy V90S and V20 pad on the 4.9 sunxi kernel, in the stock
@@ -157,9 +157,24 @@ diff -ruN a/lichee/linux-4.9/drivers/input/joystick/adc-joypad.c b/lichee/linux-
 +	return t ? v * t / 100 : v;
 +}
 +
-+/* Axis pairs (ry, rx) and (y, x), as rocknix-singleadc-joypad pairs them */
-+static void jp_report_axes(struct joypad *jp)
++/*
++ * Tina's input core passes every ABS sample on (its duplicate filter is commented
++ * out), so drop unmoved values here as mainline does; else each poll floods the readers.
++ */
++static bool jp_report_abs(struct joypad *jp, unsigned int code, int value)
 +{
++	int old = input_abs_get_val(jp->input, code), fuzz = input_abs_get_fuzz(jp->input, code);
++
++	if (value == old || (fuzz && abs(value - old) < fuzz / 2))
++		return false;
++	input_report_abs(jp->input, code, value);
++	return true;
++}
++
++/* Axis pairs (ry, rx) and (y, x), as rocknix-singleadc-joypad pairs them */
++static bool jp_report_axes(struct joypad *jp)
++{
++	bool changed = false;
 +	int i;
 +
 +	for (i = 0; i + 1 < jp->naxes; i += 2) {
@@ -182,15 +197,16 @@ diff -ruN a/lichee/linux-4.9/drivers/input/joystick/adc-joypad.c b/lichee/linux-
 +		}
 +		vx = clamp(jp_tune(ax, vx), ax->min, ax->max);
 +		vy = clamp(jp_tune(ay, vy), ay->min, ay->max);
-+		input_report_abs(jp->input, ax->code, ax->invert ? -vx : vx);
-+		input_report_abs(jp->input, ay->code, ay->invert ? -vy : vy);
++		changed |= jp_report_abs(jp, ax->code, ax->invert ? -vx : vx);
++		changed |= jp_report_abs(jp, ay->code, ay->invert ? -vy : vy);
 +	}
++	return changed;
 +}
 +
-+static void jp_report_buttons(struct joypad *jp)
++static bool jp_report_buttons(struct joypad *jp)
 +{
 +	int hat[2] = { 0, 0 };	/* ABS_HAT0X, ABS_HAT0Y */
-+	bool has_hat[2] = { false, false };
++	bool has_hat[2] = { false, false }, changed = false;
 +	int i;
 +
 +	for (i = 0; i < jp->nbuttons; i++) {
@@ -203,23 +219,26 @@ diff -ruN a/lichee/linux-4.9/drivers/input/joystick/adc-joypad.c b/lichee/linux-
 +			if (down)
 +				hat[b->code - ABS_HAT0X] += b->value;
 +		} else if (b->type == EV_ABS) {
-+			input_report_abs(jp->input, b->code, down ? b->value : 0);
-+		} else {
++			changed |= jp_report_abs(jp, b->code, down ? b->value : 0);
++		} else if (!!test_bit(b->code, jp->input->key) != down) {
 +			input_report_key(jp->input, b->code, down);
++			changed = true;
 +		}
 +	}
 +	for (i = 0; i < 2; i++)
 +		if (has_hat[i])
-+			input_report_abs(jp->input, ABS_HAT0X + i, clamp(hat[i], -1, 1));
++			changed |= jp_report_abs(jp, ABS_HAT0X + i, clamp(hat[i], -1, 1));
++	return changed;
 +}
 +
 +static void jp_poll(struct work_struct *work)
 +{
 +	struct joypad *jp = container_of(to_delayed_work(work), struct joypad, poll_work);
++	bool changed = jp_report_axes(jp);
 +
-+	jp_report_axes(jp);
-+	jp_report_buttons(jp);
-+	input_sync(jp->input);
++	changed |= jp_report_buttons(jp);
++	if (changed)
++		input_sync(jp->input);
 +	queue_delayed_work(system_freezable_wq, &jp->poll_work, msecs_to_jiffies(jp->poll_ms));
 +}
 +

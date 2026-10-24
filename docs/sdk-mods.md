@@ -529,3 +529,27 @@ hardware.
 On an existing tree: `scripts/apply-sdk-mods.sh` (150, 151 and 152 report `patched`; on a tree
 stamped 24, 150 and 151 report `applied`). The stamp moves, which wipes the kernel build tree.
 `mods_version` 21 -> 25.
+
+## Round 32 (2026-10-24): the Powkiddy pad reports changes only
+
+The V90S showed a "spotty" pad on hardware. Untouched, it sent ABS_HAT0X=0, ABS_HAT0Y=0 and a SYN on
+every poll, 3699 events in 20 s (2026-10-24). The vendor
+input core passes every ABS sample on (131), and 151 reported the hat each poll. PyUI's input thread and
+spruce's two `getevent` shell loops parsed all of it. Stamped 27: 26 is `bundle/20261024`'s.
+
+| what | where | why |
+|---|---|---|
+| `151-input-adc-joypad-powkiddy.patch` (revised) | `drivers/input/joystick/adc-joypad.c` | `jp_report_abs()` drops a hat or stick value that has not moved (for a stick, within half its fuzz, as mainline's filter does). A key is reported only when it differs from the device's key state. The poll sends a SYN only when something was reported. |
+| `scripts/lib.sh` `OAKMOSS_MODS_VERSION` | `build.sh` | refuses a tree with round 31's 151 |
+
+A tree that carries round 31's 151 refuses the revision: it neither reverses nor applies, since the
+driver is a file that patch creates, and a `.upgrade` file maps lines one for one, so it cannot add a
+function. Revert the old revision in the SDK first, from the oakMOSS checkout with `SDK_DIR` as
+`scripts/lib.sh` sets it, then run `scripts/apply-sdk-mods.sh` (151 reports `patched`; the stamp
+moves, which wipes the kernel build tree):
+
+```bash
+git -C "$OAKMOSS_ROOT" show 26eb29e:sdk-patches/tree/151-input-adc-joypad-powkiddy.patch | (cd "$SDK_DIR" && patch -p1 -R)
+```
+
+`mods_version` 25 -> 27.
