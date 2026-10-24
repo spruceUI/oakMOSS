@@ -12,6 +12,9 @@ export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 mount -t proc proc /proc 2>/dev/null
 mount -t sysfs sysfs /sys 2>/dev/null
 mount -t devtmpfs devtmpfs /dev 2>/dev/null
+# The root is the read-only squashfs here: without a tmpfs the mount points below cannot be made
+# and nothing was written (V90S, 2026-10-24). /sbin/init mounts its own /tmp.
+mount -t tmpfs tmpfs /tmp 2>/dev/null
 /usr/magicx/bin/fbfill 660066 2>/dev/null        # magenta: root mounted, init= running
 up() { cut -d' ' -f1 /proc/uptime 2>/dev/null; }
 # The disk the root filesystem is on, by the major:minor of "/".
@@ -45,5 +48,5 @@ if [ -n "$rootdisk" ] && [ -e "/dev/${rootdisk}p8" ] && mount -t ext4 -o rw,noat
     umount /tmp/probe-udisk 2>/dev/null
 fi
 /usr/magicx/bin/fbfill 006666 2>/dev/null        # teal: the probe finished writing, handing over to init
-umount /dev 2>/dev/null; umount /sys 2>/dev/null; umount /proc 2>/dev/null
+umount /tmp 2>/dev/null; umount /dev 2>/dev/null; umount /sys 2>/dev/null; umount /proc 2>/dev/null
 exec /sbin/init

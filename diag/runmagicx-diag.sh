@@ -15,7 +15,7 @@ mkdir -p /mnt/UDISK 2>/dev/null
 log() { echo "$(cut -d' ' -f1 /proc/uptime) $*" >> "$LOG" 2>/dev/null; }
 snapshot() {
     { echo "--- $1"; echo "mounts:"; cat /proc/mounts; echo "partitions:"; cat /proc/partitions;
-      echo "mmc:"; ls -l /dev/mmcblk* 2>&1; echo "power_supply:"; for p in /sys/class/power_supply/*; do echo "[$p]"; cat "$p/uevent" 2>&1; done;
+      echo "mmc:"; ls -l /dev/mmcblk* 2>&1; echo "card detect:"; grep '|cd ' /sys/kernel/debug/gpio 2>&1; echo "power_supply:"; for p in /sys/class/power_supply/*; do echo "[$p]"; cat "$p/uevent" 2>&1; done;
       echo "inputs:"; cat /proc/bus/input/devices 2>&1;
       for e in /sys/class/input/event*; do echo "[$e] name=$(cat $e/device/name 2>/dev/null) key=$(cat $e/device/capabilities/key 2>/dev/null) abs=$(cat $e/device/capabilities/abs 2>/dev/null)"; done;
       echo "sdio devices:"; for d in /sys/bus/sdio/devices/*; do [ -e "$d" ] && echo "$d vendor=$(cat $d/vendor 2>/dev/null) device=$(cat $d/device 2>/dev/null) class=$(cat $d/class 2>/dev/null)"; done;
@@ -26,6 +26,10 @@ snapshot() {
 echo "=== boot $(date '+%Y-%m-%d %H:%M:%S') device=$(cat /usr/magicx/device 2>/dev/null)" >> "$LOG" 2>/dev/null
 fbfill 004400 >> "$LOG" 2>&1
 log "rc.local reached"
+# The card election, as the stock hand-off runs it (SD2 hosts whenever it holds a frontend);
+# without it nothing mounted /mnt/SDCARD and the fallback below took SD1's logo FAT (V90S, 2026-10-24).
+oakmoss-cards.sh mount >> "$LOG" 2>&1
+[ -f /tmp/oakmoss-cards ] && log "cards: $(tr '\n' ' ' < /tmp/oakmoss-cards)"
 COUNT=0
 while ! grep -q SDCARD /proc/mounts && [ $COUNT -lt 60 ]; do
     sleep 0.5; COUNT=$((COUNT + 1))
