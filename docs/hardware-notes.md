@@ -815,6 +815,11 @@ carried untested; the lab has a V90S. Read from the stock blobs, not yet confirm
   differ from the MagicX ones (bldo3, the panel's, at 2.8 V, not 3.3 V), and `sys_config.fex`
   carries the stock values because the pack merges it into the tree that U-Boot reads.
 - **Radio:** none on the V90S. The V20's stock tree keeps the SDIO radio off too.
+- **USB WiFi dongles:** USB1 (`ehci1`/`ohci1`) has its own 5 V switch, `usb1-vbus` on PL8
+  (gpio 360), as on the TrimUI Brick, where a dongle on the USB-C port enumerates on ehci1 with
+  no role switch; usbc0 stays device-only. `USB_WIFI=1` builds 8188eu.ko and 8812au.ko against
+  this kernel (`scripts/build-usb-wifi.sh`) into `/usr/lib/oakmoss/modules/usb-wifi`, which
+  spruce's dongle contract loads. Not yet tried with a dongle on a unit.
 - **Battery:** the shared tree says 3000 mAh, the V90S's cell; the V20's is sold as 5000 mAh.
 - **Stock kernel:** Tina 4.9.191, PowerVR DDK 1.19@6345021 (our userland's). It carries a vendor
   board-check driver (`ENC_SW2001`, an I2C device on TWI1); we build none, and the board trees

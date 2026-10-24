@@ -425,7 +425,16 @@ case $STEP in
     # image with the old logo and the old hand-off). Its exit status and the word ERROR
     # are no use: a good pack prints ERROR lines too. A good pack ends with Dragon's
     # "image.cfg SUCCESS".
-    if ! "$RUN" "$LUNCH echo '=== kernel+rootfs refresh' \$(date); make -j$JOBS 2>&1 | tail -40; [ \${PIPESTATUS[0]} = 0 ] || { echo '=== image: make FAILED'; exit 1; }; gzip -c .config > package/add-rootfs-demo/usr/magicx/tina_config.gz; add-rootfs-demo 2>&1 | tail -5; echo '=== pack' \$(date); pack 2>&1 | tee /tmp/oakmoss-pack.log | tail -25; if grep -q 'update_mbr failed\|size too large' /tmp/oakmoss-pack.log || ! grep -q 'Dragon execute image.cfg SUCCESS' /tmp/oakmoss-pack.log; then echo '=== image: pack FAILED'; exit 1; fi; ls -la out/a133-aw3/*.img" 2>&1 | tee "$LOG"; then
+    if ! "$RUN" "$LUNCH echo '=== kernel+rootfs refresh' \$(date); make -j$JOBS 2>&1 | tail -40; [ \${PIPESTATUS[0]} = 0 ] || { echo '=== image: make FAILED'; exit 1; }; gzip -c .config > package/add-rootfs-demo/usr/magicx/tina_config.gz" 2>&1 | tee "$LOG"; then
+        die "image step failed (log: $LOG)"
+    fi
+    # USB WiFi dongle modules (board.conf USB_WIFI=1), between make and add-rootfs-demo: built against
+    # the kernel this image ships, and outside /lib/modules so that only spruce's contract loads them.
+    if [ "${USB_WIFI:-0}" = 1 ]; then
+        "$OAKMOSS_ROOT/scripts/build-usb-wifi.sh" "$SDK_DIR/package/add-rootfs-demo/usr/lib/oakmoss/modules/usb-wifi" 2>&1 | tee -a "$LOG" ||
+            die "USB WiFi modules did not build (log: $LOG)"
+    fi
+    if ! "$RUN" "$LUNCH add-rootfs-demo 2>&1 | tail -5; echo '=== pack' \$(date); pack 2>&1 | tee /tmp/oakmoss-pack.log | tail -25; if grep -q 'update_mbr failed\|size too large' /tmp/oakmoss-pack.log || ! grep -q 'Dragon execute image.cfg SUCCESS' /tmp/oakmoss-pack.log; then echo '=== image: pack FAILED'; exit 1; fi; ls -la out/a133-aw3/*.img" 2>&1 | tee -a "$LOG"; then
         die "image step failed (log: $LOG)"
     fi
     IMG=$(ls -t "$SDK_DIR"/out/a133-aw3/tina_a133-aw3_*.img | head -1)
@@ -468,6 +477,7 @@ case $STEP in
       case $TOOLCHAIN in armgnu13) echo "toolchain=userland Arm GNU Toolchain 13.3.Rel1 aarch64-none-linux-gnu (glibc 2.38, libstdc++ GLIBCXX_3.4.32); kernel: the same gcc with the vendor binutils; GE8300 km: vendor GCC 6.4 Linaro" ;;
                          *) echo "toolchain=$(grep '^CONFIG_GCC_VERSION=' "$SDK_DIR/.config") $(grep '^CONFIG_GLIBC_VERSION=' "$SDK_DIR/.config")" ;; esac
       echo "kernel_encrypt_obj_md5=$(md5_of "$ENC/encrypt") ($ENCRYPT_OBJ)"
+      [ "${USB_WIFI:-0}" = 1 ] && echo "usb_wifi=/usr/lib/oakmoss/modules/usb-wifi: $(cd "$SDK_DIR/package/add-rootfs-demo/usr/lib/oakmoss/modules/usb-wifi" && sha256sum 8188eu.ko 8812au.ko | awk '{printf "%s %s ", $2, $1}')"
       echo "uboot_md5=$(md5_of "$UBOOT_BIN") ($(strings "$UBOOT_BIN" | grep -m1 '^U-Boot 2018'))"
       echo "overlay_md5=$(cd "$OAKMOSS_ROOT/overlay" && find . -type f | sort | xargs md5sum | md5sum | cut -c1-32)"
       echo "board_dts=$([ -f "$OAKMOSS_ROOT/boards/$BOARD/board.dts" ] && echo "boards/$BOARD/board.dts $(md5_of "$OAKMOSS_ROOT/boards/$BOARD/board.dts")" || echo "the SDK a133-aw3 (Zero 28) tree")"

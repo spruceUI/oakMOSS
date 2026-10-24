@@ -77,6 +77,16 @@ BATTERYPLUS_COMMIT=1c31e89ec1828d51710ad35a607bdfad7e18464e
 BATTERYPLUS_TARBALL=knubat.components-$BATTERYPLUS_COMMIT.tar.gz
 BATTERYPLUS_URL=https://github.com/Mikhailzrick/knubat.components/archive/$BATTERYPLUS_COMMIT.tar.gz
 BATTERYPLUS_SHA256=1619da9e945746ea589edb70efd1095b07d21207be3fa43a4c1598be5c2a2089
+# USB WiFi dongle drivers for spruce's usb_wifi_dongle.sh (8188eu: RTL8188EU(S); 8812au: RTL8811AU/
+# 8812AU/8821AU): the wrapper's tools/a133-usb-wifi sources, built on our kernel by build-usb-wifi.sh.
+RTL8188EU_COMMIT=f42fc9c45d2086c415dce70d3018031b54a7beef
+RTL8188EU_TARBALL=rtl8188eu-$RTL8188EU_COMMIT.tar.gz
+RTL8188EU_URL=https://github.com/lwfinger/rtl8188eu/archive/$RTL8188EU_COMMIT.tar.gz
+RTL8188EU_SHA256=507d32eb91d3d407c7758319c81a36a9dc69e2b89378cabcd382411153927b7b
+RTL8812AU_COMMIT=734485506a30d6237c2deaad666a19f8ca5379f2
+RTL8812AU_TARBALL=rtl8812au-$RTL8812AU_COMMIT.tar.gz
+RTL8812AU_URL=https://github.com/aircrack-ng/rtl8812au/archive/$RTL8812AU_COMMIT.tar.gz
+RTL8812AU_SHA256=ab9d257758ec55a352a5671e3b96c0d73795c5ccea01173d4412dad35fd70d7e
 
 # Shaun Inman's main-zero40 release: the Zero 40 boot chain for the hybrid image.
 MAINZERO40_VERSION=20260202-1

@@ -1,0 +1,40 @@
+diff --git a/osdep_service.c b/osdep_service.c
+index ec49445..108ef63 100644
+--- a/osdep_service.c
++++ b/osdep_service.c
+@@ -1411,7 +1411,7 @@ u64 rtw_division64(u64 x, u64 y)
+ inline u32 rtw_random32(void)
+ {
+ #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0))
+-#if LINUX_VERSION_CODE >- KERNEL_VERSION(6, 1, 0)
++#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+ 	return get_random_u32();
+ #else
+ 	return prandom_u32();
+diff --git a/osdep_service_linux.h b/osdep_service_linux.h
+index 220c370..2b4de84 100644
+--- a/osdep_service_linux.h
++++ b/osdep_service_linux.h
+@@ -438,4 +438,22 @@ extern struct net_device *rtw_alloc_etherdev(int sizeof_priv);
+ #define STRUCT_PACKED __attribute__ ((packed))
+ 
+ 
++
++/*
++ * timer_setup()/from_timer() arrived in 4.15; this tree uses them unguarded.
++ * On older kernels express them through __setup_timer: the callback gets the
++ * timer's own address as its unsigned long argument, which is what
++ * from_timer's container_of expects. (Standard backport shim.)
++ */
++#if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 15, 0))
++#ifndef from_timer
++#define from_timer(var, callback_timer, timer_fieldname) \
++	container_of(callback_timer, typeof(*var), timer_fieldname)
++#endif
++#ifndef timer_setup
++#define timer_setup(timer, callback, flags) \
++	__setup_timer((timer), (void (*)(unsigned long))(callback), (unsigned long)(timer), (flags))
++#endif
++#endif
++
+ #endif
