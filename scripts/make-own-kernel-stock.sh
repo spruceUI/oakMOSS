@@ -308,10 +308,14 @@ PY
 # falls back to its built-in env on a plain one, which boots nothing (V90S, 2026-10-23).
 ENV_REDUND=; [ "$STOCK" = tina ] && ENV_REDUND=-r
 "$MKENVIMAGE" $ENV_REDUND -s 131072 -p 0x00 -o "$W/env.fex" "$W/env.txt"
+# The Powkiddy stock U-Boot reads its partition table at the card's 20 MiB mark (sector 40960), as the
+# stock card lays it out; a card without one showed the backlight and nothing else (V90S, 2026-10-24).
+[ "$STOCK" = tina ] && GPT_LAYOUT=${GPT_LAYOUT:-powkiddy}
+P1=40960; [ "${GPT_LAYOUT:-sdk}" = powkiddy ] && P1=41984
 
 log "image: GPT layout ${GPT_LAYOUT:-sdk} (sdk: 128 entries @LBA 2048; stock: 16 @LBA 2), stock boot0 @16 and @256, our tree in the stock package @32800"
 IMG=$OUT/oakmoss-$BOARD-own-$ST-sd1.img
-STOCK=$STOCK python3 - "$IMG" "$W" "$BOOT0" "$W/boot_package.fex" "$BOOTRES" "$DTBO" "$VBMETA" "$VBMETA_SYS" "$VBMETA_VEN" "$PSTORE_PARTUUID" "$PSTORE" <<'PY'
+STOCK=$STOCK GPT_LAYOUT=${GPT_LAYOUT:-sdk} python3 - "$IMG" "$W" "$BOOT0" "$W/boot_package.fex" "$BOOTRES" "$DTBO" "$VBMETA" "$VBMETA_SYS" "$VBMETA_VEN" "$PSTORE_PARTUUID" "$PSTORE" <<'PY'
 import struct, sys, uuid, zlib, os
 img, W, boot0, bootpkg, bootres, dtbo, vbmeta, vbmeta_sys, vbmeta_ven, pstore_uuid, pstore = sys.argv[1:12]
 ROOT_UUID = uuid.UUID(open(f'{W}/rootfs.uuid').read().strip()); S = 512
@@ -330,7 +334,12 @@ if pstore == '1':
 # The redundant env's second copy, the same image, last for the same reason (256 KB, as on the stock card).
 if os.environ.get('STOCK') == 'tina':
     parts.append(('env-redund', 512, f'{W}/env.fex'))
-start = 40960; ents = []
+GPT_LAYOUT = os.environ.get('GPT_LAYOUT', 'sdk')
+# powkiddy: the Powkiddy stock card's shape. Its U-Boot finds the partitions at the card's 20 MiB
+# mark: a copy of the MBR and GPT at 40960 and Allwinner's table (softw411) at 40992, 41024 and
+# 41056, relative to 40960, so the first partition starts at 41984 (V90S, 2026-10-24).
+LOGICAL = 40960
+start = 41984 if GPT_LAYOUT == 'powkiddy' else 40960; ents = []
 for name, size, src in parts: ents.append((name, start, size, src)); start += size
 total = start + 2048 + 34
 f = open(img, 'wb'); f.truncate(total * S)
@@ -360,22 +369,38 @@ for name, st, size, src in ents:
 # GPT_LAYOUT=stock: MagicX's shape, 16 entries at LBA 2, first usable 6. It survives the
 # in-place rewrite without erasing boot0, but a card built with it never reached
 # userspace even on its first boot (xu20-gptfix, 2026-09-18), so it is diagnostic only.
-GPT_LAYOUT = os.environ.get('GPT_LAYOUT', 'sdk')
-NENT = 16 if GPT_LAYOUT == 'stock' else 128; assert len(ents) <= NENT
+# GPT_LAYOUT=powkiddy (the default for v90s/v20): 16 entries at LBA 2, first usable 41984, as on
+# the stock card, plus the tables at the 20 MiB mark (above).
+NENT = 16 if GPT_LAYOUT in ('stock', 'powkiddy') else 128; assert len(ents) <= NENT
 ENT_SECTORS = NENT * 128 // S
 # First usable LBA = right after the array, as on MagicX's real cards (Zero 40 stock
 # image: 20 entries at LBA 2 -> a 5-sector array, first usable 7). The rewrite sets the
 # primary header's entry pointer to first_usable - array sectors while writing the
 # array itself at LBA 2 (the old cards: 34880 - 32 = the 34848 read back off a card),
 # so the two agree only when first_usable = 2 + array sectors.
-FIRST_USABLE = 2 + ENT_SECTORS if GPT_LAYOUT == 'stock' else 34880
-entry = entry.ljust(NENT * 128, b'\0'); disk = uuid.uuid4().bytes_le; last = total - 1; ent_lba = 2 if GPT_LAYOUT == 'stock' else 2048; bk_ent = last - ENT_SECTORS
+FIRST_USABLE = {'stock': 2 + ENT_SECTORS, 'powkiddy': 41984}.get(GPT_LAYOUT, 34880)
+entry = entry.ljust(NENT * 128, b'\0'); disk = uuid.uuid4().bytes_le; last = total - 1; ent_lba = 2 if GPT_LAYOUT in ('stock', 'powkiddy') else 2048; bk_ent = last - ENT_SECTORS
 def header(cur, bak, ent):
     h = bytearray(92); h[0:8] = b'EFI PART'; struct.pack_into('<IIII', h, 8, 0x10000, 92, 0, 0)
     struct.pack_into('<QQQQ', h, 24, cur, bak, FIRST_USABLE, bk_ent - 1); h[56:72] = disk; struct.pack_into('<QIII', h, 72, ent, NENT, 128, zlib.crc32(entry) & 0xffffffff)
     struct.pack_into('<I', h, 16, zlib.crc32(bytes(h)) & 0xffffffff); return bytes(h).ljust(S, b'\0')
 pmbr = bytearray(S); pmbr[446:462] = bytes([0, 0, 2, 0, 0xee, 0xff, 0xff, 0xff]) + struct.pack('<II', 1, min(last, 0xffffffff)); pmbr[510:512] = b'\x55\xaa'
 f.seek(0); f.write(pmbr); f.seek(S); f.write(header(1, last, ent_lba)); f.seek(ent_lba * S); f.write(entry)
+if GPT_LAYOUT == 'powkiddy':
+    # The stock card's 20 MiB mark: the MBR, GPT header and entries copied byte for byte, then
+    # Allwinner's table in copies 1-3 (copy 0's place holds the MBR copy there too). Fields as on the
+    # stock card: user_type 0x8000 (UDISK 0x8100), sig_verify on boot, sig_erase on UDISK; CRC over 4..16383.
+    f.seek(LOGICAL * S); f.write(bytes(pmbr)); f.write(header(1, last, ent_lba)); f.write(entry)
+    sm = bytearray(16384)
+    struct.pack_into('<I8sIIII', sm, 4, 0x200, b'softw411', 4, 0, len(ents), 0)
+    for k, (name, st, size, src) in enumerate(ents):
+        rel = st - LOGICAL
+        struct.pack_into('<IIII16s16sIIIII', sm, 32 + 128 * k, rel >> 32, rel & 0xffffffff, size >> 32, size & 0xffffffff,
+                         b'DISK', name.encode(), 0x8100 if name == 'UDISK' else 0x8000, 0, 0,
+                         0x8000 if name == 'boot' else 0, 0x8000 if name == 'UDISK' else 0)
+    for index in (1, 2, 3):
+        struct.pack_into('<I', sm, 20, index); struct.pack_into('<I', sm, 0, zlib.crc32(bytes(sm[4:])) & 0xffffffff)
+        f.seek((LOGICAL + 32 * index) * S); f.write(bytes(sm))
 f.seek(bk_ent * S); f.write(entry); f.seek(last * S); f.write(header(last, 1, bk_ent)); f.close()
 print(f"    {img}: {total*S/1e6:.0f} MB, {len(ents)} partitions, rootfs = p6")
 PY
@@ -385,8 +410,14 @@ log "verify"
 [ "$(dd if="$IMG" bs=512 skip=256 count=1 status=none | head -c 8 | tail -c 4)" = "eGON" ] || die "no boot0 mirror at sector 256"
 [ "$(dd if="$IMG" bs=512 skip=32800 count=1 status=none | head -c 13)" = "sunxi-package" ] || die "no boot package at sector 32800"
 python3 "$OAKMOSS_ROOT/scripts/toc1-checksum.py" --check "$IMG" 32800 || die "the boot package would be refused by boot0"
-[ "$(dd if="$IMG" bs=512 skip=$((40960+65536+32768)) count=1 status=none | head -c 8)" = "ANDROID!" ] || die "boot partition is not an Android boot image"
-[ "$(dd if="$IMG" bs=512 skip=241664 count=1 status=none | head -c 4)" = "hsqs" ] || die "rootfs partition is not our squashfs"
+[ "$(dd if="$IMG" bs=512 skip=$((P1+65536+32768)) count=1 status=none | head -c 8)" = "ANDROID!" ] || die "boot partition is not an Android boot image"
+[ "$(dd if="$IMG" bs=512 skip=$((P1+200704)) count=1 status=none | head -c 4)" = "hsqs" ] || die "rootfs partition is not our squashfs"
+if [ "${GPT_LAYOUT:-sdk}" = powkiddy ]; then
+    [ "$(dd if="$IMG" bs=512 skip=40961 count=1 status=none | head -c 8)" = "EFI PART" ] || die "no GPT copy at sector 40961"
+    for s in 40992 41024 41056; do
+        [ "$(dd if="$IMG" bs=512 skip=$s count=1 status=none | head -c 16 | tail -c 8)" = "softw411" ] || die "no Allwinner partition table at sector $s"
+    done
+fi
 {
   echo "device=$BOARD"; echo "kind=own-kernel-stock-chain"; echo "built=$ST"; echo "oakmoss=$(oakmoss_version)"
   echo "boot_chain=$CHAIN: card boot0 (also mirrored at sector 256), boot package with OUR device tree in place of its dtb item (checksum redone), boot-resource$([ "$STOCK" = android ] && echo ", dtbo, vbmeta x3")"
