@@ -198,6 +198,10 @@ fi
     -p '/dev d 755 0 0' -p '/dev/console c 600 0 0 5 1' >/dev/null 2>"$W/mksq.err" || { cat "$W/mksq.err" >&2; die "mksquashfs failed"; }
 echo "    rootfs squashfs: $(stat -c%s "$W/rootfs.fex") bytes"
 EXT4_FEATURES='has_journal,ext_attr,resize_inode,dir_index,filetype,extent,flex_bg,sparse_super,large_file,huge_file,uninit_bg,dir_nlink,extra_isize,^64bit,^metadata_csum'
+# e2fsprogs 1.47 adds orphan_file by default; the boards' e2fsck 1.42 refuses it ("FEATURE_C12") at every
+# boot (V90S, 2026-10-24). An older mke2fs does not know the name, hence the trial run.
+"$MKE2FS" -q -F -t ext4 -O ^orphan_file "$W/orphan-trial.ext4" 8M >/dev/null 2>&1 && EXT4_FEATURES="$EXT4_FEATURES,^orphan_file"
+rm -f "$W/orphan-trial.ext4"
 "$MKE2FS" -q -t ext4 -O "$EXT4_FEATURES" -L rootfs_data -m 0 "$W/rootfs_data.ext4" 64M
 "$MKE2FS" -q -t ext4 -O "$EXT4_FEATURES" -L UDISK -m 0 "$W/udisk.ext4" 16M
 
