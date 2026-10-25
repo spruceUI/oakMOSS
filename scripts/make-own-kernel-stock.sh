@@ -52,6 +52,8 @@ BUILD=${1:?build directory (builds/<stamp>-$BOARD)}; shift || true
 ST=$(stamp); OUT=${1:-$BUILDS_DIR/$ST-$BOARD-own}
 bconf() { { sed -n "s/^$1=\"\{0,1\}\([^\"#]*\)\"\{0,1\}.*/\1/p" "$OAKMOSS_ROOT/boards/$BOARD/board.conf" 2>/dev/null || true; } | sed 's/[[:space:]]*$//'; }
 OWN_DIAG=$(bconf OWN_DIAG); OWN_AUTOLOAD_DROP=$(bconf OWN_AUTOLOAD_DROP)
+# AB=1 (board.conf OWN_AB): slot B for updates (docs/updates.md), and the update file beside the image.
+AB=${AB:-$(bconf OWN_AB)}; AB=${AB:-0}
 DIAG=${DIAG:-${OWN_DIAG:-1}}; EARLY_PROBE=${EARLY_PROBE:-1}; EXPERIMENTS=${EXPERIMENTS:-}
 # PSTORE=1 points the kernel's pstore block backend at the card's own pstore
 # partition, so a panic or an oops is written to the CARD and survives both the
@@ -123,6 +125,8 @@ for m in $OWN_AUTOLOAD_DROP; do
     rm -f "$R/etc/modules.d/$m"
 done
 [ -z "$OWN_AUTOLOAD_DROP" ] || echo "    autoload dropped: $OWN_AUTOLOAD_DROP"
+# oakmoss-update.sh installs only updates of the card's own lane: this one boots the stock chain.
+printf 'own\n' > "$R/usr/magicx/lane"
 # /dev/by-name follows the disk the root is on (two cards, probe order): as make-hybrid-stock.sh
 python3 - "$R/etc/init.d/boot" <<'PY'
 import sys
@@ -249,7 +253,7 @@ PY
 
 log "env: stock variables, root and init pointed at our rootfs (squashfs, our kernel)"
 ROOT_UUID=$(python3 -c 'import uuid; print(uuid.uuid4())'); printf '%s' "$ROOT_UUID" > "$W/rootfs.uuid"
-STOCK=$STOCK python3 - "$ENVSTOCK" "$W/env.txt" "$ROOT_UUID" "$INIT" "${CONSOLE:-}" "${EXTRA_BOOTARGS:-}" <<'PY'
+STOCK=$STOCK AB=$AB python3 - "$ENVSTOCK" "$W/env.txt" "$ROOT_UUID" "$INIT" "${CONSOLE:-}" "${EXTRA_BOOTARGS:-}" <<'PY'
 import os, struct, sys, zlib
 raw = open(sys.argv[1], 'rb').read(); root_uuid, init, console, extra_args = sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6]
 # A redundant env (the Powkiddy cards) has a flag byte after the CRC; read as plain, it
@@ -276,6 +280,10 @@ if extra_args and 'pstore_blk' in extra_args:
 # /etc/fw_env.config's /dev/by-name/env-redund exists.
 if os.environ.get('STOCK') == 'tina':
     kv['partitions'] += ':env-redund@mmcblk0p%d' % (13 if 'pstore@' in kv['partitions'] else 12)
+# Slot B, after everything else so that it moves nothing: empty on a new card.
+if os.environ.get('AB') == '1':
+    n = kv['partitions'].count('@') + 1
+    kv['partitions'] += f':boot_b@mmcblk0p{n}:rootfs_b@mmcblk0p{n + 1}'
 # ROOTDELAY=N (diagnostic) replaces rootwait: the kernel sleeps N s, tries the root
 # device once and panics if it is missing, so with panic=S a boot whose SD1 host never
 # enumerated reboots by itself instead of waiting on the logo forever (2026-09-18).
@@ -314,6 +322,16 @@ if os.environ.get('BOOTMARK') == '1':
     # jumped to the kernel and the stall is the kernel's.
     bn = kv['boot_normal']; assert ';bootm ' in bn, bn
     kv['boot_normal'] = bn.replace(';bootm ', ';setenv bootmark ${bootmark}k;saveenv;bootm ', 1)
+# The slot check, as build.sh writes it for the SDK lane (docs/updates.md): no hush parser, so the
+# branch is the variable's name. This U-Boot sets mmc_root from root_partition too (root=/dev/mmcblk0p6).
+if os.environ.get('AB') == '1':
+    bn = kv['boot_normal']
+    assert bn.startswith('sunxi_flash read 45000000 ${boot_partition};') and kv.get('boot_partition') == 'boot' and kv.get('root_partition') == 'rootfs', bn
+    kv['boot_normal'] = 'run ab_${ab_try};' + bn
+    kv['ab_'] = 'setenv ab_try'
+    kv['ab_1'] = 'setenv ab_try 2; saveenv'
+    kv['ab_2'] = ('setenv boot_partition ${ab_fallback_boot}; setenv root_partition ${ab_fallback_root}; setenv ab_try; '
+                  'setenv ab_fallback_boot; setenv ab_fallback_root; setenv ab_reverted 1; saveenv; reset')
 assert kv['init'] in ('/sbin/init', '/sbin/init-probe', '/sbin/init-stamp') and 'rdinit' not in kv['setargs_mmc'] and kv['bootcmd'].endswith('run setargs_mmc boot_normal')
 open(sys.argv[2], 'w').write(''.join(f'{k}={v}\n' for k, v in kv.items()))
 PY
@@ -328,7 +346,7 @@ P1=40960; [ "${GPT_LAYOUT:-sdk}" = powkiddy ] && P1=41984
 
 log "image: GPT layout ${GPT_LAYOUT:-sdk} (sdk: 128 entries @LBA 2048; stock: 16 @LBA 2), stock boot0 @16 and @256, our tree in the stock package @32800"
 IMG=$OUT/oakmoss-$BOARD-own-$ST-sd1.img
-STOCK=$STOCK GPT_LAYOUT=${GPT_LAYOUT:-sdk} python3 - "$IMG" "$W" "$BOOT0" "$W/boot_package.fex" "$BOOTRES" "$DTBO" "$VBMETA" "$VBMETA_SYS" "$VBMETA_VEN" "$PSTORE_PARTUUID" "$PSTORE" <<'PY'
+STOCK=$STOCK AB=$AB GPT_LAYOUT=${GPT_LAYOUT:-sdk} python3 - "$IMG" "$W" "$BOOT0" "$W/boot_package.fex" "$BOOTRES" "$DTBO" "$VBMETA" "$VBMETA_SYS" "$VBMETA_VEN" "$PSTORE_PARTUUID" "$PSTORE" <<'PY'
 import struct, sys, uuid, zlib, os
 img, W, boot0, bootpkg, bootres, dtbo, vbmeta, vbmeta_sys, vbmeta_ven, pstore_uuid, pstore = sys.argv[1:12]
 ROOT_UUID = uuid.UUID(open(f'{W}/rootfs.uuid').read().strip()); S = 512
@@ -347,6 +365,8 @@ if pstore == '1':
 # The redundant env's second copy, the same image, last for the same reason (256 KB, as on the stock card).
 if os.environ.get('STOCK') == 'tina':
     parts.append(('env-redund', 512, f'{W}/env.fex'))
+if os.environ.get('AB') == '1':
+    parts += [('boot_b', 65536, None), ('rootfs_b', 1048576, None)]
 GPT_LAYOUT = os.environ.get('GPT_LAYOUT', 'sdk')
 # powkiddy: the Powkiddy stock card's shape. Its U-Boot finds the partitions at the card's 20 MiB
 # mark: a copy of the MBR and GPT at 40960 and Allwinner's table (softw411) at 40992, 41024 and
@@ -431,6 +451,16 @@ if [ "${GPT_LAYOUT:-sdk}" = powkiddy ]; then
         [ "$(dd if="$IMG" bs=512 skip=$s count=1 status=none | head -c 16 | tail -c 8)" = "softw411" ] || die "no Allwinner partition table at sector $s"
     done
 fi
+# The update for this lane's cards (docs/updates.md): LANE=own, kernel slot and squashfs. Only
+# OMUPD_BOOTCHAIN=1 adds boot0 and the U-Boot package, which are the vendor's here: local only.
+UPD=
+if [ "$AB" = 1 ]; then
+    VER=$(cat "$R/usr/magicx/version"); BLD=$(cat "$R/usr/magicx/build")
+    UPD=oakmoss-$BOARD-own-$VER.omupd
+    python3 "$OAKMOSS_ROOT/scripts/make-update.py" --own $([ "${OMUPD_BOOTCHAIN:-0}" = 1 ] && echo --bootchain) \
+        "$IMG" "$BOARD" "$VER" "$OUT/$UPD" "$BLD" >/dev/null || die "make-update.py --own failed"
+    echo "    update: $UPD (LANE=own, BUILD $BLD$([ "${OMUPD_BOOTCHAIN:-0}" = 1 ] && echo ", with the vendor boot chain: local only"))"
+fi
 {
   echo "device=$BOARD"; echo "kind=own-kernel-stock-chain"; echo "built=$ST"; echo "oakmoss=$(oakmoss_version)"
   echo "boot_chain=$CHAIN: card boot0 (also mirrored at sector 256), boot package with OUR device tree in place of its dtb item (checksum redone), boot-resource$([ "$STOCK" = android ] && echo ", dtbo, vbmeta x3")"
@@ -439,7 +469,8 @@ fi
   echo "rootfs=our $BOARD rootfs squashfs from $BUILD (md5 $(md5_of "$ROOTFS") before the hand-off/probe repack; our modules, PowerVR 1.19)"
   echo "handoff=$([ "$DIAG" = 1 ] && echo "DIAGNOSTIC (init=$INIT, experiments: ${EXPERIMENTS:-none})" || echo stock)"
   echo "autoload_dropped=${OWN_AUTOLOAD_DROP:-none}"
-  echo "layout=bootloader env boot misc dtbo rootfs(p6, squashfs) rootfs_data UDISK vbmeta vbmeta_system vbmeta_vendor$([ "$STOCK" = tina ] && echo " (dtbo and vbmeta blank), env-redund last (redundant env)"); GPT layout ${GPT_LAYOUT:-sdk}; root=PARTUUID via mmc_root"
+  echo "lane=own (/usr/magicx/lane); update=${UPD:-none (AB=0: one slot)}"
+  echo "layout=bootloader env boot misc dtbo rootfs(p6, squashfs) rootfs_data UDISK vbmeta vbmeta_system vbmeta_vendor$([ "$STOCK" = tina ] && echo " (dtbo and vbmeta blank), env-redund (redundant env)")$([ "$AB" = 1 ] && echo ", boot_b + rootfs_b last (slot B, empty)"); GPT layout ${GPT_LAYOUT:-sdk}; root=PARTUUID via mmc_root"
   e=$(tr '\n' ';' < "$W/env.txt")
   if [ ${#e} -gt 400 ]; then e="${e:0:400}...[truncated]"; fi
   echo "env=$e"

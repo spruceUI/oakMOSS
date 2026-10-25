@@ -83,6 +83,28 @@ On success the file is deleted and the board reboots. On any failure the file is
 `/mnt/UDISK/oakmoss-boot.log`, and to `oakmoss-update.log` beside the update on the card: the
 update's `parts_clean` wipes `/mnt/UDISK` on the next boot.
 
+## The own lane (Powkiddy V90S and V20)
+
+Cards from `scripts/make-own-kernel-stock.sh` boot the board's stock boot0 and U-Boot, with our
+device tree in the stock U-Boot package. With `OWN_AB=1` in board.conf (`AB=` overrides it) the
+card carries slot B: `boot_b` and `rootfs_b`, appended after `env-redund` so nothing else moves,
+are listed in `partitions=` and are empty on a new card. The env gets the same slot check
+(`run ab_${ab_try}`, `ab_`, `ab_1`, `ab_2`): the stock U-Boot reads `${boot_partition}` in
+`boot_normal` and sets `mmc_root` from `root_partition` too (the V90S's `root=/dev/mmcblk0p6`).
+`/usr/magicx/lane` reads `own`.
+
+Beside the image the script writes `oakmoss-<board>-own-<version>.omupd`
+(`make-update.py --own`): `LANE=own`, the kernel slot and the squashfs. It carries no
+boot-resource: these cards keep their board's stock one, which is vendor data.
+`oakmoss-update.sh` installs a package only on a card of its lane, so an SDK-lane package for
+the same board (its `bootres` would replace the stock boot-resource) is set aside as `.failed`,
+and so is an own-lane package on an SDK-lane card (`tests/test-update.sh`).
+
+On these boards the device tree lives in the U-Boot package (a header-v0 boot image carries
+none). A board-tree change therefore reaches a card only with a full flash or an
+`OMUPD_BOOTCHAIN=1` update, which carries the vendor's boot0 and U-Boot and stays local. Not
+yet proven on hardware: the slot check under the stock U-Boot, an update, the fallback.
+
 ## Releasing
 
 Upload the `.omupd` of each board with the images, and list it in `SHA256SUMS`. Use
