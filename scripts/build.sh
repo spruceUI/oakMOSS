@@ -98,8 +98,15 @@ apply_overlay() {
     # pictures there). The SDK's boot-resource has no bat/ of its own, so it is cleared first.
     local bres=${logo%/*}
     rm -rf "${bres:?}/bat"
+    # A board with OWN_BOOTRES_FILES=1 (the Powkiddy boards) puts its full-screen pictures into its own image's
+    # stock 32 MiB p1 (make-own-kernel-stock.sh); its SDK image, never flashed, takes the logo alone: all of them
+    # overflowed the 4 MiB partition (B186), and a bigger one changes the boot package's tree (its partitions node).
     if [ -f "$OAKMOSS_ROOT/boards/$board/sys_partition.fex" ] && [ -d "$OAKMOSS_ROOT/boards/$board/boot-resource" ]; then
-        cp -a "$OAKMOSS_ROOT/boards/$board/boot-resource/." "$bres/"
+        if grep -q '^OWN_BOOTRES_FILES=1' "$OAKMOSS_ROOT/boards/$board/board.conf"; then
+            cp -a "$OAKMOSS_ROOT/boards/$board/boot-resource/bootlogo.bmp" "$logo"
+        else
+            cp -a "$OAKMOSS_ROOT/boards/$board/boot-resource/." "$bres/"
+        fi
     fi
     # The SDK's own logo is Moss's (not ours to ship): every board brings oakMOSS's, from boards/<board>/boot-resource.
     if [ -f "$logo.orig" ] && cmp -s "$logo" "$logo.orig"; then

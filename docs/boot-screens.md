@@ -42,6 +42,8 @@ runs, and nothing drew again until spruce started. `bootframe` draws right after
 - `charge-screen.sh boot | frontend | reboot | poweroff` draws one frame and exits. It draws
   only when the board ships `boot-loading.rgba.gz`, which is the opt-in, and never during a
   debug-text boot. `tests/test-screens.sh` covers both rules.
+- The three init scripts are enabled by their links in `overlay/etc/rc.d` (`S01debugtext`,
+  `S02bootframe`, `K00shutdownframe`), as `chargeframe` is: the image build creates no links.
 - The `shutdownframe` script tells a reboot from a power-off by `OAKMOSS_SHUTDOWN`, which procd
   patch 901 passes to the K scripts. Without that variable it draws nothing.
 - U-Boot's pictures: for a stock-chain board with `OWN_BOOTRES_FILES=1` in its `board.conf`,
@@ -49,6 +51,8 @@ runs, and nothing drew again until spruce started. `bootframe` draws right after
   the board's files in the copy with mtools, reading each one back. The rest of the partition
   stays as it was: the fonts, the wavefiles and `lcd_compatible_index.txt`, which this U-Boot
   reads and writes. The copy is still vendor data, so it stays local, like the image around it.
+  The board's SDK image (never flashed) gets the logo alone: the full set overflows its 4 MiB
+  boot-resource partition, and a bigger partition would change the boot package's tree.
   An own-lane `.omupd` carries no boot-resource (`docs/updates.md`), so the U-Boot pictures reach
   a card by flashing an image. The Linux frames come with the rootfs, so an update brings them.
 
