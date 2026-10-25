@@ -22,8 +22,9 @@
 # Inputs: the board's stock firmware unpacked (unpack-xu20-stock.sh /
 # unpack-zero40-stock.sh) and a build of THIS board (boards/<board>/board.dts gives
 # it the board's panel, pad, radio and battery; sdk-patches/tree/070-* the panel
-# drivers). DIAG=1 (default) installs the diagnostic hand-off and, with
-# EARLY_PROBE=1, the init= probe; EXPERIMENTS="..." adds diag/experiments.
+# drivers). DIAG=1 (default; OWN_DIAG in board.conf sets a board's own) installs the
+# diagnostic hand-off and, with EARLY_PROBE=1, the init= probe; EXPERIMENTS="..." adds
+# diag/experiments. board.conf OWN_AUTOLOAD_DROP names /etc/modules.d files to remove.
 # A card to run rather than to diagnose (what the bench units run):
 #   DIAG=0 EARLY_PROBE=0 CONSOLE=tty0 BOOTRES=builds/bootres-<board>.fex \
 #       scripts/make-own-kernel-stock.sh <board> builds/<stamp>-<board> [out dir]
@@ -49,7 +50,9 @@ case "$BOARD" in
 esac
 BUILD=${1:?build directory (builds/<stamp>-$BOARD)}; shift || true
 ST=$(stamp); OUT=${1:-$BUILDS_DIR/$ST-$BOARD-own}
-DIAG=${DIAG:-1}; EARLY_PROBE=${EARLY_PROBE:-1}; EXPERIMENTS=${EXPERIMENTS:-}
+bconf() { { sed -n "s/^$1=\"\{0,1\}\([^\"#]*\)\"\{0,1\}.*/\1/p" "$OAKMOSS_ROOT/boards/$BOARD/board.conf" 2>/dev/null || true; } | sed 's/[[:space:]]*$//'; }
+OWN_DIAG=$(bconf OWN_DIAG); OWN_AUTOLOAD_DROP=$(bconf OWN_AUTOLOAD_DROP)
+DIAG=${DIAG:-${OWN_DIAG:-1}}; EARLY_PROBE=${EARLY_PROBE:-1}; EXPERIMENTS=${EXPERIMENTS:-}
 # PSTORE=1 points the kernel's pstore block backend at the card's own pstore
 # partition, so a panic or an oops is written to the CARD and survives both the
 # failure and the cold power-off needed to recover from it - which is what a
@@ -114,6 +117,12 @@ log "rootfs: our $BOARD squashfs, hand-off and probe added"
 R=$W/root
 [ "$(tr -d '\r\n' < "$R/usr/magicx/device")" = "$BOARD" ] || die "rootfs marker is not $BOARD"
 echo "    modules: $(ls "$R"/lib/modules/*/ | wc -l) ($(ls "$R"/lib/modules/)), PVR userland: $(strings "$R/usr/lib/libGLESv2.so" | grep -m1 -oE '[0-9]+\.[0-9]+@[0-9]+')"
+# Radios the board lacks: their modules stay, only the boot-time autoload goes.
+for m in $OWN_AUTOLOAD_DROP; do
+    [ -f "$R/etc/modules.d/$m" ] || die "OWN_AUTOLOAD_DROP: the rootfs has no /etc/modules.d/$m"
+    rm -f "$R/etc/modules.d/$m"
+done
+[ -z "$OWN_AUTOLOAD_DROP" ] || echo "    autoload dropped: $OWN_AUTOLOAD_DROP"
 # /dev/by-name follows the disk the root is on (two cards, probe order): as make-hybrid-stock.sh
 python3 - "$R/etc/init.d/boot" <<'PY'
 import sys
@@ -429,6 +438,7 @@ fi
   echo "kernel=ours from $BUILD ($(grep -m1 '^kernel_encrypt_obj_md5' "$BUILD/BUILD-INFO.txt")), in a $([ "$STOCK" = android ] && echo "header-v2 boot image with our device tree" || echo "header-v0 boot image (the tree comes from the package)"); board_dts=$(grep -m1 '^board_dts' "$BUILD/BUILD-INFO.txt" | cut -d= -f2-)"
   echo "rootfs=our $BOARD rootfs squashfs from $BUILD (md5 $(md5_of "$ROOTFS") before the hand-off/probe repack; our modules, PowerVR 1.19)"
   echo "handoff=$([ "$DIAG" = 1 ] && echo "DIAGNOSTIC (init=$INIT, experiments: ${EXPERIMENTS:-none})" || echo stock)"
+  echo "autoload_dropped=${OWN_AUTOLOAD_DROP:-none}"
   echo "layout=bootloader env boot misc dtbo rootfs(p6, squashfs) rootfs_data UDISK vbmeta vbmeta_system vbmeta_vendor$([ "$STOCK" = tina ] && echo " (dtbo and vbmeta blank), env-redund last (redundant env)"); GPT layout ${GPT_LAYOUT:-sdk}; root=PARTUUID via mmc_root"
   e=$(tr '\n' ';' < "$W/env.txt")
   if [ ${#e} -gt 400 ]; then e="${e:0:400}...[truncated]"; fi

@@ -819,7 +819,17 @@ carried untested; the lab has a V90S. Read from the stock blobs, not yet confirm
   (gpio 360), as on the TrimUI Brick, where a dongle on the USB-C port enumerates on ehci1 with
   no role switch; usbc0 stays device-only. `USB_WIFI=1` builds 8188eu.ko and 8812au.ko against
   this kernel (`scripts/build-usb-wifi.sh`) into `/usr/lib/oakmoss/modules/usb-wifi`, which
-  spruce's dongle contract loads. Not yet tried with a dongle on a unit.
+  spruce's dongle contract loads. On the V90S a TP-Link 0bda:8179 (8188eu) joins WiFi (boot 5,
+  2026-10-24). The SDK's SDIO radio modules (8189es, xr829) have nothing to drive here: the own
+  lane drops their autoload (`OWN_AUTOLOAD_DROP` in board.conf), which stopped three
+  "rtw_drv_entry: power on failed!!(-22)" lines a boot.
+- **Panel refresh:** the stock timing (25 MHz, 825 x 514) runs the DSI panel at 59.07 Hz,
+  measured from the disp irq count on the V90S (2026-10-24; 0.2 % above the nominal 58.96).
+  The board trees take a vertical total of 506 (front porch 18 -> 10 lines): 60.0 Hz.
+- **Pad:** polled (151) every ~16 ms. Tina's input core passes every ABS sample on, so the driver
+  reports only changes; before that the idle d-pad sent ~62 events a second per axis.
+- **Crash log:** `PSTORE=1` cannot attach on these boards: pstore_blk runs before the TF cards
+  are probed (2.84 s against 3.00/3.27 s on the V90S).
 - **Battery:** the shared tree says 3000 mAh, the V90S's cell; the V20's is sold as 5000 mAh.
 - **Stock kernel:** Tina 4.9.191, PowerVR DDK 1.19@6345021 (our userland's). It carries a vendor
   board-check driver (`ENC_SW2001`, an I2C device on TWI1); we build none, and the board trees
