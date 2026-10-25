@@ -33,7 +33,7 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 _spec = importlib.util.spec_from_file_location("mbr", os.path.join(ROOT, "scripts", "make-boot-resource.py"))
 mbr = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(mbr)
 
-FB = {"zero28": (640, 480), "zero40": (480, 800), "xu20": (1024, 768)}   # the size apps draw in
+FB = {"zero28": (640, 480), "zero40": (480, 800), "xu20": (1024, 768), "v90s": (640, 480), "v20": (640, 480)}   # the size apps draw in
 
 CHARGE_TEXT = "Charging, press Power to turn on"
 NOFRONTEND_TEXT = "No frontend detected, charging"
