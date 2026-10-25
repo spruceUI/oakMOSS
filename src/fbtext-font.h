@@ -54,7 +54,7 @@
  *  Inc., respectively. For further information, contact: fonts at gnome dot
  *  org.
  *
- * Files: debian/*
+ * Files: debian/ *
  * Copyright: (C) 2005-2006 Peter Cernak <pce@users.sourceforge.net>
  *            (C) 2006-2011 Davide Viti <zinosat@tiscali.it>
  *            (C) 2011-2013 Christian Perrier <bubulle@debian.org>
