@@ -17,7 +17,7 @@ BYNAME=${BYNAME:-/dev/by-name}
 DEVICE=${DEVICE:-$(cat /usr/magicx/device 2>/dev/null)}
 LANE=${LANE:-$(cat /usr/magicx/lane 2>/dev/null)}; LANE=${LANE:-sdk}
 LOG=${LOG:-/mnt/UDISK/oakmoss-boot.log}
-# Also on the card beside the first package: the update's parts_clean wipes /mnt/UDISK next boot.
+# Also on the card beside the first package, where the user and a PC can read it.
 CARD_LOG=${CARD_LOG:-${1%/*}/oakmoss-update.log}
 BUILD_FILE=${BUILD_FILE:-/usr/magicx/build}
 BAT=${BAT:-/sys/class/power_supply/axp2202-battery/capacity}
