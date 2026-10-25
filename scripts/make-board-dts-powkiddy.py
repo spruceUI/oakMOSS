@@ -21,7 +21,9 @@ and the panel driver (150). The edits:
 - the vendor board-check node disabled (we build no driver for it);
 - bldo1 always on: it feeds port G (L1/R1/L2/R2 and the second card slot), and the
   stock tree lists it only as the panel's third rail, so the unused-regulator sweep
-  could switch it off (Knulli's 5.15 tree does the same).
+  could switch it off (Knulli's 5.15 tree does the same);
+- the panel's vertical total 514 -> 506 lines (front porch 18 -> 10): the stock timing
+  runs the V90S at 59.07 Hz (disp irq count, 2026-10-24), which is 60.0 Hz at 506.
 
 The stock tree is an input (never redistributed); the generated board.dts is ours.
 """
@@ -35,6 +37,7 @@ AMUX_PROPS = ("amux-count", "amux-a-gpios", "amux-b-gpios", "amux-en-gpios")
 RUMBLE_PROPS = ("rumble_used", "pwm-id", "pwm-period", "rumble-boost-weak",
                 "rumble-boost-strong", "invert-rumble")
 BTN_THUMBL, BTN_THUMBR = 0x13d, 0x13e
+STOCK_VT, PANEL_VT = 0x202, 0x1fa
 
 
 def node_span(lines, header, start=0, end=None):
@@ -135,6 +138,13 @@ def main(src, out, board):
             lines.insert(rl, f"\t\t\t\t\t\t{name};")
             rl += 1
 
+    # the panel: 60 Hz
+    lf, ll = node_span(lines, "lcd0@01c0c000 {")
+    j = prop_index(lines, lf, ll, "lcd_vt")
+    if j is None or lines[j].strip() != f"lcd_vt = <{STOCK_VT:#05x}>;":
+        sys.exit(f"lcd0: {lines[j].strip() if j is not None else 'no lcd_vt'}, expected the stock {STOCK_VT:#x}")
+    set_prop(lines, lf, ll, "lcd_vt", f"<{PANEL_VT:#05x}>")
+
     head = ["/*",
             f" * Powkiddy {board.upper()} board tree for oakMOSS: the stock tree (decompiled) with the",
             f" * edits in scripts/make-board-dts-powkiddy.py. Generated: do not edit by hand.",
@@ -142,7 +152,7 @@ def main(src, out, board):
     open(out, "w").write("\n".join(lines[:1] + head + lines[1:]))
     print(f"{out}: {board}, joypad \"{NAMES[board]}\", face codes on the A133P convention, "
           f"{'no stick mux' if board == 'v90s' else 'L3/R3 added, no rumble, pwm2 off'}, "
-          f"sw2001 off, bldo1 always on")
+          f"sw2001 off, bldo1 always on, panel vt {PANEL_VT} (60 Hz)")
 
 
 if __name__ == "__main__":

@@ -4275,7 +4275,7 @@
 			lcd_ht = <0x339>;
 			lcd_hspw = <0x14>;
 			lcd_vbp = <0x10>;
-			lcd_vt = <0x202>;
+			lcd_vt = <0x1fa>;
 			lcd_vspw = <0x04>;
 			lcd_dsi_if = <0x00>;
 			lcd_dsi_lane = <0x04>;
