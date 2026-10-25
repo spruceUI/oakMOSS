@@ -131,6 +131,17 @@ whose `/usr/magicx/lane` reads `own`: a spruce-side change, due before the first
   proven (below). That the boot ROM reads boot0 from 256 is not: zero sector 16's boot0 on a
   test card and see it still boot.
 
+Proven on the V90S, own lane (2026-10-24, records `20261024-2313-v90s-boot7-b181-ota`,
+`20261024-2349-v90s-boot9-b183-ota`):
+- **Updates:** B181 to B182 into slot B, then B182 to B183 back into slot A, each confirmed on its
+  first boot (`updated slot confirmed`), so the slot check runs under the stock U-Boot and both
+  copies of its redundant env take the writes (their flags step from both sides).
+- **Lanes:** the installer logged `bootres: not in this update (lane own)`; the stock boot-resource
+  stayed.
+- Not yet seen: the "Updating" screen (the installers of both runs had no frames) and a clean FAT
+  after the update's reboot. Linux never clears a FAT's dirty flag it found set at mount, so the
+  cards need an `fsck.fat` before that can be shown.
+
 Proven on the Zero 28 (2026-10-09):
 - **Updates:** two whole updates from the card (BOOTCHAIN=0). Each wrote the other slot,
   booted it on trial and confirmed it, and `parts_clean` wiped the overlay.
