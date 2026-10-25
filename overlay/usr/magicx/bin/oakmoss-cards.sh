@@ -68,7 +68,9 @@ sd1() {
     while [ "$fs" = unread ] && [ "$n" -lt 10 ]; do sleep 0.2; fs=$(magic "$dev"); n=$((n + 1)); done
     [ "$fs" = unread ] && { log "SD1: ${dev##*/} cannot be read"; return 1; }
     if [ "$fs" = none ]; then
-        mkfs.vfat -n SPRUCEOS "$dev" >/dev/null 2>&1 || { log "SD1: formatting ${dev##*/} failed"; return 1; }
+        # BusyBox 1.27.2 copies the label as given into the 11-byte fields, NUL-padded, which fsck.fat
+        # calls invalid (and -a removes): give it padded with spaces, as dosfstools writes it.
+        mkfs.vfat -n 'SPRUCEOS   ' "$dev" >/dev/null 2>&1 || { log "SD1: formatting ${dev##*/} failed"; return 1; }
         log "SD1: ${dev##*/} formatted FAT32, $(( $(cat "/sys/class/block/${dev##*/}/size") / 2048 )) MiB"
     fi
     echo "$dev"

@@ -90,7 +90,11 @@ image has no GPT tool: the SDK's util-linux 2.25 `sfdisk` handles MBR tables onl
   as well, so a PC mounts it.
 - The running kernel learns about it through `BLKPG`, so no reboot is needed. On later boots
   it comes from the table.
-- **New partition:** formatted FAT32 with busybox `mkfs.vfat`, label `SPRUCEOS`.
+- **New partition:** formatted FAT32 with busybox `mkfs.vfat`, label `SPRUCEOS`. The label is
+  given padded with spaces to 11 characters: BusyBox 1.27.2 pads a shorter one with NULs, which
+  `fsck.fat` reports as an invalid label in the root directory and `-a` removes. Cards formatted
+  before the fix keep their NUL-padded label, which is harmless: nothing reads the label, and
+  nothing reformats a formatted partition.
 - **Re-flash:** writing an image again leaves everything past its end alone. If a FAT32 volume
   is already at 2 GiB, the partition is reattached with that volume's size and never
   formatted.
