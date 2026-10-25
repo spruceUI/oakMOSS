@@ -82,6 +82,8 @@ while :; do
     pkgs=$(ls /mnt/SDCARD/oakmoss-"$dev"-*.omupd /media/sdcard1/oakmoss-"$dev"-*.omupd 2>/dev/null)
     if [ -n "$pkgs" ] && oakmoss-update.sh $pkgs; then
         sync
+        # A reboot with the cards still mounted leaves both FATs dirty (V90S, 2026-10-24).
+        oakmoss-cards.sh umount
         reboot
         exit 0
     fi

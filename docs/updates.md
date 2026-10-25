@@ -80,8 +80,10 @@ boot `runmagicx.sh` passes every `oakmoss-<board>-*.omupd` at the root of either
 
 On success the file is deleted and the board reboots. On any failure the file is renamed
 `.failed` and the board boots the launcher as usual. Everything is logged to
-`/mnt/UDISK/oakmoss-boot.log`, and to `oakmoss-update.log` beside the update on the card: the
-update's `parts_clean` wipes `/mnt/UDISK` on the next boot.
+`/mnt/UDISK/oakmoss-boot.log`, and to `oakmoss-update.log` beside the update on the card.
+`parts_clean` names only `rootfs_data`, the overlay: on the V90S `/mnt/UDISK` is its own partition
+and kept its log and BatteryPlus's data across the update (2026-10-24). The cards are unmounted
+before the reboot, which otherwise leaves both FATs dirty.
 
 ## The own lane (Powkiddy V90S and V20)
 
