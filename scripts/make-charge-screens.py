@@ -119,7 +119,7 @@ def main(board):
     # U-Boot centres its pictures, so each is cut to its content symmetrically about the centre;
     # the charge picture is the level screen with the battery left black, so Linux's first frame
     # draws the same tree and text at the same place and only the battery appears. They fit
-    # because each board's sys_partition.fex gives its boot-resource partition 4 MiB.
+    # because each board's sys_partition.fex gives its boot-resource partition 4 MiB (8 MiB for BOOT_FRAMES: 4.8 MB of pictures).
     rot = mbr.LOGO_ROT[board]
     def centred(im):
         if full:
