@@ -98,7 +98,10 @@ Beside the image the script writes `oakmoss-<board>-own-<version>.omupd`
 boot-resource: these cards keep their board's stock one, which is vendor data.
 `oakmoss-update.sh` installs a package only on a card of its lane, so an SDK-lane package for
 the same board (its `bootres` would replace the stock boot-resource) is set aside as `.failed`,
-and so is an own-lane package on an SDK-lane card (`tests/test-update.sh`).
+and so is an own-lane package on an SDK-lane card (`tests/test-update.sh`). An installer from
+before the lane check takes any `oakmoss-<board>-*.omupd`, so the first lane-aware one reaches a
+card by a full flash, and `build.sh` makes no SDK-lane update for a board with `OWN_AB=1`: none
+can be released by mistake.
 
 On these boards the device tree lives in the U-Boot package (a header-v0 boot image carries
 none). A board-tree change therefore reaches a card only with a full flash or an

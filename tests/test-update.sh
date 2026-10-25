@@ -73,6 +73,7 @@ check "own on own: rootfs_b holds the new squashfs" 'head -c 4 "$T/card/rootfs_b
 check "own on own: stock boot-resource untouched" 'head -c 13 "$T/card/bootloader" | grep -q STOCK-BOOTRES'
 check "own on own: next boot tries boot_b + rootfs_b" 'grep -qx "boot_partition boot_b" "$T/env" && grep -qx "root_partition rootfs_b" "$T/env" && grep -qx "ab_try 1" "$T/env"'
 check "own on own: package removed" '[ ! -e "$T/sd/oakmoss-v90s-own-v200.omupd" ]'
+check "own on own: logs that it carries no boot-resource" 'grep -q "bootres: not in this update (lane own)" "$T/log"'
 
 # 2. own-lane card, SDK-lane package (boot-resource inside): set aside, nothing written
 card 1; mkpkg "$T/sd/oakmoss-v90s-v201.omupd" - 201 1

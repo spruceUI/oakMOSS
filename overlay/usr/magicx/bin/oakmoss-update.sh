@@ -152,8 +152,14 @@ if [ "$(m BOOTCHAIN)" = 1 ]; then
         put "$name" "$DISK" "$main"
     done
 fi
-if has bootres && [ "$(on_card "$BYNAME/bootloader" "$(m bootres_SIZE)" 0)" != "$(m bootres_SHA256)" ]; then
-    put bootres "$BYNAME/bootloader" 0
+if has bootres; then
+    if [ "$(on_card "$BYNAME/bootloader" "$(m bootres_SIZE)" 0)" != "$(m bootres_SHA256)" ]; then
+        put bootres "$BYNAME/bootloader" 0
+    else
+        log "bootres unchanged"
+    fi
+else
+    log "bootres: not in this update (lane $LANE)"
 fi
 
 cat > "$W/env" <<EOF

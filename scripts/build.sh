@@ -448,10 +448,17 @@ case $STEP in
     packed_uboot_oakmoss "$FINAL" || die "the U-Boot packed into $FINAL lacks the oakMOSS boot arguments (patch 104)"
     "$OAKMOSS_ROOT/scripts/add-boot-backups.py" "$FINAL" || die "could not add the boot0 and U-Boot copies"
     UPDATE=$OUT/oakmoss-$BOARD-$(oakmoss_version).omupd
-    # OMUPD_BOOTCHAIN=1: the update also carries boot0 and the U-Boot package (docs/updates.md).
-    "$OAKMOSS_ROOT/scripts/make-update.py" $([ "${OMUPD_BOOTCHAIN:-0}" = 1 ] && echo --bootchain) \
-        "$FINAL" "$BOARD" "$(oakmoss_version)" "$UPDATE" "$(oakmoss_build)" ||
-        die "could not make the update"
+    # A board whose cards are the own lane's (board.conf OWN_AB=1) gets its update from
+    # make-own-kernel-stock.sh: an SDK-lane one would also replace a card's stock boot-resource
+    # on any installer from before the lane check (docs/updates.md), so none is made.
+    if [ "${OWN_AB:-0}" = 1 ]; then
+        UPDATE=; log "no SDK-lane update for $BOARD: its cards take the own lane's (make-own-kernel-stock.sh)"
+    else
+        # OMUPD_BOOTCHAIN=1: the update also carries boot0 and the U-Boot package (docs/updates.md).
+        "$OAKMOSS_ROOT/scripts/make-update.py" $([ "${OMUPD_BOOTCHAIN:-0}" = 1 ] && echo --bootchain) \
+            "$FINAL" "$BOARD" "$(oakmoss_version)" "$UPDATE" "$(oakmoss_build)" ||
+            die "could not make the update"
+    fi
     # Refuse to ship a kernel module this build did not actually produce (lib.sh,
     # check_shipped_modules): deletes this half-built record rather than leaving it to look done.
     check_shipped_modules "$BOARD" || { rm -rf "$OUT"; die "refusing $OUT: stale kernel module(s) above"; }
@@ -485,7 +492,7 @@ case $STEP in
       echo "libstdcxx=$(for f in "$ROOTFS"/usr/lib/libstdc++.so.6.0.*; do [ -e "$f" ] && basename "$f" && break; done)"
       echo "oakmoss_libs=$([ -n "${OAKMOSS_LIBS:-}" ] && echo "sha256sums=$(sha256_of "$OAKMOSS_LIBS/SHA256SUMS") $(grep -m1 '^oakmoss=' "$OAKMOSS_LIBS/BUILD-INFO")" || echo none)"
       echo "batteryplus=$([ -x "$ROOTFS/usr/magicx/bin/batteryplus" ] && echo "knubat.components ${BATTERYPLUS_COMMIT:0:12}, voltage mode" || echo none)"
-      echo "outputs=$(basename "$FINAL") (raw GPT image: dd or Etcher to SD1, whole card); $(basename "$UPDATE") (update for cards with two slots, docs/updates.md; bootchain=${OMUPD_BOOTCHAIN:-0}); $(basename "$IMG") (Allwinner PhoenixSuit image); $(basename "$IMG").dump/rootfs.fex (rootfs squashfs, used by the hybrid and diag images)"
+      echo "outputs=$(basename "$FINAL") (raw GPT image: dd or Etcher to SD1, whole card); $([ -n "$UPDATE" ] && echo "$(basename "$UPDATE") (update for cards with two slots, docs/updates.md; bootchain=${OMUPD_BOOTCHAIN:-0})" || echo "no SDK-lane update (own-lane board)"); $(basename "$IMG") (Allwinner PhoenixSuit image); $(basename "$IMG").dump/rootfs.fex (rootfs squashfs, used by the hybrid and diag images)"
       echo "debug=$DEBUG_INFO"
     } > "$OUT/BUILD-INFO.txt"
     # System.map beside the build: a KDEBUG_MARK card reports initcall addresses, and
