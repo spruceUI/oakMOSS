@@ -33,10 +33,9 @@ size = 512
 ;***************************************************************************************************
 [partition_start]
 
-; oakMOSS: 8 MiB, not 4: the full-screen U-Boot pictures (boards/<board>/boot-resource) packed to 9772 sectors
 [partition]
     name         = bootloader
-    size         = 16384
+    size         = 8192
     downloadfile = "boot-resource.fex"
     user_type    = 0x8000
 
