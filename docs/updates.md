@@ -115,6 +115,13 @@ Upload the `.omupd` of each board with the images, and list it in `SHA256SUMS`. 
 image now carries an empty slot B, about 440 MiB of zeros, so publish the compressed image
 (`COMPRESS=1`, `.img.xz`) rather than the raw one.
 
+For an own-lane board (V90S, V20) the update to upload is the own one,
+`oakmoss-<board>-own-<version>.omupd` from `make-own-kernel-stock.sh`, beside the own image. Its
+image keeps the board's stock boot0, U-Boot and boot-resource, which are vendor data: publish
+neither that image nor an `OMUPD_BOOTCHAIN=1` update of it, only the update without the boot
+chain. Spruce's Firmware Update app has to fetch `oakmoss-<board>-own-<tag>.omupd` on a card
+whose `/usr/magicx/lane` reads `own`: a spruce-side change, due before the first such release.
+
 ## Still to prove on hardware
 
 - boot0's own copy: Allwinner's own writer puts boot0 at 256 and the package at 24576
