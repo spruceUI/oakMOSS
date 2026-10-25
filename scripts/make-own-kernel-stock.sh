@@ -51,7 +51,7 @@ esac
 BUILD=${1:?build directory (builds/<stamp>-$BOARD)}; shift || true
 ST=$(stamp); OUT=${1:-$BUILDS_DIR/$ST-$BOARD-own}
 bconf() { { sed -n "s/^$1=\"\{0,1\}\([^\"#]*\)\"\{0,1\}.*/\1/p" "$OAKMOSS_ROOT/boards/$BOARD/board.conf" 2>/dev/null || true; } | sed 's/[[:space:]]*$//'; }
-OWN_DIAG=$(bconf OWN_DIAG); OWN_AUTOLOAD_DROP=$(bconf OWN_AUTOLOAD_DROP)
+OWN_DIAG=$(bconf OWN_DIAG); OWN_AUTOLOAD_DROP=$(bconf OWN_AUTOLOAD_DROP); OWN_BOOTRES_FILES=$(bconf OWN_BOOTRES_FILES)
 # AB=1 (board.conf OWN_AB): slot B for updates (docs/updates.md), and the update file beside the image.
 AB=${AB:-$(bconf OWN_AB)}; AB=${AB:-0}
 DIAG=${DIAG:-${OWN_DIAG:-1}}; EARLY_PROBE=${EARLY_PROBE:-1}; EXPERIMENTS=${EXPERIMENTS:-}
@@ -99,6 +99,16 @@ elif [ "$STOCK" = tina ] && [ ! -f "$DUMP/RFSFAT16_BOOT-RESOURCE_FE" ]; then
     BOOTRES=$(ls "$BUILD"/*.img.dump/boot-resource.fex 2>/dev/null | head -1); [ -f "$BOOTRES" ] || die "no boot-resource.fex under $BUILD"
     log "boot-resource: this build's ($BOOTRES)"
 else BOOTRES=$(f 'RFSFAT16_BOOT-RESOURCE_FE'); fi
+# OWN_BOOTRES_FILES=1 (board.conf): the board's own bootloader pictures (boards/<board>/boot-resource:
+# the boot logo and the charge pictures, scripts/make-charge-screens.py) go into a COPY of that
+# partition with mtools, nothing mounted; the rest of it (fonts, wavefiles, the panel index) stays.
+BOOTRES_NOTE=
+if [ "${OWN_BOOTRES_FILES:-0}" = 1 ]; then
+    BRD=$OAKMOSS_ROOT/boards/$BOARD/boot-resource
+    MCOPY=${MCOPY:-$SDK_DIR/out/host/bin/mcopy}; [ -x "$MCOPY" ] || MCOPY=$(command -v mcopy || true)
+    [ -x "$MCOPY" ] || die "OWN_BOOTRES_FILES: need mcopy (the SDK's out/host/bin, or mtools)"
+    [ -f "$BRD/bootlogo.bmp" ] || die "OWN_BOOTRES_FILES: no $BRD/bootlogo.bmp (scripts/make-charge-screens.py $BOARD)"
+fi
 ENVSTOCK=$(f 'RFSFAT16_ENV_FEX000000000')
 if [ "$STOCK" = android ]; then
     DTBO=$(f 'RFSFAT16_DTBO_FEX00000000')
@@ -112,6 +122,22 @@ if [ -f "$BOOT0_NAND" ] && cmp -s "$BOOT0" "$BOOT0_NAND"; then die "boot0 sanity
 mkdir -p "$OUT"
 need_tmp_space 2048
 W=$(mktemp -d "${TMPDIR:-/tmp}/oakmoss-own.XXXX"); trap 'rm -rf "$W"' EXIT
+
+if [ "${OWN_BOOTRES_FILES:-0}" = 1 ]; then
+    # Allwinner's fsbuild leaves the BPB's geometry fields at zero, which mtools refuses unless told not to.
+    export MTOOLS_SKIP_CHECK=1
+    cp "$BOOTRES" "$W/bootres.fex"; n=0
+    while IFS= read -r -d '' src; do
+        rel=${src#"$BRD"/}
+        "$MCOPY" -o -i "$W/bootres.fex" "$src" "::$rel" || die "mcopy $rel into the boot-resource failed"
+        "$MCOPY" -n -i "$W/bootres.fex" "::$rel" "$W/bootres-check" && cmp -s "$src" "$W/bootres-check" || die "$rel reads back different"
+        n=$((n + 1))
+    done < <(find "$BRD" -type f -print0 | sort -z)
+    rm -f "$W/bootres-check"
+    BOOTRES_NOTE=" + $n pictures from boards/$BOARD/boot-resource"
+    log "boot-resource: $BOOTRES$BOOTRES_NOTE (read back)"
+    BOOTRES=$W/bootres.fex
+fi
 
 log "rootfs: our $BOARD squashfs, hand-off and probe added"
 "$UNSQUASHFS" -n -d "$W/root" "$ROOTFS" >/dev/null 2>"$W/unsq.err" || true
@@ -463,7 +489,7 @@ if [ "$AB" = 1 ]; then
 fi
 {
   echo "device=$BOARD"; echo "kind=own-kernel-stock-chain"; echo "built=$ST"; echo "oakmoss=$(oakmoss_version)"
-  echo "boot_chain=$CHAIN: card boot0 (also mirrored at sector 256), boot package with OUR device tree in place of its dtb item (checksum redone), boot-resource$([ "$STOCK" = android ] && echo ", dtbo, vbmeta x3")"
+  echo "boot_chain=$CHAIN: card boot0 (also mirrored at sector 256), boot package with OUR device tree in place of its dtb item (checksum redone), boot-resource${BOOTRES_NOTE}$([ "$STOCK" = android ] && echo ", dtbo, vbmeta x3")"
   echo "boot_chain_sha256=$CHAIN_SHA"
   echo "kernel=ours from $BUILD ($(grep -m1 '^kernel_encrypt_obj_md5' "$BUILD/BUILD-INFO.txt")), in a $([ "$STOCK" = android ] && echo "header-v2 boot image with our device tree" || echo "header-v0 boot image (the tree comes from the package)"); board_dts=$(grep -m1 '^board_dts' "$BUILD/BUILD-INFO.txt" | cut -d= -f2-)"
   echo "rootfs=our $BOARD rootfs squashfs from $BUILD (md5 $(md5_of "$ROOTFS") before the hand-off/probe repack; our modules, PowerVR 1.19)"

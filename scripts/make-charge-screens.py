@@ -22,6 +22,13 @@ Writes, for <board>:
   .../nofe-level-NNN.rgba.gz   "No frontend detected, charging": the level screen when no card
       has a launcher and the charger is in (charge-screen.sh nofrontend);
   .../nofrontend-off.rgba.gz   "No frontend, power off in 10s", the same without the charger.
+The boards in BOOT_FRAMES (their own boot logo behind a stock U-Boot) also get the boot screens
+(docs/boot-screens.md), on the level screen's layout:
+  .../boot-loading.rgba.gz   "Loading...", from init until the hand-off (/etc/init.d/bootframe);
+  .../reboot.rgba.gz, poweroff.rgba.gz   "Rebooting", "Shutting down" (/etc/init.d/shutdownframe);
+and full-screen U-Boot pictures, not centred cut-outs: bootlogo.bmp is the same screen with an
+empty status line, 32-bit like the stock logo it replaces, and bat/bempty.bmp is added (the
+Powkiddy U-Boot's no-charger low-battery picture).
 The Linux frames are the framebuffer's own format (B, G, R, A bytes: ARGB8888, measured on the Zero 28
 with one-byte colour bars)
 at the size apps draw in; the kernel rotates them for the panel on every flip.
@@ -44,6 +51,7 @@ NOFRONTEND_OFF_TEXT = "No frontend, power off in 10s"
 LOW_BATTERY = {"bat0": ["Battery too low to start", "Charging, please wait"],
                "low_pwr": ["Battery too low", "Connect the charger"]}
 LEVELS = range(0, 101, 5)
+BOOT_FRAMES = ("v90s", "v20")
 
 
 def _font(bold, px):
@@ -103,12 +111,19 @@ def main(board):
     for level in LEVELS:
         save(f"nofe-level-{level:03d}", card(w, h, [NOFRONTEND_TEXT], battery=level))
     save("nofrontend-off", card(w, h, [NOFRONTEND_OFF_TEXT]))
+    full = board in BOOT_FRAMES
+    if full:
+        save("boot-loading", card(w, h, ["Loading..."]))
+        save("reboot", card(w, h, ["Rebooting"]))
+        save("poweroff", card(w, h, ["Shutting down"]))
     # U-Boot centres its pictures, so each is cut to its content symmetrically about the centre;
     # the charge picture is the level screen with the battery left black, so Linux's first frame
     # draws the same tree and text at the same place and only the battery appears. They fit
     # because each board's sys_partition.fex gives its boot-resource partition 4 MiB.
     rot = mbr.LOGO_ROT[board]
     def centred(im):
+        if full:
+            return im.rotate(rot, expand=True) if rot else im
         x0, y0, x1, y1 = im.getbbox()
         m = 4; dx = max(w / 2 - x0, x1 - w / 2) + m; dy = max(h / 2 - y0, y1 - h / 2) + m
         im = im.crop((round(w / 2 - dx), round(h / 2 - dy), round(w / 2 + dx), round(h / 2 + dy)))
@@ -117,12 +132,17 @@ def main(board):
     os.makedirs(out, exist_ok=True)
     bmp = centred(card(w, h, [CHARGE_TEXT], battery=100, draw_battery=False).convert("RGB"))
     bmp.save(os.path.join(out, "battery_charge.bmp"), format="BMP")
-    for name, lines in LOW_BATTERY.items():
+    low = dict(LOW_BATTERY, bempty=LOW_BATTERY["low_pwr"]) if full else LOW_BATTERY
+    for name, lines in low.items():
         centred(card(w, h, lines, battery=0, show_pct=False).convert("RGB")).save(
             os.path.join(out, name + ".bmp"), format="BMP")
-    if board != "zero28":
-        mbr.logo(board).save(os.path.join(ROOT, "boards", board, "boot-resource", "bootlogo.bmp"), format="BMP")
-    print(f"{board}: {len(LEVELS)} level frames x 2 + loading + updating + nofrontend-off ({w}x{h}), battery_charge.bmp {bmp.size[0]}x{bmp.size[1]}")
+    logo = os.path.join(ROOT, "boards", board, "boot-resource", "bootlogo.bmp")
+    if full:
+        centred(card(w, h, [""])).save(logo, format="BMP")
+    elif board != "zero28":
+        mbr.logo(board).save(logo, format="BMP")
+    print(f"{board}: {len(LEVELS)} level frames x 2 + loading + updating + nofrontend-off"
+          f"{' + boot-loading + reboot + poweroff' if full else ''} ({w}x{h}), battery_charge.bmp {bmp.size[0]}x{bmp.size[1]}")
 
 
 if __name__ == "__main__":

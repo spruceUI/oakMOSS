@@ -1,0 +1,19 @@
+#!/bin/sh /etc/rc.common
+# oakMOSS shutdown and reboot screens: "Shutting down" or "Rebooting" under the boot logo, first
+# of the K scripts (the launcher has let go of the panel by then). procd patch 901 passes the
+# kind as OAKMOSS_SHUTDOWN; without it nothing is drawn. A debug-text boot shows the kernel log
+# instead (oakmoss-debug-text.sh). Boards without the boot screens: nothing (docs/boot-screens.md).
+
+STOP=00
+
+stop() {
+    case ${OAKMOSS_SHUTDOWN:-} in
+        poweroff|reboot) ;;
+        *) return 0 ;;
+    esac
+    if [ -e /tmp/oakmoss-debug-text ]; then
+        /usr/magicx/bin/oakmoss-debug-text.sh shutdown "$OAKMOSS_SHUTDOWN"
+    else
+        /usr/magicx/bin/charge-screen.sh "$OAKMOSS_SHUTDOWN"
+    fi
+}

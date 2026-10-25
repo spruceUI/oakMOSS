@@ -14,6 +14,8 @@ export LD_LIBRARY_PATH=/usr/magicx/lib:$LD_LIBRARY_PATH
 
 LOG=/mnt/UDISK/oakmoss-boot.log
 log() { echo "$(cut -d' ' -f1 /proc/uptime) $*" >> "$LOG" 2>/dev/null; }
+# A debug-text boot's log screen (oakmoss-debug-text.sh) ends before anything else takes the panel.
+text_off() { [ -e /tmp/oakmoss-debug-text ] && oakmoss-debug-text.sh stop; }
 echo "=== boot $(date '+%Y-%m-%d %H:%M:%S') device=$(cat /usr/magicx/device 2>/dev/null) version=$(cat /usr/magicx/version 2>/dev/null) slot=$(fw_printenv -n root_partition 2>/dev/null)" >> "$LOG" 2>/dev/null
 
 # Reaching userland confirms an updated slot (docs/updates.md); until then U-Boot
@@ -80,6 +82,7 @@ while :; do
     # Updates from both cards go to the installer, which picks the newest and shows its own frame.
     dev=$(cat /usr/magicx/device 2>/dev/null)
     pkgs=$(ls /mnt/SDCARD/oakmoss-"$dev"-*.omupd /media/sdcard1/oakmoss-"$dev"-*.omupd 2>/dev/null)
+    [ -n "$pkgs" ] && text_off
     if [ -n "$pkgs" ] && oakmoss-update.sh $pkgs; then
         sync
         # A reboot with the cards still mounted leaves both FATs dirty (V90S, 2026-10-24).
@@ -89,6 +92,7 @@ while :; do
     fi
 
     [ -f "$MAGICX_PATH" ] || [ -f "$UPDATER_PATH" ] && break
+    text_off
 
     # No launcher on any card: with the charger in, the charging screen until the power key
     # (then the cards again) or until the charger goes (it powers off); otherwise power off.
@@ -105,6 +109,10 @@ while :; do
     exit 0
 done
 
+# "Loading frontend" under the boot logo while the launcher starts (the boards with the boot
+# screens, docs/boot-screens.md); a debug-text boot leaves its last lines up instead.
+text_off
+/usr/magicx/bin/charge-screen.sh frontend
 if [ -f "$MAGICX_PATH" ]; then
     log "running $MAGICX_PATH"
     "$MAGICX_PATH"

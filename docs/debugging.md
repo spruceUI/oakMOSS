@@ -17,6 +17,8 @@ On the device, the partition is `/media/sdcard1` while SD2 hosts and `/mnt/SDCAR
 hosts (`docs/cards.md`), so `touch /media/sdcard1/oakmoss-debug` over SSH turns it on there.
 The records follow at once. The kernel marks follow from the next boot, because U-Boot reads
 the setting from the env (`oakmoss_debug`), where `runmagicx.sh` writes it at every boot.
+On the boards with the boot screens (Powkiddy V90S and V20), the same file also shows the
+kernel log on the panel during the boot, in place of the boot screens (`docs/boot-screens.md`).
 
 ## What it records
 

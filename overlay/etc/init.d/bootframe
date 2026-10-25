@@ -1,0 +1,14 @@
+#!/bin/sh /etc/rc.common
+# oakMOSS boot screen: "Loading..." under the boot logo as soon as init runs, after the GPU
+# driver's fbdev setup has blanked U-Boot's picture; runmagicx.sh puts "Loading frontend" up
+# before the launcher. Only on boards that ship the boot screens (docs/boot-screens.md); not in
+# a charger boot (chargeframe) or a debug-text boot (debugtext).
+
+START=02
+
+start() {
+    case " $(cat /proc/cmdline 2>/dev/null) " in
+        *" androidboot.mode=charger "*) ;;
+        *) /usr/magicx/bin/charge-screen.sh boot ;;
+    esac
+}

@@ -1,0 +1,10 @@
+#!/bin/sh /etc/rc.common
+# oakMOSS debug text: with an oakmoss-debug file on SD1's SPRUCEOS partition, the boot shows the
+# kernel log and the boot log on the panel in place of the boot screens, until the launcher
+# starts (oakmoss-debug-text.sh; docs/boot-screens.md). Before bootframe, so its frame stays off.
+
+START=01
+
+start() {
+    /usr/magicx/bin/oakmoss-debug-text.sh start
+}

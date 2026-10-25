@@ -13,10 +13,11 @@
 # format (the board's page size, B G R A bytes), written to both pages and flipped to; the kernel's
 # framebuffer rotation turns them for the panel on the flip.
 
-MODE=$1                 # "frame", "updating", "nofrontend-off": draw once and exit; "nofrontend" (see below)
-FRAMES=/usr/magicx/share/charge
-FB=/dev/fb0
-FBSYS=/sys/class/graphics/fb0
+MODE=$1                 # "frame", "updating", "nofrontend-off" and the boot screens: draw once and exit; "nofrontend" (see below)
+FRAMES=${FRAMES:-/usr/magicx/share/charge}     # these four for tests (tests/test-screens.sh)
+FB=${FB:-/dev/fb0}
+FBSYS=${FBSYS:-/sys/class/graphics/fb0}
+TEXT_FLAG=${TEXT_FLAG:-/tmp/oakmoss-debug-text}  # a debug-text boot (oakmoss-debug-text.sh)
 BAT=/sys/class/power_supply/axp2202-battery/capacity
 USB=/sys/class/power_supply/axp2202-usb/online
 GOV=/sys/devices/system/cpu/cpufreq/policy0/scaling_governor
@@ -79,6 +80,17 @@ if [ "$MODE" = frame ]; then
     exit 0
 fi
 
+# The boot screens (docs/boot-screens.md): `charge-screen.sh boot` ("Loading...", /etc/init.d/bootframe),
+# `frontend` ("Loading frontend", runmagicx.sh), `reboot` and `poweroff` (/etc/init.d/shutdownframe).
+# Only on the boards that ship them (boot-loading.rgba.gz), and never over a debug boot's text.
+case $MODE in
+    boot|frontend|reboot|poweroff)
+        [ -f "$FRAMES/boot-loading.rgba.gz" ] && [ ! -e "$TEXT_FLAG" ] || exit 0
+        echo 0 > "$FBSYS/blank" 2>/dev/null
+        case $MODE in boot) show boot-loading ;; frontend) show loading ;; *) show "$MODE" ;; esac
+        exit 0 ;;
+esac
+
 # `charge-screen.sh updating`: "Updating, do not power off" while oakmoss-update.sh writes the card;
 # `charge-screen.sh nofrontend-off`: "No frontend, power off in 10s" (runmagicx.sh powers off).
 if [ "$MODE" = updating ] || [ "$MODE" = nofrontend-off ]; then
@@ -109,7 +121,7 @@ while :; do
     for d in /sys/class/input/event*; do
         case "$(cat "$d/device/name" 2>/dev/null)" in
             axp2202-pek) pek=/dev/input/${d##*/} ;;
-            magicx-input) pad=/dev/input/${d##*/} ;;
+            magicx-input|"Powkiddy V90S Gamepad"|"Powkiddy V20 Gamepad") pad=/dev/input/${d##*/} ;;
         esac
     done
     [ -n "$pek" ] && [ -n "$pad" ] && break
