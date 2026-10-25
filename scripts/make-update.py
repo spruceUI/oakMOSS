@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """Cut an oakMOSS update (.omupd) out of a finished SD1 image.
 
-    make-update.py [--bootchain] <sd1.img> <board> <version> <out.omupd> [<build>]
+    make-update.py [--bootchain] [--own] <sd1.img> <board> <version> <out.omupd> [<build>]
 
 The update carries the kernel slot (boot), the root filesystem slot (rootfs)
 and the boot-resource partition, with --bootchain also boot0 and the U-Boot
 package (BOOTCHAIN=1), each with the sha256 of the bytes that go on the card. The device installs it with
 /usr/magicx/bin/oakmoss-update.sh (docs/updates.md). <build> is the commit time
 (build.sh), which the device compares with /usr/magicx/build to install only newer updates.
+--own cuts it from an own-lane image (make-own-kernel-stock.sh): LANE=own, and no
+boot-resource, which is the board's stock one there (vendor data, never in an update).
 
 Format: a 4 KiB text manifest (KEY=VALUE lines, NUL padded), then each part
 at a 4 KiB-aligned offset. boot and bootres are gzipped whole partitions; the
@@ -53,7 +55,8 @@ def read_at(img, sector, length):
 def main():
     args = sys.argv[1:]
     bootchain = '--bootchain' in args
-    args = [a for a in args if a != '--bootchain']
+    own = '--own' in args
+    args = [a for a in args if a not in ('--bootchain', '--own')]
     if len(args) not in (4, 5):
         sys.exit(__doc__)
     path, board, version, out = args[:4]
@@ -62,7 +65,7 @@ def main():
         sys.exit(f'build must be a number, not {build!r}')
     with open(path, 'rb') as img:
         parts, first_usable = gpt_partitions(img)
-        for need in ('boot', 'rootfs', 'bootloader'):
+        for need in ('boot', 'rootfs') + (() if own else ('bootloader',)):
             if need not in parts:
                 sys.exit(f'no "{need}" partition in {path}')
 
@@ -71,7 +74,7 @@ def main():
             return read_at(img, start, sectors * SECTOR)
 
         boot = whole('boot')
-        bootres = whole('bootloader')
+        bootres = None if own else whole('bootloader')
 
         start, sectors = parts['rootfs']
         sb = read_at(img, start, 96)
@@ -99,8 +102,9 @@ def main():
     items = [('boot', boot, True), ('rootfs', rootfs, False)]
     if bootchain:
         items += [('boot0', boot0, False), ('package', package, False)]
-    items.append(('bootres', bootres, True))
-    lines = ['FORMAT=omupd1', f'BOARD={board}', f'VERSION={version}', f'BUILD={build}',
+    if not own:
+        items.append(('bootres', bootres, True))
+    lines = ['FORMAT=omupd1', f'BOARD={board}'] + (['LANE=own'] if own else []) + [f'VERSION={version}', f'BUILD={build}',
              f'BOOTCHAIN={int(bootchain)}', 'PARTS=' + ' '.join(n for n, _, _ in items)]
     blobs = []
     offset = ALIGN

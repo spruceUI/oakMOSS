@@ -9,11 +9,13 @@
 #
 #   oakmoss-update.sh <file.omupd>...
 #
-# DEVICE, BYNAME, DISK, FIRST_SECTOR, BUILD_FILE, BAT, USB and SHOW exist for testing
-# against plain files.
+# DEVICE, LANE, BYNAME, DISK, FIRST_SECTOR, BUILD_FILE, BAT, USB and SHOW exist for testing
+# against plain files. LANE is the card's: own on make-own-kernel-stock.sh's cards (the
+# rootfs says so in /usr/magicx/lane), sdk otherwise; a package names its lane the same way.
 
 BYNAME=${BYNAME:-/dev/by-name}
 DEVICE=${DEVICE:-$(cat /usr/magicx/device 2>/dev/null)}
+LANE=${LANE:-$(cat /usr/magicx/lane 2>/dev/null)}; LANE=${LANE:-sdk}
 LOG=${LOG:-/mnt/UDISK/oakmoss-boot.log}
 # Also on the card beside the first package: the update's parts_clean wipes /mnt/UDISK next boot.
 CARD_LOG=${CARD_LOG:-${1%/*}/oakmoss-update.log}
@@ -46,6 +48,10 @@ for f in "$@"; do
     if [ "$(peek "$f" FORMAT)" != omupd1 ] || [ "$(peek "$f" BOARD)" != "$DEVICE" ]; then
         set_aside "$f" failed "not an oakMOSS update for the $DEVICE"; continue
     fi
+    l=$(peek "$f" LANE)
+    if [ "${l:-sdk}" != "$LANE" ]; then
+        set_aside "$f" failed "an update for the ${l:-sdk} lane, and this card is the $LANE lane's"; continue
+    fi
     b=$(peek "$f" BUILD); case $b in ''|*[!0-9]*) b=0 ;; esac
     if [ "$b" -le "$cur" ]; then
         set_aside "$f" old "$(peek "$f" VERSION) is not newer than this image, $(cat /usr/magicx/version 2>/dev/null)"
@@ -71,6 +77,9 @@ m() { sed -n "s/^$1=//p" "$W/manifest" | head -n 1; }
 
 [ "$(m FORMAT)" = omupd1 ] || fail "$PKG is not an oakMOSS update"
 [ "$(m BOARD)" = "$DEVICE" ] || fail "$PKG is for the $(m BOARD), this is the $DEVICE"
+l=$(m LANE); [ "${l:-sdk}" = "$LANE" ] || fail "$PKG is for the ${l:-sdk} lane, this card is $LANE"
+# An own-lane update carries no boot-resource: that card keeps its board's stock one.
+has() { case " $(m PARTS) " in *" $1 "*) return 0 ;; esac; return 1; }
 log "$(m VERSION) from $PKG"
 
 part() {
@@ -120,7 +129,7 @@ cur_root=$(fw_printenv -n root_partition 2>/dev/null); cur_root=${cur_root:-root
 if [ "$cur_root" = rootfs_b ]; then new_boot=boot new_root=rootfs; else new_boot=boot_b new_root=rootfs_b; fi
 [ -e "$BYNAME/$new_boot" ] && [ -e "$BYNAME/$new_root" ] ||
     fail "this card has no second slot; flash an oakMOSS image with one first"
-for p in boot:$new_boot rootfs:$new_root bootres:bootloader; do
+for p in boot:$new_boot rootfs:$new_root $(has bootres && echo bootres:bootloader); do
     [ "$(m "${p%%:*}_SIZE")" -le "$(size_of "$BYNAME/${p#*:}")" ] || fail "${p%%:*} does not fit in ${p#*:}"
 done
 
@@ -143,7 +152,7 @@ if [ "$(m BOOTCHAIN)" = 1 ]; then
         put "$name" "$DISK" "$main"
     done
 fi
-if [ "$(on_card "$BYNAME/bootloader" "$(m bootres_SIZE)" 0)" != "$(m bootres_SHA256)" ]; then
+if has bootres && [ "$(on_card "$BYNAME/bootloader" "$(m bootres_SIZE)" 0)" != "$(m bootres_SHA256)" ]; then
     put bootres "$BYNAME/bootloader" 0
 fi
 
