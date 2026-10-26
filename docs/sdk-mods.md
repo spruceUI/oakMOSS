@@ -553,3 +553,26 @@ git -C "$OAKMOSS_ROOT" show 26eb29e:sdk-patches/tree/151-input-adc-joypad-powkid
 ```
 
 `mods_version` 25 -> 27.
+
+## Round 33 (2026-10-25): the TrimUI Brick, Brick Pro and Smart Pro panel
+
+Three more A133P boards whose stock trees are complete 4.9 Tina trees: the boards boot our kernel
+on TrimUI's boot0, U-Boot and device tree, all unchanged (`boards/brick` first). All three stock trees
+name one panel driver, `otm1289a`, which the SDK lacks: the stock U-Boot reads the module's DCS ID
+registers and appends `lcd=<controller>` to the command line. Stamped 28: 26 is `bundle/20261024`'s,
+27 this branch's base (round 32).
+
+| what | where | why |
+|---|---|---|
+| `160-lcd-panel-trimui-a133p.patch` | `lichee/linux-4.9/drivers/video/fbdev/sunxi/disp2/disp/lcd/` (`trimui_brick.c/.h`, `trimui_brick_panels.h`, `panels.c/.h`, `Kconfig`, `../Makefile`) | Registered as `otm1289a`. Init tables for the eight controllers (gc9702c, otm1289a, er68576, st7703, nv3052, jd9168, gh7003, the Brick Pro's jd9168) are Knulli's recovery from the stock U-Boot and kernel (5.15 driver, GPL-2.0), on the same 4.9 disp2 calls as 070 and 150. The table follows `trimui_lcd=` (bring-up), then U-Boot's `lcd=`, then the DCS IDs. The stock trees carry no board compatible: a Brick Pro is told by its lcd0 `lcd_ht` 1184. Hunks sit beside `he0801a068`, clear of 070 and 150. Built in (config line in 161). |
+| `161-kernel-config-trimui.patch` | `device/config/chips/a133/configs/aw3/linux/config-4.9` | `CONFIG_LCD_SUPPORT_TRIMUI_BRICK=y`, after `HE0801A068`, where no 020 or 152 hunk reaches. |
+| `scripts/lib.sh` `OAKMOSS_MODS_VERSION` | `build.sh` | refuses a tree without 160-161 |
+
+Checked 2026-10-25 on the desk only: both patches made with GNU diff against the SDK files with 020,
+070, 150 and 152 applied, and dry-run forward onto that tree; the driver compiles with clang
+(`-std=gnu89 -Wall -Wextra -Werror`, stub disp2 headers); its panel choice passes 13 cases (the three
+lab units' `lcd=`, `default`, a jd9168 Brick Pro, `trimui_lcd=`, no or empty `lcd=`). Not yet built
+with the SDK's compiler, not on hardware.
+
+On an existing tree: `scripts/apply-sdk-mods.sh` (160 and 161 report `patched`). The stamp moves,
+which wipes the kernel build tree. `mods_version` 27 -> 28.

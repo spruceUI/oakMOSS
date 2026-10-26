@@ -1,0 +1,13 @@
+diff -ruN a/device/config/chips/a133/configs/aw3/linux/config-4.9 b/device/config/chips/a133/configs/aw3/linux/config-4.9
+--- a/device/config/chips/a133/configs/aw3/linux/config-4.9	2026-10-25 22:24:19.135708629 -0500
++++ b/device/config/chips/a133/configs/aw3/linux/config-4.9	2026-10-25 22:24:19.139708631 -0500
+@@ -2444,6 +2444,9 @@
+ # CONFIG_LCD_SUPPORT_TFT720X1280 is not set
+ # CONFIG_LCD_SUPPORT_FD055HD003S is not set
+ CONFIG_LCD_SUPPORT_HE0801A068=y
++# round 33: the TrimUI A133P panel (tree patch 160), answered here: the build's silentoldconfig
++# stops at any new symbol, whatever its default
++CONFIG_LCD_SUPPORT_TRIMUI_BRICK=y
+ # CONFIG_LCD_SUPPORT_ILI9341 is not set
+ # CONFIG_LCD_SUPPORT_LH219WQ1 is not set
+ # CONFIG_LCD_SUPPORT_LS029B3SX02 is not set

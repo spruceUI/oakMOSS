@@ -229,6 +229,12 @@ its power sequence and 27-entry init table are [Knulli](https://github.com/knull
 reconstruction from the stock V90S kernel (GPL-2.0). It sits on the 4.9 disp2 calls that patch 070 uses.
 A kernel patch: the kernel built with it is GPL-2.0, as always.
 
+`sdk-patches/tree/160-lcd-panel-trimui-a133p.patch` (the TrimUI Brick, Brick Pro and Smart Pro panel,
+`otm1289a`) ports Knulli's `board/allwinner/a133/panels/trimui_brick.c` and its generated
+`trimui_brick_panels.h` (branch `development`, commit `f727825f`, 2026-10-18; GPL-2.0): the init tables
+Knulli recovered from the stock firmware, unchanged; the driver is adapted to the 4.9 disp2 calls and
+takes the stock U-Boot's `lcd=` first. A kernel patch, GPL-2.0.
+
 ## ROCKNIX: the Powkiddy joypad's axis handling
 
 `sdk-patches/tree/151-input-adc-joypad-powkiddy.patch` is a new driver for the stock tree's
@@ -252,5 +258,5 @@ image's userland.
 [Knulli](https://github.com/knulli-cfw/knulli-linux) (in-tree a133 boards for
 these devices) and the TrimUI Smart Pro SDK were read while researching the
 platform (docs/DEPENDENCIES.md, docs/toolchain.md). Nothing from them is included beyond the panel
-init above (150). The V90S's stock boot chain is fetched from Knulli's board files at a pinned commit
-(`scripts/lib.sh`) and is not redistributed.
+drivers above (150, 160). The V90S's stock boot chain is fetched from Knulli's board files at a pinned commit
+(`scripts/lib.sh`) and is not redistributed; so is the TrimUI Brick's, from TrimUI's public firmware release.

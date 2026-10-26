@@ -216,7 +216,8 @@ kdebug_patch_state() {
 }
 # The level apply-sdk-mods.sh stamps (docs/sdk-mods.md, `mods_version`). A tree stamped lower
 # lacks later rounds, so build.sh refuses it.
-OAKMOSS_MODS_VERSION=27
+# 28 = feat/trimui-a133p round 33 (26 is bundle/20261024's): whoever merges second renumbers.
+OAKMOSS_MODS_VERSION=28
 need_mods() {
     local v
     [ -f "$SDK_DIR/.oakmoss-mods" ] || die "SDK modifications not applied (run scripts/apply-sdk-mods.sh)"
