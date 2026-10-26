@@ -29,7 +29,9 @@ and known gaps: [docs/status.md](docs/status.md).
 
 In progress (not in a release): the **Powkiddy V90S** and **V20**, A133P boards on their own stock
 boot chain (`boards/v90s`, `boards/v20`; the V20 untested). See `docs/hardware-notes.md`,
-"Powkiddy V90S and V20".
+"Powkiddy V90S and V20". The **TrimUI Brick** (then Brick Pro and Smart Pro) from a TF card on
+TrimUI's untouched boot chain, beside the stock eMMC (`boards/brick`, not yet built):
+[docs/trimui.md](docs/trimui.md).
 
 ## Documentation
 

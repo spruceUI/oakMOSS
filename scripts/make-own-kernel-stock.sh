@@ -8,11 +8,15 @@
 # hands the kernel, it is ours), and OUR rootfs squashfs in the rootfs partition
 # - the same kernel, modules, PowerVR 1.19 stack and userland the Zero 28 runs.
 #
-#   scripts/make-own-kernel-stock.sh <board> <build dir> [out dir]     board: xu20 | zero40 | v90s | v20
+#   scripts/make-own-kernel-stock.sh <board> <build dir> [out dir]     board: xu20 | zero40 | v90s | v20 | brick
 #
 # The Powkiddy V90S and V20 share one stock card (Tina Linux, not Android): its boot0 (DDR3 at
 # 576 MHz, which the SDK's boot0 is not set up for), its U-Boot package and its v0 boot image
 # header. No dtbo or vbmeta exist there; the partitions keep their places, blank.
+#
+# The TrimUI Brick (Tina Linux) keeps TrimUI's boot0, U-Boot package and boot-resource byte-identical,
+# its device tree included (board.conf OWN_STOCK_DT=1): TrimUI's recovery lives in that U-Boot, and our
+# kernel reads the stock tree (docs/trimui.md). The card boots beside the stock eMMC (OWN_EMMC=1).
 #
 # Why not the Android kernel (scripts/make-hybrid-stock.sh): its 1.11 GPU driver
 # exports no display-class API, so no Linux GPU userland can initialize on it
@@ -37,7 +41,7 @@
 # PSTORE=1 captures panics/oopses to the card's pstore partition, readable after the
 # next good boot with: mount -t pstore pstore /sys/fs/pstore; cat /sys/fs/pstore/*
 . "$(dirname "$0")/lib.sh"
-BOARD=${1:?board: xu20 | zero40 | v90s | v20}; shift || true
+BOARD=${1:?board: xu20 | zero40 | v90s | v20 | brick}; shift || true
 STOCK=android
 case "$BOARD" in
     xu20)   STOCK_DIR=$XU20_STOCK_DIR;   DUMP=$STOCK_DIR/$XU20_STOCK_IMG.dump;   CHAIN_SHA=$XU20_STOCK_IMG_SHA256;   UNPACKER=unpack-xu20-stock.sh
@@ -48,12 +52,21 @@ case "$BOARD" in
             CHAIN="Powkiddy V90S stock card (Tina Linux; Knulli's V90S files)" ;;
     v20)  STOCK_DIR=$POWKIDDY_V20_STOCK_DIR; DUMP=$STOCK_DIR/items; CHAIN_SHA=$POWKIDDY_V20_STOCK_SHA256; UNPACKER="unpack-powkiddy-stock.sh v20"; STOCK=tina
           CHAIN="Powkiddy V20 stock card (Tina Linux; its own boot0 at 504 MHz, U-Boot, SCP and tree, read off another developer's card)" ;;
-    *) die "unknown board $BOARD (xu20 | zero40 | v90s | v20)" ;;
+    brick) STOCK_DIR=$TRIMUI_BRICK_STOCK_DIR; DUMP=$STOCK_DIR/items; CHAIN_SHA=$TRIMUI_BRICK_STOCK_SHA256; UNPACKER="unpack-trimui-stock.sh brick"; STOCK=tina
+           CHAIN="TrimUI Brick stock firmware 1.1.1 (github.com/trimui/firmware_brick, trimui_tg3040.awimg)" ;;
+    *) die "unknown board $BOARD (xu20 | zero40 | v90s | v20 | brick)" ;;
 esac
 BUILD=${1:?build directory (builds/<stamp>-$BOARD)}; shift || true
 ST=$(stamp); OUT=${1:-$BUILDS_DIR/$ST-$BOARD-own}
 bconf() { { sed -n "s/^$1=\"\{0,1\}\([^\"#]*\)\"\{0,1\}.*/\1/p" "$OAKMOSS_ROOT/boards/$BOARD/board.conf" 2>/dev/null || true; } | sed 's/[[:space:]]*$//'; }
 OWN_DIAG=$(bconf OWN_DIAG); OWN_AUTOLOAD_DROP=$(bconf OWN_AUTOLOAD_DROP); OWN_BOOTRES_FILES=$(bconf OWN_BOOTRES_FILES)
+# TrimUI (docs/trimui.md): OWN_STOCK_DT keeps the stock package whole, OWN_EMMC roots the card past the
+# eMMC, OWN_TRIMUI_INPUTD adds TrimUI's input daemon (a local image), OWN_TRIMUI_GPIO the lines stock sets.
+OWN_STOCK_DT=$(bconf OWN_STOCK_DT); OWN_EMMC=$(bconf OWN_EMMC); OWN_TRIMUI_INPUTD=$(bconf OWN_TRIMUI_INPUTD); OWN_TRIMUI_GPIO=$(bconf OWN_TRIMUI_GPIO)
+[ "${OWN_STOCK_DT:-0}" != 1 ] || [ "$STOCK" = tina ] || die "OWN_STOCK_DT=1 needs a Tina stock chain (a v0 boot image takes the tree from the package)"
+[ "${OWN_STOCK_DT:-0}" != 1 ] || { [ "${OWN_BOOTRES_FILES:-0}" != 1 ] && [ -z "${BOOTRES:-}" ]; } ||
+    die "OWN_STOCK_DT=1 keeps the stock boot-resource: no OWN_BOOTRES_FILES or BOOTRES"
+[ "${OWN_STOCK_DT:-0}" != 1 ] || [ "${OMUPD_BOOTCHAIN:-0}" != 1 ] || die "OWN_STOCK_DT=1: no OMUPD_BOOTCHAIN (the card refuses it)"
 # AB=1 (board.conf OWN_AB): slot B for updates (docs/updates.md), and the update file beside the image.
 AB=${AB:-$(bconf OWN_AB)}; AB=${AB:-0}
 DIAG=${DIAG:-${OWN_DIAG:-1}}; EARLY_PROBE=${EARLY_PROBE:-1}; EXPERIMENTS=${EXPERIMENTS:-}
@@ -155,6 +168,23 @@ done
 [ -z "$OWN_AUTOLOAD_DROP" ] || echo "    autoload dropped: $OWN_AUTOLOAD_DROP"
 # oakmoss-update.sh installs only updates of the card's own lane: this one boots the stock chain.
 printf 'own\n' > "$R/usr/magicx/lane"
+# A card whose vendor chain stays byte-identical: oakmoss-update.sh refuses packages that would write it.
+if [ "${OWN_STOCK_DT:-0}" = 1 ]; then
+    printf '%s\n' "boot0, the U-Boot package and the boot-resource are the vendor's, byte-identical" > "$R/usr/magicx/keep-boot-chain"
+fi
+# TrimUI's input daemon (overlay/etc/init.d/trimui-inputd starts it): a LOCAL image from here on (user,
+# 2026-10-25), marked so in the rootfs and in BUILD-INFO. The GPIO lines are the ones stock sets first.
+if [ "${OWN_TRIMUI_INPUTD:-0}" = 1 ]; then
+    [ -f "$STOCK_DIR/trimui_inputd" ] || die "OWN_TRIMUI_INPUTD: no $STOCK_DIR/trimui_inputd (scripts/$UNPACKER)"
+    [ -x "$R/etc/init.d/trimui-inputd" ] && [ -L "$R/etc/rc.d/S14trimui-inputd" ] ||
+        die "OWN_TRIMUI_INPUTD: this build has no trimui-inputd init script (overlay/etc/init.d)"
+    install -D -m 0755 "$STOCK_DIR/trimui_inputd" "$R/usr/trimui/bin/trimui_inputd"
+    printf '%s\n' "carries TrimUI's closed trimui_inputd: local images only, never published (user, 2026-10-25)" > "$R/usr/magicx/local-only"
+    echo "    trimui_inputd: TrimUI's, from the stock rootfs (a LOCAL image)"
+fi
+if [ -n "${OWN_TRIMUI_GPIO:-}" ]; then
+    printf '%s\n' $OWN_TRIMUI_GPIO > "$R/usr/magicx/trimui-gpio"; echo "    GPIO lines set at boot: $OWN_TRIMUI_GPIO"
+fi
 # /dev/by-name follows the disk the root is on (two cards, probe order): as make-hybrid-stock.sh
 python3 - "$R/etc/init.d/boot" <<'PY'
 import sys
@@ -246,11 +276,16 @@ rm -f "$W/orphan-trial.ext4"
 "$MKE2FS" -q -t ext4 -O "$EXT4_FEATURES" -L rootfs_data -m 0 "$W/rootfs_data.ext4" 64M
 "$MKE2FS" -q -t ext4 -O "$EXT4_FEATURES" -L UDISK -m 0 "$W/udisk.ext4" 16M
 
-log "device tree: ours, into the stock boot package and into the boot image"
-python3 "$OAKMOSS_ROOT/scripts/toc1-item.py" --extract "$OURPKG" dtb "$W/our.dtb"
 cp "$BOOTPKG" "$W/boot_package.fex"
-python3 "$OAKMOSS_ROOT/scripts/toc1-item.py" --replace "$W/boot_package.fex" dtb "$W/our.dtb"
-python3 "$OAKMOSS_ROOT/scripts/toc1-checksum.py" --fix "$W/boot_package.fex"
+if [ "${OWN_STOCK_DT:-0}" = 1 ]; then
+    log "device tree: the stock package's own, the package byte-identical"
+    : > "$W/our.dtb"    # unused: a v0 boot image carries no tree
+else
+    log "device tree: ours, into the stock boot package and into the boot image"
+    python3 "$OAKMOSS_ROOT/scripts/toc1-item.py" --extract "$OURPKG" dtb "$W/our.dtb"
+    python3 "$OAKMOSS_ROOT/scripts/toc1-item.py" --replace "$W/boot_package.fex" dtb "$W/our.dtb"
+    python3 "$OAKMOSS_ROOT/scripts/toc1-checksum.py" --fix "$W/boot_package.fex"
+fi
 # boot image: the stock header (addresses, page size, its command line) with our
 # kernel, a placeholder ramdisk (our kernel mounts root= itself), our tree, and no
 # header command line of its own.
@@ -281,9 +316,10 @@ PY
 
 log "env: stock variables, root and init pointed at our rootfs (squashfs, our kernel)"
 ROOT_UUID=$(python3 -c 'import uuid; print(uuid.uuid4())'); printf '%s' "$ROOT_UUID" > "$W/rootfs.uuid"
-STOCK=$STOCK AB=$AB python3 - "$ENVSTOCK" "$W/env.txt" "$ROOT_UUID" "$INIT" "${CONSOLE:-}" "${EXTRA_BOOTARGS:-}" <<'PY'
+ROOTB_UUID=$(python3 -c 'import uuid; print(uuid.uuid4())'); printf '%s' "$ROOTB_UUID" > "$W/rootfs_b.uuid"
+STOCK=$STOCK AB=$AB EMMC=${OWN_EMMC:-0} python3 - "$ENVSTOCK" "$W/env.txt" "$ROOT_UUID" "$INIT" "${CONSOLE:-}" "${EXTRA_BOOTARGS:-}" "$ROOTB_UUID" <<'PY'
 import os, struct, sys, zlib
-raw = open(sys.argv[1], 'rb').read(); root_uuid, init, console, extra_args = sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6]
+raw = open(sys.argv[1], 'rb').read(); root_uuid, init, console, extra_args, root_b_uuid = sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6], sys.argv[7]
 # A redundant env (the Powkiddy cards) has a flag byte after the CRC; read as plain, it
 # prefixed the first variable's name (B169R's env had "\x01bootdelay").
 d = raw[5:] if zlib.crc32(raw[5:]) & 0xffffffff == struct.unpack_from('<I', raw)[0] else raw[4:]
@@ -360,7 +396,18 @@ if os.environ.get('AB') == '1':
     kv['ab_1'] = 'setenv ab_try 2; saveenv'
     kv['ab_2'] = ('setenv boot_partition ${ab_fallback_boot}; setenv root_partition ${ab_fallback_root}; setenv ab_try; '
                   'setenv ab_fallback_boot; setenv ab_fallback_root; setenv ab_reverted 1; saveenv; reset')
-assert kv['init'] in ('/sbin/init', '/sbin/init-probe', '/sbin/init-stamp') and 'rdinit' not in kv['setargs_mmc'] and kv['bootcmd'].endswith('run setargs_mmc boot_normal')
+# A board with an eMMC (TrimUI: mmcblk0, the stock firmware): U-Boot sets mmc_root from root_partition as
+# /dev/mmcblk0pN (board_helper.c), which there names the eMMC. The root comes from oak_root instead, set by
+# the slot's name (no hush parser: the name is the branch), so slot B and the fallback need nothing new.
+if os.environ.get('EMMC') == '1':
+    kv['oakroot_rootfs'] = 'setenv oak_root PARTUUID=' + root_uuid
+    if os.environ.get('AB') == '1':
+        kv['oakroot_rootfs_b'] = 'setenv oak_root PARTUUID=' + root_b_uuid
+    assert kv['setargs_mmc'].count(' root=${mmc_root} ') == 1 and kv.get('root_partition') == 'rootfs'
+    kv['setargs_mmc'] = kv['setargs_mmc'].replace(' root=${mmc_root} ', ' root=${oak_root} ')
+    kv['bootcmd'] = kv['bootcmd'].replace('run setargs_mmc boot_normal', 'run oakroot_${root_partition} setargs_mmc boot_normal')
+assert kv['init'] in ('/sbin/init', '/sbin/init-probe', '/sbin/init-stamp') and 'rdinit' not in kv['setargs_mmc']
+assert kv['bootcmd'].endswith(('run setargs_mmc boot_normal', 'run oakroot_${root_partition} setargs_mmc boot_normal'))
 open(sys.argv[2], 'w').write(''.join(f'{k}={v}\n' for k, v in kv.items()))
 PY
 # The Powkiddy stock U-Boot reads a redundant env (env + env-redund, a flag byte after the CRC) and
@@ -369,6 +416,7 @@ ENV_REDUND=; [ "$STOCK" = tina ] && ENV_REDUND=-r
 "$MKENVIMAGE" $ENV_REDUND -s 131072 -p 0x00 -o "$W/env.fex" "$W/env.txt"
 # The Powkiddy stock U-Boot reads its partition table at the card's 20 MiB mark (sector 40960), as the
 # stock card lays it out; a card without one showed the backlight and nothing else (V90S, 2026-10-24).
+# It is Allwinner's stock card shape: TrimUI's own rescue cards carry the same tables at 40960.
 [ "$STOCK" = tina ] && GPT_LAYOUT=${GPT_LAYOUT:-powkiddy}
 P1=40960; [ "${GPT_LAYOUT:-sdk}" = powkiddy ] && P1=41984
 
@@ -377,7 +425,7 @@ IMG=$OUT/oakmoss-$BOARD-own-$ST-sd1.img
 STOCK=$STOCK AB=$AB GPT_LAYOUT=${GPT_LAYOUT:-sdk} python3 - "$IMG" "$W" "$BOOT0" "$W/boot_package.fex" "$BOOTRES" "$DTBO" "$VBMETA" "$VBMETA_SYS" "$VBMETA_VEN" "$PSTORE_PARTUUID" "$PSTORE" <<'PY'
 import struct, sys, uuid, zlib, os
 img, W, boot0, bootpkg, bootres, dtbo, vbmeta, vbmeta_sys, vbmeta_ven, pstore_uuid, pstore = sys.argv[1:12]
-ROOT_UUID = uuid.UUID(open(f'{W}/rootfs.uuid').read().strip()); S = 512
+ROOT_UUID = uuid.UUID(open(f'{W}/rootfs.uuid').read().strip()); ROOTB_UUID = uuid.UUID(open(f'{W}/rootfs_b.uuid').read().strip()); S = 512
 parts = [('bootloader', 65536, bootres), ('env', 32768, f'{W}/env.fex'), ('boot', 65536, f'{W}/boot.img'), ('misc', 32768, None),
          ('dtbo', 4096, dtbo), ('rootfs', 1048576, f'{W}/rootfs.fex'), ('rootfs_data', 131072, f'{W}/rootfs_data.ext4'), ('UDISK', 32768, f'{W}/udisk.ext4'),
          ('vbmeta', 32768, vbmeta), ('vbmeta_system', 32768, vbmeta_sys), ('vbmeta_vendor', 32768, vbmeta_ven),
@@ -414,7 +462,7 @@ for name, st, size, src in ents:
         wr(st, src)
 linux = uuid.UUID('0FC63DAF-8483-4772-8E79-3D69D8477DE4').bytes_le; attr = 0x8000200000000000; entry = b''
 for name, st, size, src in ents:
-    pu = ROOT_UUID if name == 'rootfs' else (uuid.UUID(pstore_uuid) if name == 'pstore' else uuid.uuid4())
+    pu = {'rootfs': ROOT_UUID, 'rootfs_b': ROOTB_UUID}.get(name) or (uuid.UUID(pstore_uuid) if name == 'pstore' else uuid.uuid4())
     entry += linux + pu.bytes_le + struct.pack('<QQQ', st, st + size - 1, attr) + name.encode('utf-16-le').ljust(72, b'\0')
 # The partition table is laid out the way MagicX's own firmware lays it out (the stock
 # XU20 GPT item: entries at LBA 2, 17 entries, first usable LBA 32768), not the way the
@@ -479,6 +527,14 @@ if [ "${GPT_LAYOUT:-sdk}" = powkiddy ]; then
         [ "$(dd if="$IMG" bs=512 skip=$s count=1 status=none | head -c 16 | tail -c 8)" = "softw411" ] || die "no Allwinner partition table at sector $s"
     done
 fi
+# OWN_STOCK_DT: what the card's U-Boot runs from is the vendor's, byte for byte (TrimUI's recovery lives there).
+if [ "${OWN_STOCK_DT:-0}" = 1 ]; then
+    on_img() { dd if="$IMG" bs=512 skip="$1" count=$(( ($(stat -c%s "$2") + 511) / 512 )) status=none | head -c "$(stat -c%s "$2")" | sha256sum | cut -d' ' -f1; }
+    for s in 16 256; do [ "$(on_img $s "$BOOT0")" = "$(sha256_of "$BOOT0")" ] || die "boot0 at sector $s is not the stock one"; done
+    [ "$(on_img 32800 "$BOOTPKG")" = "$(sha256_of "$BOOTPKG")" ] || die "the boot package at sector 32800 is not the stock one"
+    [ "$(on_img $P1 "$BOOTRES")" = "$(sha256_of "$BOOTRES")" ] || die "the boot-resource is not the stock one"
+    echo "    boot0 (16, 256), boot package (32800) and boot-resource: the stock items, byte for byte"
+fi
 # The update for this lane's cards (docs/updates.md): LANE=own, kernel slot and squashfs. Only
 # OMUPD_BOOTCHAIN=1 adds boot0 and the U-Boot package, which are the vendor's here: local only.
 UPD=
@@ -491,18 +547,27 @@ if [ "$AB" = 1 ]; then
 fi
 {
   echo "device=$BOARD"; echo "kind=own-kernel-stock-chain"; echo "built=$ST"; echo "oakmoss=$(oakmoss_version)"
-  echo "boot_chain=$CHAIN: card boot0 (also mirrored at sector 256), boot package with OUR device tree in place of its dtb item (checksum redone), boot-resource${BOOTRES_NOTE}$([ "$STOCK" = android ] && echo ", dtbo, vbmeta x3")"
+  if [ "${OWN_STOCK_DT:-0}" = 1 ]; then
+    echo "boot_chain=$CHAIN: card boot0 (also mirrored at sector 256), boot package with its own device tree and boot-resource, all byte-identical (checked)"
+  else
+    echo "boot_chain=$CHAIN: card boot0 (also mirrored at sector 256), boot package with OUR device tree in place of its dtb item (checksum redone), boot-resource${BOOTRES_NOTE}$([ "$STOCK" = android ] && echo ", dtbo, vbmeta x3")"
+  fi
+  [ "${OWN_TRIMUI_INPUTD:-0}" = 1 ] && echo "publish=NO: the rootfs carries TrimUI's closed trimui_inputd (local images only, user 2026-10-25)"
   echo "boot_chain_sha256=$CHAIN_SHA"
   echo "kernel=ours from $BUILD ($(grep -m1 '^kernel_encrypt_obj_md5' "$BUILD/BUILD-INFO.txt")), in a $([ "$STOCK" = android ] && echo "header-v2 boot image with our device tree" || echo "header-v0 boot image (the tree comes from the package)"); board_dts=$(grep -m1 '^board_dts' "$BUILD/BUILD-INFO.txt" | cut -d= -f2-)"
   echo "rootfs=our $BOARD rootfs squashfs from $BUILD (md5 $(md5_of "$ROOTFS") before the hand-off/probe repack; our modules, PowerVR 1.19)"
   echo "handoff=$([ "$DIAG" = 1 ] && echo "DIAGNOSTIC (init=$INIT, experiments: ${EXPERIMENTS:-none})" || echo stock)"
   echo "autoload_dropped=${OWN_AUTOLOAD_DROP:-none}"
   echo "lane=own (/usr/magicx/lane); update=${UPD:-none (AB=0: one slot)}"
-  echo "layout=bootloader env boot misc dtbo rootfs(p6, squashfs) rootfs_data UDISK vbmeta vbmeta_system vbmeta_vendor$([ "$STOCK" = tina ] && echo " (dtbo and vbmeta blank), env-redund (redundant env)")$([ "$AB" = 1 ] && echo ", boot_b + rootfs_b last (slot B, empty)"); GPT layout ${GPT_LAYOUT:-sdk}; root=PARTUUID via mmc_root"
+  echo "layout=bootloader env boot misc dtbo rootfs(p6, squashfs) rootfs_data UDISK vbmeta vbmeta_system vbmeta_vendor$([ "$STOCK" = tina ] && echo " (dtbo and vbmeta blank), env-redund (redundant env)")$([ "$AB" = 1 ] && echo ", boot_b + rootfs_b last (slot B, empty)"); GPT layout ${GPT_LAYOUT:-sdk}; root=PARTUUID via $([ "${OWN_EMMC:-0}" = 1 ] && echo "oak_root (U-Boot's mmc_root would name the eMMC)" || echo mmc_root)"
   e=$(tr '\n' ';' < "$W/env.txt")
   if [ ${#e} -gt 400 ]; then e="${e:0:400}...[truncated]"; fi
   echo "env=$e"
-  echo "outputs=$(basename "$IMG") (raw GPT image: write raw, eject, boot; $([ "$STOCK" = tina ] && echo "system card in TF1 (sdc0), user card in TF2 (sdc1)" || echo "system card in the sdc2 slot, user card in the sdc0 slot"))"
+  if [ "${OWN_EMMC:-0}" = 1 ]; then
+    echo "outputs=$(basename "$IMG") (raw GPT image: write raw, eject, boot; the card in the TF slot (sdc0), the stock eMMC (sdc2) left alone)"
+  else
+    echo "outputs=$(basename "$IMG") (raw GPT image: write raw, eject, boot; $([ "$STOCK" = tina ] && echo "system card in TF1 (sdc0), user card in TF2 (sdc1)" || echo "system card in the sdc2 slot, user card in the sdc0 slot"))"
+  fi
 } > "$OUT/BUILD-INFO.txt"
 cp "$W/env.txt" "$OUT/env.txt"; ( cd "$OUT" && md5sum ./*.img > md5sums.txt )
 log "$BOARD own-kernel image ready: $OUT"; ls -la "$OUT" >&2
