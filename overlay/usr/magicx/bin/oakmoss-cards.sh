@@ -8,7 +8,7 @@
 #   oakmoss-cards.sh umount    take them down again, before a re-check
 #   oakmoss-cards.sh hotplug   SD2 inserted or pulled later (/etc/hotplug.d/block, ACTION + DEVNAME)
 #
-# MNT, MEDIA, SD1_DISK, SD2_GLOB, DEV_GLOB and CD_FILE exist for testing with loop devices.
+# MNT, MEDIA, SD1_DISK, SD2_GLOB, DEV_GLOB, CD_FILE and SYS_BLOCK exist for testing with loop devices.
 
 export PATH=/usr/magicx/bin:$PATH
 STATE=/tmp/oakmoss-cards
@@ -20,8 +20,16 @@ SD2_GLOB=${SD2_GLOB:-/sys/block/mmcblk*}
 DEV_GLOB=${DEV_GLOB:-mmcblk*}
 CD_FILE=${CD_FILE:-/sys/kernel/debug/gpio}
 SD2_CD_GPIO_FILE=${SD2_CD_GPIO_FILE:-/usr/magicx/sd2-cd-gpio}
+SYS_BLOCK=${SYS_BLOCK:-/sys/class/block}
 log() { echo "$(cut -d' ' -f1 /proc/uptime) cards: $*" >> "$LOG" 2>/dev/null; }
 mounted() { grep -q " $1 " /proc/mounts; }
+
+# A board's eMMC (TrimUI: mmcblk0, the stock firmware) is never a card: no election, no mount.
+# emmc <block name>: the disk, its partitions (through the parent disk), boot areas and rpmb.
+emmc() {
+    _e=$SYS_BLOCK/$1; [ -e "$_e/partition" ] && _e=$_e/..
+    [ "$(cat "$_e/device/type" 2>/dev/null)" = MMC ]
+}
 
 frontend() { [ -f "$1/magicx/init.sh" ] || [ -f "$1/.tmp_update/updater" ]; }
 
@@ -95,6 +103,7 @@ sd2() {		# sd2 <wait s>: SD2, the other MMC card (its first partition, or the wh
         for d in $SD2_GLOB; do
             case ${d##*/} in *boot*|*rpmb) continue ;; esac
             [ "/dev/${d##*/}" = "$SD1_DISK" ] && continue
+            emmc "${d##*/}" && continue
             [ -b "/dev/${d##*/}" ] || continue
             sleep 0.2	# the partitions appear with the disk; give their nodes a moment
             if [ -b "/dev/${d##*/}p1" ]; then echo "/dev/${d##*/}p1"; else echo "/dev/${d##*/}"; fi
@@ -152,6 +161,7 @@ cards_hotplug() {
     [ -f "$STATE" ] || return 0
     case $DEVNAME in $DEV_GLOB) ;; *) return 0 ;; esac
     case /dev/$DEVNAME in "$SD1_DISK"*) return 0 ;; esac
+    emmc "$DEVNAME" && return 0
     case $ACTION in
     add)
         [ "$(sed -n 's/^HOST=//p' "$STATE")" = sd1 ] || return 0
