@@ -5,7 +5,8 @@ fsbuild packs the boards' 4 MiB boot-resource with 2 sectors per cluster: 4071 c
 U-Boot reads as FAT16 (by the label) and Linux as FAT12 (by the count, fs/fat/inode.c), so a
 write from Linux corrupts it for U-Boot. This reads every entry fsbuild wrote and writes them
 again, in place, into a FAT16 of about 8111 clusters: names (8.3 and long), attributes, times,
-sizes and contents unchanged. It reads the result back and compares it before writing.
+sizes and contents unchanged, each directory in name order. It reads the result back and compares
+it before writing.
 
     scripts/fat16-boot-resource.py <sd1.img>
     scripts/fat16-boot-resource.py --export <sd1.img> <out.fex>   the partition as it is, checked
@@ -137,8 +138,11 @@ def write_fat16(old, tree):
         return bytes(e)
 
     def directory(items, self_cluster, parent_cluster):
-        """A directory's raw bytes; subdirectories and files are allocated as they come."""
+        """A directory's raw bytes; subdirectories and files are allocated in name order, so the
+        partition does not depend on the order the build host listed them (salusa vs Caladan, B195)."""
         raw = b''
+        items = ([i for i in items if i[2] is None]       # the label, "." and "..": first, as they were
+                 + sorted((i for i in items if i[2] is not None), key=lambda i: i[1][:11]))
         for lfn, e, body in items:
             if body is None:
                 if e[:11] == b'.          ':

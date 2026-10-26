@@ -536,7 +536,7 @@ ship and nothing on the device reads it (U-Boot loads only `bootlogo.bmp`).
 |---|---|---|
 | `scripts/build.sh` (overlay step) | `target/allwinner/generic/boot-resource/boot-resource.ini` | `size=` from the board's `sys_partition.fex` (bootloader size / 2 KiB); the SDK's file is kept as `.ini.orig` |
 | `scripts/build.sh`, `scripts/apply-sdk-mods.sh` | `target/allwinner/generic/boot-resource/bootlogo.bmp.sdk` | the SDK logo's backup lives beside the pack's root; an older `boot-resource/bootlogo.bmp.orig` moves there |
-| `scripts/fat16-boot-resource.py` | the image's bootloader partition | rewrites fsbuild's FAT as a FAT16 of one-sector clusters (8111), every entry kept, read back and compared first |
+| `scripts/fat16-boot-resource.py` | the image's bootloader partition | rewrites fsbuild's FAT as a FAT16 of one-sector clusters (8111), every entry kept, each directory in name order, read back and compared first |
 | `scripts/make-update.py` `check_bootres` | the image's bootloader partition | refuses a FAT that is not a FAT16 of exactly its partition by count and by label, or carries a `.orig` file |
 
 At 4 MiB fsbuild keeps 2 sectors per cluster: 4071 clusters, and a 12-bit table under a "FAT16"
@@ -544,7 +544,10 @@ label (`fsck.fat`: "12 bit entries"). U-Boot goes by the label and Linux by the 
 would follow every multi-cluster file (the logo, the charge pictures) through the wrong table.
 `build.sh` therefore rewrites the partition in the finished image before the update is made, puts
 the result in the dump's `boot-resource.fex` and drops the PhoenixSuit image, which nothing flashes. Every update to these images rewrites boot-resource,
-so a card from an older image loses the `.orig` at its next update. Not yet tested on hardware.
+so a card from an older image loses the `.orig` at its next update. On hardware since B176
+(2026-10-24, the three MagicX boards). The rewrite writes each directory in name order: fsbuild
+keeps the build host's listing order, so the same files from salusa (B189) and Caladan (B195) gave
+two partitions; sorted, they are byte-identical (`tests/test-fat16-order.sh`).
 
 ## Round 31 (2026-10-23): the Powkiddy V90S and V20 panel and pad
 
