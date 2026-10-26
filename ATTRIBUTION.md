@@ -222,6 +222,21 @@ configuration and init script in `overlay/etc/` are oakMOSS's own
 ([docs/batteryplus.md](docs/batteryplus.md)). An image that carries the binary carries a
 GPL-2.0 program; its source is that commit.
 
+## Knulli: panel drivers
+
+`sdk-patches/tree/150-lcd-panel-rgp35-nv3051.patch` (the Powkiddy V90S and V20 panel, RGP35_NV3051):
+its power sequence and 27-entry init table are [Knulli](https://github.com/knulli-cfw/knulli-linux)'s
+reconstruction from the stock V90S kernel (GPL-2.0). It sits on the 4.9 disp2 calls that patch 070 uses.
+A kernel patch: the kernel built with it is GPL-2.0, as always.
+
+## ROCKNIX: the Powkiddy joypad's axis handling
+
+`sdk-patches/tree/151-input-adc-joypad-powkiddy.patch` is a new driver for the stock tree's
+`adc-joypad` binding. The stock kernel's driver is a port of [ROCKNIX](https://github.com/ROCKNIX)'s
+`rocknix-singleadc-joypad` (GPL-2.0). This one's axis maths and defaults follow that driver: the mux
+channel table, calibration at open, the scaled radial deadzone, and tuning in percent. So the stock
+tree's tuning values mean the same thing. Kernel code, GPL-2.0.
+
 ## spruceOS
 
 [spruceOS](https://github.com/spruceUI/spruceOS) (CC BY-NC 4.0) is the launcher
@@ -236,4 +251,6 @@ image's userland.
 
 [Knulli](https://github.com/knulli-cfw/knulli-linux) (in-tree a133 boards for
 these devices) and the TrimUI Smart Pro SDK were read while researching the
-platform (docs/DEPENDENCIES.md, docs/toolchain.md); nothing from them is included.
+platform (docs/DEPENDENCIES.md, docs/toolchain.md). Nothing from them is included beyond the panel
+init above (150). The V90S's stock boot chain is fetched from Knulli's board files at a pinned commit
+(`scripts/lib.sh`) and is not redistributed.
