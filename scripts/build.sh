@@ -108,6 +108,12 @@ apply_overlay() {
             cp -a "$OAKMOSS_ROOT/boards/$board/boot-resource/." "$bres/"
         fi
     fi
+    # A board whose cards keep the vendor's boot-resource (OWN_STOCK_DT=1, TrimUI) brings no pictures, and no card
+    # carries its SDK image: that image takes oakMOSS's committed logo (the Zero 28's), never the SDK's.
+    if grep -q '^OWN_STOCK_DT=1' "$OAKMOSS_ROOT/boards/$board/board.conf" && [ ! -d "$OAKMOSS_ROOT/boards/$board/boot-resource" ] &&
+        [ -f "$logo.orig" ] && cmp -s "$logo" "$logo.orig"; then
+        cp -a "$OAKMOSS_ROOT/boards/zero28/boot-resource/bootlogo.bmp" "$logo"
+    fi
     # The SDK's own logo is Moss's (not ours to ship): every board brings oakMOSS's, from boards/<board>/boot-resource.
     if [ -f "$logo.orig" ] && cmp -s "$logo" "$logo.orig"; then
         die "$board would ship the SDK's original boot logo: add boards/$board/boot-resource/bootlogo.bmp"
@@ -407,7 +413,7 @@ case $STEP in
   cont)
     run_make cont "cp target/allwinner/a133-aw3/defconfig .config;" ;;
   overlay)
-    apply_overlay "${1:?board: zero28|zero40|xu20|v90s|v20}"; log "overlay for $1 staged in $SDK_DIR" ;;
+    apply_overlay "${1:?board: zero28|zero40|xu20|v90s|v20|brick}"; log "overlay for $1 staged in $SDK_DIR" ;;
   phase1)
     TOOLCHAIN=vendor; export TOOLCHAIN; apply_overlay zero28
     run_make phase1 "$(install_config phase1.config)" ;;
@@ -421,7 +427,7 @@ case $STEP in
         die "U-Boot build failed"
     check_uboot; log "U-Boot installed: $UBOOT_BIN ($(md5_of "$UBOOT_BIN"))" ;;
   image)
-    BOARD=${1:?board: zero28|zero40|xu20|v90s|v20}
+    BOARD=${1:?board: zero28|zero40|xu20|v90s|v20|brick}
     [ -x "$OPENIXCARD_BIN" ] || die "OpenixCard not found at $OPENIXCARD_BIN (scripts/build-openixcard.sh)"
     check_uboot
     apply_overlay "$BOARD"
