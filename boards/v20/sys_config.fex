@@ -183,7 +183,7 @@ select_gpio3	=
 ;  REF_DDR4_16X2_V1_4（16bit*2）                               
 ;----------------------------------------------------
 [dram_para]
-dram_clk       = 576
+dram_clk       = 504
 dram_type      = 3
 dram_dx_odt    = 0x07070707
 dram_dx_dri    = 0x0c0c0c0c

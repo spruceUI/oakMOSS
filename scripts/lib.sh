@@ -122,11 +122,12 @@ ZERO40_STOCK_XZ_SHA256=5ee40ba1449e47ddf545b289c5963545a1f7162078b396e3236ed876a
 ZERO40_STOCK_IMG=adb.img                                                               # decompressed, 8 000 000 000 bytes
 ZERO40_STOCK_IMG_SHA256=5219dc6b9251a351c937427726185dc3798819b0b14d8d08e68fe505f6209646
 ZERO40_STOCK_DIR=$INPUTS_DIR/zero40-stock                                              # unpack-zero40-stock.sh output
-# ---- Powkiddy V90S / V20 stock card (scripts/make-own-kernel-stock.sh v90s|v20) ---
-# The two boards ship the same stock card: Tina Linux behind a boot0 for their DDR3 (576 MHz)
-# and a U-Boot package. Its boot0, package, env and v0 boot image (whose header ours reuses)
-# are public in Knulli's board files, pinned here by commit and checksum; none of it is
-# redistributed here. unpack-powkiddy-stock.sh also takes a local copy (e.g. read off a card).
+# ---- Powkiddy V90S / V20 stock cards (scripts/make-own-kernel-stock.sh v90s|v20) ---
+# V90S: Tina Linux behind a boot0 for its DDR3 (576 MHz) and a U-Boot package. Its boot0, package,
+# env and v0 boot image (whose header ours reuses) are public in Knulli's board files, pinned here
+# by commit and checksum; none of it is redistributed here. unpack-powkiddy-stock.sh also takes a
+# local copy (e.g. read off a card). Knulli ships the same files for the V20, but a real V20 card
+# has its own chain (below).
 POWKIDDY_STOCK_REF=6b33506613d0a661d190e9bc3afc898440bcbb14                               # knulli-cfw/knulli-linux, 2025-10-23
 POWKIDDY_STOCK_URL=https://raw.githubusercontent.com/knulli-cfw/knulli-linux/$POWKIDDY_STOCK_REF/board/allwinner/a133/powkiddy-v90s/partitions
 POWKIDDY_STOCK_BOOT0_SHA256=638d5d75f9d348a4fbcadb901a2c102fd88148900c3d186acc7ae6d4095784c4
@@ -135,6 +136,15 @@ POWKIDDY_STOCK_ENV_SHA256=e53c8673bd5bde392310b6076eef08a3d06abe3941395fac8ab335
 POWKIDDY_STOCK_BOOTIMG_SHA256=93695c7fb3d9ce8b48466f5ac2c99270f64bdf664e3cfa81b71f4724f6b757d2
 POWKIDDY_STOCK_DIR=$INPUTS_DIR/powkiddy-stock                                          # unpack-powkiddy-stock.sh output
 POWKIDDY_STOCK_SHA256="boot0 $POWKIDDY_STOCK_BOOT0_SHA256, package $POWKIDDY_STOCK_PKG_SHA256"
+# V20: its own boot0 (DDR3 at 504 MHz), U-Boot (2018.05-00025), SCP and tree, read off another
+# developer's stock card (2026-10-25); not public, so `unpack-powkiddy-stock.sh v20 <dir>` takes a
+# local copy (boot0.img, boot_package.fex, the 128 KiB env.img, boot.img), checked against these pins.
+POWKIDDY_V20_STOCK_BOOT0_SHA256=af7b1d2e2a885a5c22a0175549d0b1d32241e22455eb9c9909014b38539ed8ab
+POWKIDDY_V20_STOCK_PKG_SHA256=3deea3cc43e4b0bcd0b339f5298953894bbda108a8ac740b49f0d89b0af81ee3
+POWKIDDY_V20_STOCK_ENV_SHA256=9e12f02d432dd58feab5a71075fd0ca5cd5b4f4063aee62910412e0f2d9b2fb5
+POWKIDDY_V20_STOCK_BOOTIMG_SHA256=ab521b0db5c2561d4fb973791a495c912a0ec9997ad67cf3d102cce56036cb8b
+POWKIDDY_V20_STOCK_DIR=$INPUTS_DIR/powkiddy-v20-stock                                  # unpack-powkiddy-stock.sh v20 output
+POWKIDDY_V20_STOCK_SHA256="boot0 $POWKIDDY_V20_STOCK_BOOT0_SHA256, package $POWKIDDY_V20_STOCK_PKG_SHA256"
 # awutils (GPL-2.0) unpacks that image: OpenixCard refuses its 0x0415 header
 # version; tools-patches/awutils-imagewty-0x415.patch treats it as the 0x0300 layout.
 AWUTILS_REPO=https://github.com/Ithamar/awutils

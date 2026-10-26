@@ -44,8 +44,10 @@ case "$BOARD" in
             CHAIN="XU20 V32 stock firmware (github.com/Magicx-Breeze/XU20_V32, Developers release)" ;;
     zero40) STOCK_DIR=$ZERO40_STOCK_DIR; DUMP=$STOCK_DIR/$ZERO40_STOCK_IMG.dump; CHAIN_SHA=$ZERO40_STOCK_IMG_SHA256; UNPACKER=unpack-zero40-stock.sh
             CHAIN="Zero 40 stock firmware (github.com/Magicx-Breeze/Zero40, release Zero40_V1, adb.img)" ;;
-    v90s|v20) STOCK_DIR=$POWKIDDY_STOCK_DIR; DUMP=$STOCK_DIR/items; CHAIN_SHA=$POWKIDDY_STOCK_SHA256; UNPACKER=unpack-powkiddy-stock.sh; STOCK=tina
-            CHAIN="Powkiddy V90S/V20 stock card (Tina Linux; the two boards share it)" ;;
+    v90s) STOCK_DIR=$POWKIDDY_STOCK_DIR; DUMP=$STOCK_DIR/items; CHAIN_SHA=$POWKIDDY_STOCK_SHA256; UNPACKER=unpack-powkiddy-stock.sh; STOCK=tina
+            CHAIN="Powkiddy V90S stock card (Tina Linux; Knulli's V90S files)" ;;
+    v20)  STOCK_DIR=$POWKIDDY_V20_STOCK_DIR; DUMP=$STOCK_DIR/items; CHAIN_SHA=$POWKIDDY_V20_STOCK_SHA256; UNPACKER="unpack-powkiddy-stock.sh v20"; STOCK=tina
+          CHAIN="Powkiddy V20 stock card (Tina Linux; its own boot0 at 504 MHz, U-Boot, SCP and tree, read off another developer's card)" ;;
     *) die "unknown board $BOARD (xu20 | zero40 | v90s | v20)" ;;
 esac
 BUILD=${1:?build directory (builds/<stamp>-$BOARD)}; shift || true

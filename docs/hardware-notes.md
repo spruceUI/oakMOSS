@@ -788,12 +788,27 @@ samples, not proof that the fix made the cut.
 
 ## Powkiddy V90S and V20 (2026-10-23)
 
-Two more A133P boards, from one stock firmware: the V90S (clamshell, no sticks, rumble) and the
-V20 (vertical, two sticks, L3/R3, no rumble). Their stock card's boot0, U-Boot package, env and
-device tree are byte-identical; a strap pin tells them apart (PE3, high on the V20). The V20 is
-carried untested; the lab has a V90S. Read from the stock blobs, not yet confirmed on a unit:
+Two more A133P boards: the V90S (clamshell, no sticks, rumble) and the V20 (vertical, two sticks,
+L3/R3, no rumble). The V20 is carried untested; the lab has a V90S. Read from the stock blobs, not
+yet confirmed on a unit.
 
-- **DRAM:** DDR3 at 576 MHz (boot0 `dram_type` 3, and the stock tree's `/dram` node), not the
+**Each board has its own stock chain (corrected 2026-10-25).** Knulli ships the V90S's boot0 and
+U-Boot package for both boards, so they looked byte-identical. A real V20 card has its own chain:
+- boot0: DDR3 at **504 MHz**;
+- U-Boot 2018.05-00025 (the V90S's is -00041), its own SCP and its own tree.
+
+That tree's own values: battery 1771 mAh at 4.35 V with its own gauge model, thermal trips 70/80 C,
+a 24 MHz panel timing (58.07 Hz), USB OTG with an ID pin (PH8) and a MENU button on PH7.
+
+The V20 images use all of it (`unpack-powkiddy-stock.sh v20` from a local copy; the tree from
+`make-board-dts-powkiddy.py` on the V20's own stock tree). Our edits to that tree:
+- the charge voltage stays at 4.20 V;
+- MENU and FAV both send BTN_MODE (spruce's menu key);
+- both until a unit is tested.
+
+Details: the research note `powkiddy-v20-v90s-20261023` (wrapper docs), section 1a.
+
+- **DRAM:** DDR3 at 576 MHz on the V90S, 504 MHz on the V20 (boot0 `dram_type` 3, and each stock tree's `/dram` node), not the
   MagicX boards' DDR4 at 792 MHz. The SDK's boot0 is set up for the latter, which is why the
   first images run the stock boot0 (`make-own-kernel-stock.sh v90s`). The SDK pack writes
   `sys_config.fex`'s `[dram_para]` into boot0 word for word (checked on the Zero 28 build), so
@@ -830,7 +845,7 @@ carried untested; the lab has a V90S. Read from the stock blobs, not yet confirm
   reports only changes; before that the idle d-pad sent ~62 events a second per axis.
 - **Crash log:** `PSTORE=1` cannot attach on these boards: pstore_blk runs before the TF cards
   are probed (2.84 s against 3.00/3.27 s on the V90S).
-- **Battery:** the shared tree says 3000 mAh, the V90S's cell; the V20's is sold as 5000 mAh.
+- **Battery:** the V90S tree says 3000 mAh; the V20's own tree 1771 mAh at 4.35 V (it is sold as 5000 mAh).
 - **Stock kernel:** Tina 4.9.191, PowerVR DDK 1.19@6345021 (our userland's). It carries a vendor
   board-check driver (`ENC_SW2001`, an I2C device on TWI1); we build none, and the board trees
   disable its node. The stock tree's other nodes all bind in our kernel.
