@@ -819,7 +819,10 @@ Details: the research note `powkiddy-v20-v90s-20261023` (wrapper docs), section 
   ROCKNIX's singleadc joypad: buttons on GPIOs, the d-pad as a hat, the V20's sticks behind a
   4-channel multiplexer on GPADC channel 0 (select PH1/PH0, enable PH5), rumble on PWM2 (PD20,
   V90S). The board trees put the face buttons on the A133P line's codes (A 305, B 304, X 308,
-  Y 307) and name the pad per board (`Powkiddy V90S Gamepad`, `Powkiddy V20 Gamepad`).
+  Y 307) and name the pad per board (`Powkiddy V90S Gamepad`, `Powkiddy V20 Gamepad`). The
+  V90S pad has no ABS_X/ABS_Y, so SDL 2.26 (RetroArch) skipped it until
+  `overlay/etc/udev/rules.d/61-oakmoss-pads.rules` tagged both pads joysticks. That was tested
+  on the V90S on 2026-10-26: from 0 SDL joysticks to 1, with controls in RetroArch and DraStic. The V20 is untested.
 - **Volume keys** on the LRADC (KEY_VOLUMEUP at 720 mV, KEY_VOLUMEDOWN at 1080 mV); power key
   on the AXP2202.
 - **Cards:** TF1 is sdc0 (card detect PF6, the boot slot), TF2 is sdc1 (card detect PG6); the

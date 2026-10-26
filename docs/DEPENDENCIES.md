@@ -202,7 +202,8 @@ also rotates the framebuffer in hardware (see the last point).
 - **Input:** `libevdev` 1.4.6 and `libinput` 1.5.0 on, with eudev's `libudev.so.1`. Since round
   15 the touch controllers (`axs_ts`, `hyn_ts`) are tagged as touchscreens in udev
   (`overlay/etc/udev/rules.d/60-oakmoss-touchscreen.rules`), which libudev users need, and the
-  kernel drops repeated multitouch values, so a held touch stays held.
+  kernel drops repeated multitouch values, so a held touch stays held. The Powkiddy pads are tagged
+  joysticks by name (`61-oakmoss-pads.rules`): SDL 2.26 takes an untagged device only with ABS_X/ABS_Y.
 - **Library versions** (the study): `zlib` 1.2.8 (1.3.1 since round 18, tree patch 135), `libpng` 1.2.56 (the old 1.2 branch, not 1.6),
   `libjpeg` (IJG) 9a, `freetype` 2.6.1, `bluez` 5.54, `dbus` 1.10.4, `openssl` 1.1.0i (1.1.1w since round 19; nothing in
   the image links it, spruce's card libraries do). `libffi` is `libffi.so.7`.

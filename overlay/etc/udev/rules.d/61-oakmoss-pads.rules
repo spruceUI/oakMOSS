@@ -1,0 +1,6 @@
+# oakMOSS: the Powkiddy pads (adc-joypad) are joysticks. Untagged, SDL guesses from the capabilities and needs
+# ABS_X/ABS_Y, which the stick-less V90S pad lacks, so RetroArch saw no pad. By name, without input_id (see 60-).
+# Tested on the V90S (2026-10-26); the V20's pad has sticks and is untested.
+ACTION=="remove", GOTO="oakmoss_pads_end"
+SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="Powkiddy V90S Gamepad|Powkiddy V20 Gamepad", ENV{ID_INPUT}="1", ENV{ID_INPUT_JOYSTICK}="1"
+LABEL="oakmoss_pads_end"
