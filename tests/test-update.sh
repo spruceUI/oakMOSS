@@ -22,16 +22,17 @@ if [ "$1" = -s ]; then cat "$2" >> "$ENVF"; else echo "$*" >> "$ENVF"; fi
 EOF
 chmod +x "$T/bin/fw_printenv" "$T/bin/fw_setenv"
 
-# mkpkg <out> <lane|-> <build> <bootres 0|1>: a v90s package in make-update.py's format
+# mkpkg <out> <lane|-> <build> <bootres 0|1> [bootchain 0|1]: a v90s package in make-update.py's format
 mkpkg() { python3 -I - "$@" <<'PY'
 import gzip, hashlib, sys
 out, lane, build, with_bootres = sys.argv[1:5]
+bootchain = sys.argv[5] if len(sys.argv) > 5 else '0'
 A = 4096
 parts = [('boot', b'BOOT-' + build.encode() * 1000, True), ('rootfs', b'hsqs' + build.encode() * 3000, False)]
 if with_bootres == '1':
     parts.append(('bootres', b'SDK-BOOTRES' * 500, True))
 lines = ['FORMAT=omupd1', 'BOARD=v90s'] + ([f'LANE={lane}'] if lane != '-' else []) + \
-        [f'VERSION=v{build}', f'BUILD={build}', 'BOOTCHAIN=0', 'PARTS=' + ' '.join(n for n, _, _ in parts)]
+        [f'VERSION=v{build}', f'BUILD={build}', f'BOOTCHAIN={bootchain}', 'PARTS=' + ' '.join(n for n, _, _ in parts)]
 blobs, off = [], A
 for n, d, gz in parts:
     st = gzip.compress(d, 9, mtime=0) if gz else d
@@ -57,7 +58,7 @@ card() {
 }
 run() {  # run <lane> <pkg>: the updater as the board runs it, against the files
     rc=0
-    ENVF=$T/env PATH="$T/bin:$PATH" DEVICE=v90s LANE=$1 BYNAME=$T/card BUILD_FILE=$T/build \
+    ENVF=$T/env PATH="$T/bin:$PATH" DEVICE=v90s LANE=$1 KEEP_CHAIN=${KEEP:-$T/no-keep} BYNAME=$T/card BUILD_FILE=$T/build \
         BAT=$T/bat USB=$T/usb SHOW=true LOG=$T/log CARD_LOG=$T/sd/oakmoss-update.log TMPDIR=$T/tmp \
         sh "$UPD" "$2" >"$T/out" 2>&1 || rc=$?
 }
@@ -99,5 +100,20 @@ card 0; mkpkg "$T/sd/oakmoss-v90s-own-v204.omupd" own 204 0
 run own "$T/sd/oakmoss-v90s-own-v204.omupd"
 check "no slot B: refused" '[ "$rc" != 0 ] && grep -q "no second slot" "$T/out"'
 check "no slot B: slot A and boot-resource untouched" '[ "$(tr -d "\000" < "$T/card/boot" | wc -c)" -eq 0 ] && head -c 13 "$T/card/bootloader" | grep -q STOCK-BOOTRES'
+
+# 6-8. a card that keeps the vendor's boot chain (TrimUI, /usr/magicx/keep-boot-chain): no package
+# that writes boot0, the U-Boot package or the boot-resource; a plain own-lane package still installs
+touch "$T/keep"
+card 1; mkpkg "$T/sd/oakmoss-v90s-own-v205.omupd" own 205 0 1
+KEEP=$T/keep run own "$T/sd/oakmoss-v90s-own-v205.omupd"
+check "keep-chain card, BOOTCHAIN=1: refused" '[ "$rc" != 0 ] && [ -e "$T/sd/oakmoss-v90s-own-v205.omupd.failed" ]'
+check "keep-chain card, BOOTCHAIN=1: slot B and env untouched" 'slot_b_blank && [ "$(wc -l < "$T/env")" -eq 2 ]'
+card 1; mkpkg "$T/sd/oakmoss-v90s-own-v206.omupd" own 206 1
+KEEP=$T/keep run own "$T/sd/oakmoss-v90s-own-v206.omupd"
+check "keep-chain card, boot-resource inside: refused" '[ "$rc" != 0 ] && [ -e "$T/sd/oakmoss-v90s-own-v206.omupd.failed" ]'
+check "keep-chain card, boot-resource inside: nothing written" 'slot_b_blank && head -c 13 "$T/card/bootloader" | grep -q STOCK-BOOTRES'
+card 1; mkpkg "$T/sd/oakmoss-v90s-own-v207.omupd" own 207 0
+KEEP=$T/keep run own "$T/sd/oakmoss-v90s-own-v207.omupd"
+check "keep-chain card, plain own package: installs" '[ "$rc" = 0 ] && head -c 8 "$T/card/boot_b" | grep -q "BOOT-207"'
 
 exit $FAIL

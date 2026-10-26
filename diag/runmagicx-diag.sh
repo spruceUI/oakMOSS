@@ -41,6 +41,9 @@ while ! grep -q SDCARD /proc/mounts && [ $COUNT -lt 60 ]; do
     if [ $COUNT -eq 20 ]; then
         # 10 s: mount the first FAT partition we can find, whatever it is called.
         for dev in $(/sbin/block info 2>/dev/null | sed -n 's|^\(/dev/[a-z0-9]*\):.*TYPE="\(vfat\|msdos\|fat\)".*|\1|p'); do
+            # never a board's eMMC (TrimUI: mmcblk0, whose p1 is the stock boot-resource)
+            s=/sys/class/block/${dev#/dev/}; [ -e "$s/partition" ] && s=$s/..
+            [ "$(cat "$s/device/type" 2>/dev/null)" = MMC ] && { log "10 s: $dev is on the eMMC, skipped"; continue; }
             log "10 s: trying $dev at /mnt/SDCARD"; mkdir -p /mnt/SDCARD
             mount -t vfat -o rw,noatime,fmask=0000,dmask=0000,iocharset=utf8 "$dev" /mnt/SDCARD >> "$LOG" 2>&1 && { log "mounted $dev"; break; }
         done

@@ -9,13 +9,16 @@
 #
 #   oakmoss-update.sh <file.omupd>...
 #
-# DEVICE, LANE, BYNAME, DISK, FIRST_SECTOR, BUILD_FILE, BAT, USB and SHOW exist for testing
+# DEVICE, LANE, KEEP_CHAIN, BYNAME, DISK, FIRST_SECTOR, BUILD_FILE, BAT, USB and SHOW exist for testing
 # against plain files. LANE is the card's: own on make-own-kernel-stock.sh's cards (the
 # rootfs says so in /usr/magicx/lane), sdk otherwise; a package names its lane the same way.
 
 BYNAME=${BYNAME:-/dev/by-name}
 DEVICE=${DEVICE:-$(cat /usr/magicx/device 2>/dev/null)}
 LANE=${LANE:-$(cat /usr/magicx/lane 2>/dev/null)}; LANE=${LANE:-sdk}
+# A card on the vendor's boot chain that must stay byte-identical (TrimUI: its recovery lives in U-Boot)
+# takes no package that writes boot0, the U-Boot package or the boot-resource.
+KEEP_CHAIN=${KEEP_CHAIN:-/usr/magicx/keep-boot-chain}
 LOG=${LOG:-/mnt/UDISK/oakmoss-boot.log}
 # Also on the card beside the first package, where the user and a PC can read it.
 CARD_LOG=${CARD_LOG:-${1%/*}/oakmoss-update.log}
@@ -51,6 +54,9 @@ for f in "$@"; do
     l=$(peek "$f" LANE)
     if [ "${l:-sdk}" != "$LANE" ]; then
         set_aside "$f" failed "an update for the ${l:-sdk} lane, and this card is the $LANE lane's"; continue
+    fi
+    if [ -e "$KEEP_CHAIN" ] && { [ "$(peek "$f" BOOTCHAIN)" = 1 ] || [ -n "$(peek "$f" bootres_SIZE)" ]; }; then
+        set_aside "$f" failed "it writes the boot chain or boot-resource, which this card keeps as the vendor's"; continue
     fi
     b=$(peek "$f" BUILD); case $b in ''|*[!0-9]*) b=0 ;; esac
     if [ "$b" -le "$cur" ]; then

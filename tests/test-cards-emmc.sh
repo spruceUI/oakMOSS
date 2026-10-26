@@ -33,4 +33,10 @@ for n in mmcblk1 mmcblk1p1 mmcblk1p15 mmcblk2 mmcblk2p1 loop0 nosuch; do check "
 check "sd2() skips the eMMC" "sed -n '/^sd2() {/,/^}/p' '$CARDS' | grep -q 'emmc \"\${d##\*/}\" && continue'"
 check "hotplug skips the eMMC" "sed -n '/^cards_hotplug() {/,/^}/p' '$CARDS' | grep -q 'emmc \"\$DEVNAME\" && return 0'"
 check "the script parses (sh -n)" "sh -n '$CARDS'"
+# The diagnostic hand-off and the early probe mount FAT partitions read-write: the same guard.
+PROBE=$HERE/../diag/init-probe.sh; DIAGH=$HERE/../diag/runmagicx-diag.sh
+check "init-probe skips the eMMC" "grep -q '\"\$(cat \"\$b/../device/type\" 2>/dev/null)\" = MMC ] && continue' '$PROBE'"
+check "runmagicx-diag's FAT fallback skips the eMMC" "grep -q '\"\$(cat \"\$s/device/type\" 2>/dev/null)\" = MMC ] && {' '$DIAGH'"
+check "init-probe parses (sh -n)" "sh -n '$PROBE'"
+check "runmagicx-diag parses (sh -n)" "sh -n '$DIAGH'"
 [ "$FAIL" = 0 ] && echo "all passed" || { echo "FAILED"; exit 1; }

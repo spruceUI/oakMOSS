@@ -38,6 +38,8 @@ wrote=""
 for b in /sys/class/block/mmcblk*p1; do
     n=${b##*/}; case $n in "$rootdisk"p*) continue;; esac
     [ -e "/dev/$n" ] || continue
+    # never a board's eMMC (TrimUI: mmcblk0, the stock firmware; its p1 is the stock boot-resource)
+    [ "$(cat "$b/../device/type" 2>/dev/null)" = MMC ] && continue
     if mount -t vfat -o rw,noatime "/dev/$n" /tmp/probe-sd2 2>/dev/null || mount -t exfat -o rw,noatime "/dev/$n" /tmp/probe-sd2 2>/dev/null; then
         report > /tmp/probe-sd2/oakmoss-early-probe.log 2>&1; sync /tmp/probe-sd2/oakmoss-early-probe.log 2>/dev/null
         umount /tmp/probe-sd2 2>/dev/null; wrote="$wrote $n"
