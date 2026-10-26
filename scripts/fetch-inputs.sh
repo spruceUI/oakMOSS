@@ -17,7 +17,7 @@
 #                         its PowerVR 1.11 userland is what the XU20 image needs)
 # Without the SDK nothing can be built; without the Zero 40 object only the
 # Zero 28 image can be built; without the TrimUI /usr tree no XU20 image.
-# The XU20 and Zero 40 stock firmwares are public GitHub releases and are fetched.
+# The XU20, Zero 40 and TrimUI Brick stock firmwares are public GitHub releases and are fetched.
 . "$(dirname "$0")/lib.sh"
 WITH_PHASE2=0
 for a in "$@"; do case $a in --with-phase2) WITH_PHASE2=1 ;; *) die "unknown option $a" ;; esac; done
@@ -39,6 +39,7 @@ fetch "$POWKIDDY_STOCK_URL/boot0.img" "$INPUTS_DIR/powkiddy-stock-src/boot0.img"
 fetch "$POWKIDDY_STOCK_URL/boot_package.fex" "$INPUTS_DIR/powkiddy-stock-src/boot_package.fex" "$POWKIDDY_STOCK_PKG_SHA256"
 fetch "$POWKIDDY_STOCK_URL/env.img" "$INPUTS_DIR/powkiddy-stock-src/env.img" "$POWKIDDY_STOCK_ENV_SHA256"
 fetch "$POWKIDDY_STOCK_URL/boot.img" "$INPUTS_DIR/powkiddy-stock-src/boot.img" "$POWKIDDY_STOCK_BOOTIMG_SHA256"
+fetch "$TRIMUI_BRICK_URL" "$INPUTS_DIR/$TRIMUI_BRICK_ZIP" "$TRIMUI_BRICK_ZIP_SHA256"
 if [ "$WITH_PHASE2" = 1 ]; then
     fetch "$GCC750_URL" "$INPUTS_DIR/$GCC750_TARBALL" "$GCC750_SHA256"
     fetch "$BINUTILS228_URL" "$INPUTS_DIR/$BINUTILS228_TARBALL" "$BINUTILS228_SHA256"

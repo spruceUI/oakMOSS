@@ -145,6 +145,22 @@ POWKIDDY_V20_STOCK_ENV_SHA256=9e12f02d432dd58feab5a71075fd0ca5cd5b4f4063aee62910
 POWKIDDY_V20_STOCK_BOOTIMG_SHA256=ab521b0db5c2561d4fb973791a495c912a0ec9997ad67cf3d102cce56036cb8b
 POWKIDDY_V20_STOCK_DIR=$INPUTS_DIR/powkiddy-v20-stock                                  # unpack-powkiddy-stock.sh v20 output
 POWKIDDY_V20_STOCK_SHA256="boot0 $POWKIDDY_V20_STOCK_BOOT0_SHA256, package $POWKIDDY_V20_STOCK_PKG_SHA256"
+# ---- TrimUI A133P stock firmware (scripts/make-own-kernel-stock.sh brick) ---------------------------
+# TrimUI's public 1.1.1 releases (github.com/trimui/firmware_<model>): an unencrypted PhoenixSuit image
+# in a zip, read by scripts/awimg-items.py. Its boot0, U-Boot package (the device tree inside) and
+# boot-resource go onto our cards byte-identical, so TrimUI's recovery paths stay. trimui_inputd is
+# TrimUI's closed input daemon from the image's rootfs: LOCAL images only (user, 2026-10-25).
+TRIMUI_BRICK_ZIP=TG3040_Brick_firmware_v1.1.1.zip
+TRIMUI_BRICK_URL=https://github.com/trimui/firmware_brick/releases/download/v1.1.1-20251126/$TRIMUI_BRICK_ZIP
+TRIMUI_BRICK_ZIP_SHA256=488db02176e81ad4fdcf9e0bb4dbf406c883199f5b3521445e038bf81c8916ef
+TRIMUI_BRICK_BOOT0_SHA256=fb821279f641d4fa19305bf297a4631f859089dcacddaedcb141d2a5b31a585f
+TRIMUI_BRICK_PKG_SHA256=9e3ae29b54a8c87f73b8168764cc24a3f77a9aa7a8873721c3122937aaad5a31
+TRIMUI_BRICK_ENV_SHA256=ecd875222fce2d3e7bd0964b2d37aba1bddcf98a4e8a76986b3d9d2847558169
+TRIMUI_BRICK_BOOTIMG_SHA256=359a00146b54ea806097032cf1eef2f87cab950cd331a795e1ec2ecd98e24c85
+TRIMUI_BRICK_BOOTRES_SHA256=d37b602bd11347601c5dc3925b97d2c67efc64f8846635c64253b773cba9f5a0
+TRIMUI_BRICK_INPUTD_SHA256=21c4df6ea7ece62dfde340287262c92aa741e6f4acfce97cd5647e6a1db359a9
+TRIMUI_BRICK_STOCK_DIR=$INPUTS_DIR/trimui-brick-stock                                    # unpack-trimui-stock.sh brick output
+TRIMUI_BRICK_STOCK_SHA256="boot0 $TRIMUI_BRICK_BOOT0_SHA256, package $TRIMUI_BRICK_PKG_SHA256"
 # awutils (GPL-2.0) unpacks that image: OpenixCard refuses its 0x0415 header
 # version; tools-patches/awutils-imagewty-0x415.patch treats it as the 0x0300 layout.
 AWUTILS_REPO=https://github.com/Ithamar/awutils
