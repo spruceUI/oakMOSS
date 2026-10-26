@@ -10,9 +10,9 @@
 #
 #   scripts/make-own-kernel-stock.sh <board> <build dir> [out dir]     board: xu20 | zero40 | v90s | v20 | brick
 #
-# The Powkiddy V90S and V20 share one stock card (Tina Linux, not Android): its boot0 (DDR3 at
-# 576 MHz, which the SDK's boot0 is not set up for), its U-Boot package and its v0 boot image
-# header. No dtbo or vbmeta exist there; the partitions keep their places, blank.
+# The Powkiddy V90S and V20 each boot their own stock card's chain (Tina Linux, not Android): its boot0
+# (DDR3 at 576 MHz on the V90S, 504 on the V20; the SDK's boot0 is set up for neither), its U-Boot
+# package and its v0 boot image header. No dtbo or vbmeta exist there; the partitions keep their places, blank.
 #
 # The TrimUI Brick (Tina Linux) keeps TrimUI's boot0, U-Boot package and boot-resource byte-identical,
 # its device tree included (board.conf OWN_STOCK_DT=1): TrimUI's recovery lives in that U-Boot, and our

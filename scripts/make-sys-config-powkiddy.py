@@ -14,7 +14,8 @@ replaced value below comes from; nothing is typed in. What differs (2026-10-23):
   2.8 V (the Zero 28's 3.3 V), aldo3 kept on in standby, no aldo1 or bldo4;
 - jtag_para off: its pins PH9-PH12 are the d-pad here;
 - gpio_bias: ports C and L at 1.8 V;
-- dram_para (DDR3 at 576 MHz) and dram_select_para: the stock DRAM, for the SDK chain;
+- dram_para (DDR3: 576 MHz on the V90S, 504 on the V20, each from its own stock tree) and dram_select_para:
+  the stock DRAM, for the SDK chain;
 - target, platform, auto_print, card2_boot_para: the stock values.
 """
 import re
