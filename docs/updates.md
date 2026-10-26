@@ -74,6 +74,7 @@ boot `runmagicx.sh` passes every `oakmoss-<board>-*.omupd` at the root of either
 4. writes the kernel and the squashfs into the slot that is not running, and reads them back;
 5. writes boot-resource when it differs from the card's and, only for a `BOOTCHAIN=1` update,
    boot0 and the U-Boot package when they differ, copy first and main last, each read back;
+   a part it leaves alone is logged as unchanged;
 6. sets `boot_partition`, `root_partition`, the fallback, `ab_try=1` and
    `parts_clean=rootfs_data` in one `fw_setenv -s` write. Tina's preinit wipes the overlay
    on the next boot, so no file from the old slot hides one in the new.
@@ -109,6 +110,10 @@ On these boards the device tree lives in the U-Boot package (a header-v0 boot im
 none). A board-tree change therefore reaches a card only with a full flash or an
 `OMUPD_BOOTCHAIN=1` update, which carries the vendor's boot0 and U-Boot and stays local. Not
 yet proven on hardware: the slot check under the stock U-Boot, an update, the fallback.
+
+The TrimUI boards take the same lane with the vendor's tree left in its package too
+(`OWN_STOCK_DT=1`): their cards carry `/usr/magicx/keep-boot-chain`, and `oakmoss-update.sh` sets aside
+any package that would write boot0, the U-Boot package or the boot-resource there (docs/trimui.md).
 
 ## Releasing
 

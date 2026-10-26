@@ -232,8 +232,10 @@ kdebug_patch_state() {
 }
 # The level apply-sdk-mods.sh stamps (docs/sdk-mods.md, `mods_version`). A tree stamped lower
 # lacks later rounds, so build.sh refuses it.
-# 28 = feat/trimui-a133p round 33 (26 is bundle/20261024's): whoever merges second renumbers.
-OAKMOSS_MODS_VERSION=28
+# 29 = the merged line (integration/20261026): main's 21 + bundle/20261024 (26: patch 136) + feat/powkiddy-v90s
+# (24, 25, 27: patches 150-152) + feat/trimui-a133p (28: 160-161). NOT fix/pmf's 22-23 (140-142): the gate is >=,
+# so fix/pmf renumbers above 29 when it lands.
+OAKMOSS_MODS_VERSION=29
 need_mods() {
     local v
     [ -f "$SDK_DIR/.oakmoss-mods" ] || die "SDK modifications not applied (run scripts/apply-sdk-mods.sh)"

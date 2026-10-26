@@ -153,7 +153,8 @@ if [ "$(m BOOTCHAIN)" = 1 ]; then
         fail "the U-Boot package runs into the partitions"
     for p in boot0:256:16 package:24576:32800; do
         name=${p%%:*}; spare=${p#*:}; spare=${spare%:*}; main=${p##*:}
-        [ "$(on_card "$DISK" "$(m "${name}_SIZE")" "$main")" = "$(m "${name}_SHA256")" ] && continue
+        # an unchanged part is logged too, so the log alone says which path ran
+        [ "$(on_card "$DISK" "$(m "${name}_SIZE")" "$main")" = "$(m "${name}_SHA256")" ] && { log "$name unchanged"; continue; }
         put "$name" "$DISK" "$spare"
         put "$name" "$DISK" "$main"
     done

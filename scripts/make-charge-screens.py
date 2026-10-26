@@ -22,13 +22,13 @@ Writes, for <board>:
   .../nofe-level-NNN.rgba.gz   "No frontend detected, charging": the level screen when no card
       has a launcher and the charger is in (charge-screen.sh nofrontend);
   .../nofrontend-off.rgba.gz   "No frontend, power off in 10s", the same without the charger.
-The boards in BOOT_FRAMES (their own boot logo behind a stock U-Boot) also get the boot screens
-(docs/boot-screens.md), on the level screen's layout:
+The boards in BOOT_FRAMES also get the boot screens (docs/boot-screens.md), on the level screen's layout:
   .../boot-loading.rgba.gz   "Loading...", from init until the hand-off (/etc/init.d/bootframe);
   .../reboot.rgba.gz, poweroff.rgba.gz   "Rebooting", "Shutting down" (/etc/init.d/shutdownframe);
-and full-screen U-Boot pictures, not centred cut-outs: bootlogo.bmp is the same screen with an
-empty status line, 32-bit like the stock logo it replaces, and bat/bempty.bmp is added (the
-Powkiddy U-Boot's no-charger low-battery picture).
+and a U-Boot bootlogo.bmp that is the same screen with an empty status line (32-bit, like the logos
+it replaces), so the first Linux frame only adds its status line. The boards in FULL_UBOOT (their
+own logo behind a stock U-Boot: the Powkiddy boards) get full-screen U-Boot pictures instead of
+centred cut-outs, and bat/bempty.bmp (that U-Boot's no-charger low-battery picture).
 The Linux frames are the framebuffer's own format (B, G, R, A bytes: ARGB8888, measured on the Zero 28
 with one-byte colour bars)
 at the size apps draw in; the kernel rotates them for the panel on every flip.
@@ -51,7 +51,8 @@ NOFRONTEND_OFF_TEXT = "No frontend, power off in 10s"
 LOW_BATTERY = {"bat0": ["Battery too low to start", "Charging, please wait"],
                "low_pwr": ["Battery too low", "Connect the charger"]}
 LEVELS = range(0, 101, 5)
-BOOT_FRAMES = ("v90s", "v20")
+BOOT_FRAMES = ("v90s", "v20", "zero28", "zero40", "xu20")
+FULL_UBOOT = ("v90s", "v20")
 
 
 def _font(bold, px):
@@ -111,8 +112,8 @@ def main(board):
     for level in LEVELS:
         save(f"nofe-level-{level:03d}", card(w, h, [NOFRONTEND_TEXT], battery=level))
     save("nofrontend-off", card(w, h, [NOFRONTEND_OFF_TEXT]))
-    full = board in BOOT_FRAMES
-    if full:
+    full, frames = board in FULL_UBOOT, board in BOOT_FRAMES
+    if frames:
         save("boot-loading", card(w, h, ["Loading..."]))
         save("reboot", card(w, h, ["Rebooting"]))
         save("poweroff", card(w, h, ["Shutting down"]))
@@ -124,7 +125,7 @@ def main(board):
     def centred(im):
         if full:
             return im.rotate(rot, expand=True) if rot else im
-        x0, y0, x1, y1 = im.getbbox()
+        x0, y0, x1, y1 = im.convert("RGB").getbbox()   # RGB: an opaque RGBA picture's box is the whole of it
         m = 4; dx = max(w / 2 - x0, x1 - w / 2) + m; dy = max(h / 2 - y0, y1 - h / 2) + m
         im = im.crop((round(w / 2 - dx), round(h / 2 - dy), round(w / 2 + dx), round(h / 2 + dy)))
         return im.rotate(rot, expand=True) if rot else im
@@ -137,12 +138,12 @@ def main(board):
         centred(card(w, h, lines, battery=0, show_pct=False).convert("RGB")).save(
             os.path.join(out, name + ".bmp"), format="BMP")
     logo = os.path.join(ROOT, "boards", board, "boot-resource", "bootlogo.bmp")
-    if full:
+    if frames:
         centred(card(w, h, [""])).save(logo, format="BMP")
     elif board != "zero28":
         mbr.logo(board).save(logo, format="BMP")
     print(f"{board}: {len(LEVELS)} level frames x 2 + loading + updating + nofrontend-off"
-          f"{' + boot-loading + reboot + poweroff' if full else ''} ({w}x{h}), battery_charge.bmp {bmp.size[0]}x{bmp.size[1]}")
+          f"{' + boot-loading + reboot + poweroff' if frames else ''} ({w}x{h}), battery_charge.bmp {bmp.size[0]}x{bmp.size[1]}")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,113 @@
+oakMOSS: 'DAC volume' keeps its level across streams, and 0 is mute.
+
+sunxi_codec_digital_mute writes SUNXI_DAC_VOL_CTRL = 0 when a stream stops and the DT's
+dac_digital_vol (0x1A0A0: DAC_VOL_SEL, 0 dB both sides) when one starts, so a level set through
+the plain SOC_DOUBLE_TLV 'DAC volume' lasted only until the next stream, and every game started
+at full DAC volume. spruce works around it with 'digital volume' (DAC_DPC DVOL), whose floor is
+about -73 dB: quiet, not silent (Zero 28 report, 2026-10-24).
+
+Keep the level in the driver instead: 'DAC volume' becomes an EXT control with the same name and
+range whose get returns the cached L/R and whose put caches it, writing the register only while
+a stream plays. Unmute writes the cached level with the DT's upper bits (DAC_VOL_SEL), the stop
+path is unchanged, and the TLV marks 0x00 as mute, which it is on this DAC. A level set while
+nothing plays (the launcher's menu) is kept, so this does not save on mute and restore on unmute.
+Suspend/resume already saves and restores the register; the next unmute writes the cache anyway.
+
+--- a/lichee/linux-4.9/sound/soc/sunxi/sun50iw10-codec.c
++++ b/lichee/linux-4.9/sound/soc/sunxi/sun50iw10-codec.c
+@@ -64,7 +64,8 @@
+ static const DECLARE_TLV_DB_SCALE(headphone_gain_tlv, -4200, 600, 0);
+ static const DECLARE_TLV_DB_SCALE(mic1gain_tlv, 0, 100, 0);
+ static const DECLARE_TLV_DB_SCALE(mic2gain_tlv, 0, 100, 0);
+-static const DECLARE_TLV_DB_SCALE(dac_vol_tlv, -11925, 75, 0);
++/* oakMOSS: 0x00 is mute on this DAC, not -119.25 dB */
++static const DECLARE_TLV_DB_SCALE(dac_vol_tlv, -11925, 75, 1);
+ static const DECLARE_TLV_DB_SCALE(adc_vol_tlv, -11925, 75, 0);
+ static const unsigned int lineout_tlv[] = {
+ 	TLV_DB_RANGE_HEAD(2),
+@@ -822,6 +823,47 @@
+ #endif
+ 
+ 	return 0;
++}
++
++/*
++ * oakMOSS: digital_mute writes SUNXI_DAC_VOL_CTRL at every stream start and stop, so a level set
++ * through 'DAC volume' used to last only until the next stream. The level lives here instead (one
++ * codec on this SoC); the register follows it while a stream plays and gets it at every start.
++ */
++static DEFINE_MUTEX(dac_vol_lock);
++static unsigned int dac_vol_lr;		/* DAC_VOL_L | DAC_VOL_R, from dac_digital_vol at probe */
++static bool dac_vol_live;		/* a stream is unmuted, so the register holds dac_vol_lr */
++
++static int sunxi_codec_dac_vol_get(struct snd_kcontrol *kcontrol,
++				   struct snd_ctl_elem_value *ucontrol)
++{
++	mutex_lock(&dac_vol_lock);
++	ucontrol->value.integer.value[0] = (dac_vol_lr >> DAC_VOL_L) & 0xFF;
++	ucontrol->value.integer.value[1] = (dac_vol_lr >> DAC_VOL_R) & 0xFF;
++	mutex_unlock(&dac_vol_lock);
++	return 0;
++}
++
++static int sunxi_codec_dac_vol_put(struct snd_kcontrol *kcontrol,
++				   struct snd_ctl_elem_value *ucontrol)
++{
++	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
++	struct sunxi_codec_info *sunxi_codec = snd_soc_codec_get_drvdata(codec);
++	long l = ucontrol->value.integer.value[0], r = ucontrol->value.integer.value[1];
++	unsigned int lr;
++	int changed;
++
++	if (l < 0 || l > 0xFF || r < 0 || r > 0xFF)
++		return -EINVAL;
++	lr = (l << DAC_VOL_L) | (r << DAC_VOL_R);
++	mutex_lock(&dac_vol_lock);
++	changed = lr != dac_vol_lr;
++	dac_vol_lr = lr;
++	if (changed && dac_vol_live)
++		snd_soc_write(codec, SUNXI_DAC_VOL_CTRL,
++			      (sunxi_codec->dac_digital_vol & ~0xFFFF) | dac_vol_lr);
++	mutex_unlock(&dac_vol_lock);
++	return changed;
+ }
+ 
+ static const struct snd_kcontrol_new sunxi_codec_controls[] = {
+@@ -849,8 +891,9 @@
+ 	SOC_SINGLE_TLV("LINEOUT volume", SUNXI_DAC_REG, LINEOUT_VOL,
+ 			0x1F, 0, lineout_tlv),
+ 	/* DAC Volume / HEADPHONE VOL */
+-	SOC_DOUBLE_TLV("DAC volume", SUNXI_DAC_VOL_CTRL, DAC_VOL_L, DAC_VOL_R,
+-		       0xFF, 0, dac_vol_tlv),
++	SOC_DOUBLE_EXT_TLV("DAC volume", SUNXI_DAC_VOL_CTRL, DAC_VOL_L, DAC_VOL_R,
++			   0xFF, 0, sunxi_codec_dac_vol_get, sunxi_codec_dac_vol_put,
++			   dac_vol_tlv),
+ 	/* ADC Volume */
+ 	SOC_DOUBLE_TLV("ADC volume", SUNXI_ADC_VOL_CTRL, ADC_VOL_L, ADC_VOL_R,
+ 		       0xFF, 0, adc_vol_tlv),
+@@ -1244,12 +1287,16 @@
+ 	struct snd_soc_codec *codec = dai->codec;
+ 	struct sunxi_codec_info *sunxi_codec = snd_soc_codec_get_drvdata(codec);
+ 
++	/* oakMOSS: unmute restores the cached 'DAC volume', not the DT constant */
++	mutex_lock(&dac_vol_lock);
++	dac_vol_live = !mute;
+ 	if (mute) {
+ 		snd_soc_write(codec, SUNXI_DAC_VOL_CTRL, 0);
+ 	} else {
+ 		snd_soc_write(codec, SUNXI_DAC_VOL_CTRL,
+-				sunxi_codec->dac_digital_vol);
++				(sunxi_codec->dac_digital_vol & ~0xFFFF) | dac_vol_lr);
+ 	}
++	mutex_unlock(&dac_vol_lock);
+ 
+ 	return 0;
+ }
+@@ -1883,6 +1930,7 @@
+ 	} else {
+ 		sunxi_codec->dac_digital_vol = temp_val;
+ 	}
++	dac_vol_lr = sunxi_codec->dac_digital_vol & 0xFFFF;	/* oakMOSS: 'DAC volume' starts here */
+ 
+ 	/* lineout volume */
+ 	ret = of_property_read_u32(np, "lineout_vol", &temp_val);

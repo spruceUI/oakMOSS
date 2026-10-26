@@ -505,6 +505,47 @@ completed (`docs/hardware-notes.md`).
 On an existing tree: `scripts/apply-sdk-mods.sh` installs 901 beside 900, and procd rebuilds at the
 next `image`. The stamp moves, which wipes the kernel build tree. `mods_version` 20 -> 21.
 
+## Round 29 (2026-10-24): 'DAC volume' keeps its level, and 0 is mute
+
+A Zero 28 at spruce's lowest volume was still audible in a quiet room: spruce keeps its level in
+'digital volume' (DAC_DPC DVOL), whose floor is about -73 dB, because the driver reset 'DAC volume'
+at every stream. `sunxi_codec_digital_mute` (sun50iw10-codec.c) wrote `SUNXI_DAC_VOL_CTRL` = 0 when
+a stream stopped and the DT's `dac_digital_vol` (0x1A0A0, 0 dB) when one started. The driver now
+caches the level: 'DAC volume' keeps its name and 0-255 range, a write lands in the register only
+while a stream plays, every stream start writes the cached level, and its TLV marks 0 as mute.
+
+| what | where | why |
+|---|---|---|
+| `sdk-patches/tree/136-sun50iw10-codec-dac-volume-cache.patch` | `lichee/linux-4.9/sound/soc/sunxi/sun50iw10-codec.c` | 'DAC volume' becomes an EXT control over a cached L/R level; unmute writes it with the DT's DAC_VOL_SEL; the stop path is unchanged |
+| `scripts/lib.sh` `OAKMOSS_MODS_VERSION` | `build.sh` | refuses a tree without 136 |
+
+On an existing tree: `scripts/apply-sdk-mods.sh` applies 136; the stamp moves, which wipes the kernel
+build tree. `mods_version` 21 -> 26: 22-25 are the unmerged fix/pmf and feat/powkiddy-v90s levels,
+so each level keeps one meaning. Not yet tested on hardware.
+
+## Round 30 (2026-10-24): boot-resource sized to its partition, without the SDK logo
+
+The boot-resource FAT16 of every image up to v0.6.0-beta.1 said 16384 sectors (8 MiB) on the boards'
+8192-sector partition: fsbuild sizes it from `target/allwinner/generic/boot-resource/boot-resource.ini`
+(`size=8192`, KiB), so `df` overstated the space and a writer trusting the boot sector could place
+clusters past the end. It also carried the SDK's logo as `bootlogo.bmp.orig` (38454 bytes), the
+backup `apply-sdk-mods.sh` kept inside the folder the pack copies, though that logo is not ours to
+ship and nothing on the device reads it (U-Boot loads only `bootlogo.bmp`).
+
+| what | where | why |
+|---|---|---|
+| `scripts/build.sh` (overlay step) | `target/allwinner/generic/boot-resource/boot-resource.ini` | `size=` from the board's `sys_partition.fex` (bootloader size / 2 KiB); the SDK's file is kept as `.ini.orig` |
+| `scripts/build.sh`, `scripts/apply-sdk-mods.sh` | `target/allwinner/generic/boot-resource/bootlogo.bmp.sdk` | the SDK logo's backup lives beside the pack's root; an older `boot-resource/bootlogo.bmp.orig` moves there |
+| `scripts/fat16-boot-resource.py` | the image's bootloader partition | rewrites fsbuild's FAT as a FAT16 of one-sector clusters (8111), every entry kept, read back and compared first |
+| `scripts/make-update.py` `check_bootres` | the image's bootloader partition | refuses a FAT that is not a FAT16 of exactly its partition by count and by label, or carries a `.orig` file |
+
+At 4 MiB fsbuild keeps 2 sectors per cluster: 4071 clusters, and a 12-bit table under a "FAT16"
+label (`fsck.fat`: "12 bit entries"). U-Boot goes by the label and Linux by the count, so U-Boot
+would follow every multi-cluster file (the logo, the charge pictures) through the wrong table.
+`build.sh` therefore rewrites the partition in the finished image before the update is made, puts
+the result in the dump's `boot-resource.fex` and drops the PhoenixSuit image, which nothing flashes. Every update to these images rewrites boot-resource,
+so a card from an older image loses the `.orig` at its next update. Not yet tested on hardware.
+
 ## Round 31 (2026-10-23): the Powkiddy V90S and V20 panel and pad
 
 Two new boards on the same A133P, from the stock firmware the V90S and V20 share
@@ -576,3 +617,18 @@ with the SDK's compiler, not on hardware.
 
 On an existing tree: `scripts/apply-sdk-mods.sh` (160 and 161 report `patched`). The stamp moves,
 which wipes the kernel build tree. `mods_version` 27 -> 28.
+
+## Round 34 (2026-10-26): the merged line, stamped 29
+
+`integration/20261026` joins the lines that each stamped their own level: bundle/20261024 (rounds 29-30,
+stamp 26: patch 136 and the boot-resource rework), feat/powkiddy-v90s (rounds 31-32, stamps 24, 25 and 27:
+patches 150-152) and feat/trimui-a133p (round 33, stamp 28: 160-161), all on main's 21. Nothing new is
+patched; the stamp says that a tree carries every one of them. It does NOT carry fix/pmf's 140-142 (its
+stamps 22-23, and its rounds 29-30, whose numbers bundle's rounds also took): `need_mods` is a >= test, so
+fix/pmf takes a stamp above 29 and new round numbers when it lands.
+
+On an existing tree, from this checkout with `SDK_DIR` as `scripts/lib.sh` sets it: a tree at 26 (bundle)
+takes 150, 151, 152, 160 and 161 (`patched`); a tree at 27 (feat/powkiddy-v90s) takes 136, 160 and 161; a
+tree at 28 takes 136. A tree that still carries round 31's 151 reverses it first (round 32). The stamp
+moves to 29, which wipes the kernel build tree, and the new Kconfig symbols (150's, 151's, 160's) need
+`build.sh ext` before any image (B191). `mods_version` -> 29.

@@ -252,9 +252,15 @@ if [ ! -f "$enc.zero28" ]; then
     [ "$CHECK" = 1 ] || { cp -a "$enc" "$enc.zero28"; changed=1; note backup "$enc.zero28"; }
 fi
 for f in target/allwinner/a133-aw3/defconfig target/allwinner/a133-aw3/base-files/etc/rc.local \
-         package/base-files/files/etc/banner target/allwinner/generic/boot-resource/boot-resource/bootlogo.bmp; do
+         package/base-files/files/etc/banner; do
     [ -f "$f.orig" ] || [ "$CHECK" = 1 ] || { cp -a "$f" "$f.orig"; changed=1; note backup "$f.orig"; }
 done
+# The SDK's logo, kept beside the pack's root so it never ships (build.sh moves an older .orig there too).
+f=target/allwinner/generic/boot-resource/boot-resource/bootlogo.bmp
+if [ ! -f target/allwinner/generic/boot-resource/bootlogo.bmp.sdk ] && [ "$CHECK" != 1 ]; then
+    cp -a "$([ -f "$f.orig" ] && echo "$f.orig" || echo "$f")" target/allwinner/generic/boot-resource/bootlogo.bmp.sdk
+    changed=1; note backup target/allwinner/generic/boot-resource/bootlogo.bmp.sdk
+fi
 
 if [ "$CHECK" = 1 ]; then
     [ "$missing" = 0 ] && log "all SDK modifications are in place" || die "SDK modifications missing (run without --check)"

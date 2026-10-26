@@ -113,14 +113,12 @@ because the base does not.
       `BTN_SOUTH` 304 and `KEY_SELECT` 353 in the same instant (measured 2026-09-16,
       the launcher now ignores 353); volume keys arrive on the pad node, not the
       jack device; virtual-mouse buttons 272/273 are exposed. Trim in the driver.
-- [ ] **Codec DAC volume owned by the driver**: `sound/soc/sunxi/sun50iw3-codec.c`
-      `codec_aif_mute` writes `SUNXI_DAC_VOL_CTRL` = 0 on mute and the DT default
-      (`gain_config.dac_digital_vol`, 160) on unmute, so a level set through the
-      'DAC volume' control (MinUI, MagicX's own `vol` helper) is lost at every
-      stream restart and every game starts at full volume. Restore the user's
-      value (cache the kcontrol write) instead of the DT constant; also the
-      'digital volume' TLV is declared backwards (0 is 0 dB on the hardware).
-      The launcher works around it by keeping the level in 'digital volume'.
+- [x] **Codec DAC volume owned by the driver** (round 29, tree patch 136): the driver is
+      `sound/soc/sunxi/sun50iw10-codec.c`, whose `sunxi_codec_digital_mute` wrote
+      `SUNXI_DAC_VOL_CTRL` = 0 at a stream stop and the DT's `dac_digital_vol` at a start,
+      so a 'DAC volume' level lasted one stream. The driver now caches it, and 0 is mute.
+- [ ] **'digital volume' TLV declared backwards** (0 is 0 dB on the hardware). Leave it:
+      spruce writes raw values to that control, and flipping it would reverse them.
 - [ ] **Newer-board-revision fixes** from main-zero40 v20260202-1 ("Allwinner
       supplied fixes for newer board revisions"): contents unknown, not in our
       inputs (HN Known gaps).

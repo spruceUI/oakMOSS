@@ -1,10 +1,11 @@
 # Boot screens
 
-On the Powkiddy V90S and V20, the panel shows an oakMOSS screen at every step of a boot and a
-shutdown, and never goes blank between U-Boot and spruce. This is the oakMOSS form of what
-dArkMoss does for the XU Mini M and the G350 (`bootlogo.service` and its siblings there). The
-other boards opt in the same way, by shipping the frames (below). Until one does, nothing
-changes for it.
+On the MagicX Zero 28, Zero 40 and XU20 and the Powkiddy V90S and V20, the
+panel shows an oakMOSS screen at every step of a boot and a shutdown. It never goes blank between
+U-Boot and spruce. This is the oakMOSS form of what dArkMoss does for the XU Mini M and the G350
+(`bootlogo.service` and its siblings there). A board opts in by shipping the frames (below), and a
+board that doesn't gets no change. Proven on the V90S 2026-10-25 (logo, all four status lines, debug
+text, charge mode).
 
 ## What the panel shows
 
@@ -30,15 +31,19 @@ runs, and nothing drew again until spruce started. `bootframe` draws right after
 ## The pieces
 
 - `scripts/make-charge-screens.py <board>` renders every frame. The boards in its
-  `BOOT_FRAMES` (v90s, v20) also get:
+  `BOOT_FRAMES` (zero28, zero40, xu20, v90s, v20) also get:
   - `boot-loading`, `reboot` and `poweroff` in `boards/<board>/overlay/usr/magicx/share/charge/`;
-  - full-screen U-Boot pictures in `boards/<board>/boot-resource/`: `bootlogo.bmp` (32-bit, like
-    the stock logo), `bat/battery_charge.bmp`, `bat/bat0.bmp`, `bat/bempty.bmp` and
-    `bat/low_pwr.bmp`. The Powkiddy U-Boot reads `bat0`, `battery_charge` and `bempty` (strings
-    in its binary).
+  - a U-Boot `boards/<board>/boot-resource/bootlogo.bmp` in the frames' layout with an empty status
+    line. On the MagicX boards it is cut out symmetrically about the screen's centre and turned for
+    the panel, as their charge pictures already were. Their U-Boot centres it, so it lands exactly
+    where the frames put the tree.
+  - The boards in `FULL_UBOOT` (v90s, v20) get full-screen U-Boot pictures instead: `bootlogo.bmp`
+    (32-bit, like the stock logo), `bat/battery_charge.bmp`, `bat/bat0.bmp`, `bat/bempty.bmp` and
+    `bat/low_pwr.bmp`. The Powkiddy U-Boot reads `bat0`, `battery_charge` and `bempty` (strings in
+    its binary).
 
   Run it in the Lima VM, which has the DejaVu fonts: `lima bash -lc 'cd <worktree> &&
-  python3 -I scripts/make-charge-screens.py v90s'`. Its output is deterministic.
+  python3 -I scripts/make-charge-screens.py zero28'`. Its output is deterministic.
 - `charge-screen.sh boot | frontend | reboot | poweroff` draws one frame and exits. It draws
   only when the board ships `boot-loading.rgba.gz`, which is the opt-in, and never during a
   debug-text boot. `tests/test-screens.sh` covers both rules.
@@ -46,7 +51,10 @@ runs, and nothing drew again until spruce started. `bootframe` draws right after
   `S02bootframe`, `K00shutdownframe`), as `chargeframe` is: the image build creates no links.
 - The `shutdownframe` script tells a reboot from a power-off by `OAKMOSS_SHUTDOWN`, which procd
   patch 901 passes to the K scripts. Without that variable it draws nothing.
-- U-Boot's pictures: for a stock-chain board with `OWN_BOOTRES_FILES=1` in its `board.conf`,
+- U-Boot's pictures on the MagicX boards (their own U-Boot): `build.sh` packs
+  `boards/<board>/boot-resource` into the SDK image's 4 MiB boot-resource partition, as before.
+  The SDK-lane `.omupd` carries that partition, so an update brings the new logo too.
+- U-Boot's pictures on a stock-chain board: with `OWN_BOOTRES_FILES=1` in its `board.conf`,
   `make-own-kernel-stock.sh` copies the stock boot-resource partition (`BOOTRES=`) and replaces
   the board's files in the copy with mtools, reading each one back. The rest of the partition
   stays as it was: the fonts, the wavefiles and `lcd_compatible_index.txt`, which this U-Boot
@@ -96,7 +104,7 @@ power key woke it, after a 10 s wait. It now also takes the joypads `Powkiddy V9
 ## Adding a board
 
 1. Add the board to `BOOT_FRAMES` in `make-charge-screens.py` and render it.
-2. For a stock-chain board, set `OWN_BOOTRES_FILES=1` in its `board.conf`. On the board's own
-   chain, `build.sh` already packs `boards/<board>/boot-resource`.
+2. For a stock-chain board, add it to `FULL_UBOOT` as well and set `OWN_BOOTRES_FILES=1` in its
+   `board.conf`. On the board's own chain, `build.sh` already packs `boards/<board>/boot-resource`.
 3. Check the U-Boot's picture names against its binary (`strings u-boot.bin | grep -i bmp`),
    and the charge screen's input names against the board's input nodes.

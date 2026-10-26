@@ -88,8 +88,11 @@ apply_overlay() {
     # shellcheck disable=SC1090
     . "$OAKMOSS_ROOT/boards/$board/board.conf"
     local logo=$SDK_DIR/target/allwinner/generic/boot-resource/boot-resource/bootlogo.bmp
+    # The SDK's logo is kept beside the pack's root, not in it (it shipped as bootlogo.bmp.orig up to v0.6.0-beta.1).
+    local sdklogo=${logo%/*/*}/bootlogo.bmp.sdk
+    [ -f "$logo.orig" ] && { [ -f "$sdklogo" ] || cp -a "$logo.orig" "$sdklogo"; rm -f "$logo.orig"; }
     if [ -f "$ov/bootlogo.bmp" ]; then cp -a "$ov/bootlogo.bmp" "$logo"
-    elif [ -f "$logo.orig" ]; then cp -a "$logo.orig" "$logo"; fi      # no logo in the overlay: the SDK's own
+    elif [ -f "$sdklogo" ]; then cp -a "$sdklogo" "$logo"; fi      # no logo in the overlay: the SDK's own
     # The board's other bootloader pictures (boards/<board>/boot-resource, e.g. bat/battery_charge.bmp
     # from scripts/make-charge-screens.py, and the Zero 40's and XU20's own boot logo), for a board
     # with its own sys_partition.fex, whose bigger boot-resource partition they need: the SDK
@@ -111,11 +114,18 @@ apply_overlay() {
     # A board whose cards keep the vendor's boot-resource (OWN_STOCK_DT=1, TrimUI) brings no pictures, and no card
     # carries its SDK image: that image takes oakMOSS's committed logo (the Zero 28's), never the SDK's.
     if grep -q '^OWN_STOCK_DT=1' "$OAKMOSS_ROOT/boards/$board/board.conf" && [ ! -d "$OAKMOSS_ROOT/boards/$board/boot-resource" ] &&
-        [ -f "$logo.orig" ] && cmp -s "$logo" "$logo.orig"; then
+        [ -f "$sdklogo" ] && cmp -s "$logo" "$sdklogo"; then
         cp -a "$OAKMOSS_ROOT/boards/zero28/boot-resource/bootlogo.bmp" "$logo"
     fi
+    # fsbuild sizes the FAT from boot-resource.ini (8192 KiB), twice the boards' 8192-sector partition:
+    # size it to the partition the board's sys_partition.fex gives (make-update.py checks the result).
+    local ini=${bres%/*}/boot-resource.ini kib
+    [ -f "$ini.orig" ] || cp -a "$ini" "$ini.orig"
+    kib=$(awk '/name *= *bootloader/ { b = 1 } b && /^[ \t]*size *=/ { gsub(/[^0-9]/, ""); print $0 / 2; exit }' \
+        "$OAKMOSS_ROOT/boards/$board/sys_partition.fex" 2>/dev/null)
+    if [ -n "$kib" ]; then sed "s/^size=[0-9]*/size=$kib/" "$ini.orig" > "$ini"; else cp -a "$ini.orig" "$ini"; fi
     # The SDK's own logo is Moss's (not ours to ship): every board brings oakMOSS's, from boards/<board>/boot-resource.
-    if [ -f "$logo.orig" ] && cmp -s "$logo" "$logo.orig"; then
+    if [ -f "$sdklogo" ] && cmp -s "$logo" "$sdklogo"; then
         die "$board would ship the SDK's original boot logo: add boards/$board/boot-resource/bootlogo.bmp"
     fi
     cp -a "$ov/etc/rc.local" "$SDK_DIR/target/allwinner/a133-aw3/base-files/etc/rc.local"
@@ -463,6 +473,14 @@ case $STEP in
     # Read back the U-Boot the image really carries: Tina's make rebuilds it when its tree changed.
     packed_uboot_oakmoss "$FINAL" || die "the U-Boot packed into $FINAL lacks the oakMOSS boot arguments (patch 104)"
     "$OAKMOSS_ROOT/scripts/add-boot-backups.py" "$FINAL" || die "could not add the boot0 and U-Boot copies"
+    # fsbuild's 4 MiB boot-resource is a 12-bit table labelled FAT16 (U-Boot and Linux would disagree):
+    # rewrite it as a FAT16 of one-sector clusters, files unchanged.
+    "$OAKMOSS_ROOT/scripts/fat16-boot-resource.py" "$FINAL" || die "could not rewrite the boot-resource FAT"
+    # No copy of fsbuild's FAT stays in the record: the dump's boot-resource.fex becomes the rewritten
+    # partition, and the PhoenixSuit image goes (nothing flashes it; the scripts read only its dump).
+    "$OAKMOSS_ROOT/scripts/fat16-boot-resource.py" --export "$FINAL" "$OUT/$(basename "$IMG").dump/boot-resource.fex" ||
+        die "could not export the boot-resource partition"
+    rm -f "$OUT/$(basename "$IMG")"
     UPDATE=$OUT/oakmoss-$BOARD-$(oakmoss_version).omupd
     # A board whose cards are the own lane's (board.conf OWN_AB=1) gets its update from
     # make-own-kernel-stock.sh: an SDK-lane one would also replace a card's stock boot-resource
@@ -508,7 +526,7 @@ case $STEP in
       echo "libstdcxx=$(for f in "$ROOTFS"/usr/lib/libstdc++.so.6.0.*; do [ -e "$f" ] && basename "$f" && break; done)"
       echo "oakmoss_libs=$([ -n "${OAKMOSS_LIBS:-}" ] && echo "sha256sums=$(sha256_of "$OAKMOSS_LIBS/SHA256SUMS") $(grep -m1 '^oakmoss=' "$OAKMOSS_LIBS/BUILD-INFO")" || echo none)"
       echo "batteryplus=$([ -x "$ROOTFS/usr/magicx/bin/batteryplus" ] && echo "knubat.components ${BATTERYPLUS_COMMIT:0:12}, voltage mode" || echo none)"
-      echo "outputs=$(basename "$FINAL") (raw GPT image: dd or Etcher to SD1, whole card); $([ -n "$UPDATE" ] && echo "$(basename "$UPDATE") (update for cards with two slots, docs/updates.md; bootchain=${OMUPD_BOOTCHAIN:-0})" || echo "no SDK-lane update (own-lane board)"); $(basename "$IMG") (Allwinner PhoenixSuit image); $(basename "$IMG").dump/rootfs.fex (rootfs squashfs, used by the hybrid and diag images)"
+      echo "outputs=$(basename "$FINAL") (raw GPT image: dd or Etcher to SD1, whole card); $([ -n "$UPDATE" ] && echo "$(basename "$UPDATE") (update for cards with two slots, docs/updates.md; bootchain=${OMUPD_BOOTCHAIN:-0})" || echo "no SDK-lane update (own-lane board)"); $(basename "$IMG").dump/rootfs.fex (rootfs squashfs, used by the hybrid and diag images)"
       echo "debug=$DEBUG_INFO"
     } > "$OUT/BUILD-INFO.txt"
     # System.map beside the build: a KDEBUG_MARK card reports initcall addresses, and

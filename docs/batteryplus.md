@@ -18,8 +18,8 @@ writes the result to `/tmp/battery.percent`.
 | its hook directories | `/etc/batteryplus/{charging.d,discharging.d,state.d}` | empty; shipped so it never has to create them |
 
 The learned data (the voltage map, the calibration and the restore state) lives in
-`/mnt/UDISK/batteryplus`. It survives reboots; an update wipes `/mnt/UDISK`, and BatteryPlus
-learns it again.
+`/mnt/UDISK/batteryplus`. It survives reboots and updates (UDISK is its own partition; an update's
+`parts_clean` clears only the overlay). Writing an image to SD1 starts it afresh.
 
 ## For the launcher
 
