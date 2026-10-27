@@ -234,8 +234,8 @@ kdebug_patch_state() {
 # lacks later rounds, so build.sh refuses it.
 # 29 = the merged line (integration/20261026): main's 21 + bundle/20261024 (26: patch 136) + feat/powkiddy-v90s
 # (24, 25, 27: patches 150-152) + feat/trimui-a133p (28: 160-161). NOT fix/pmf's 22-23 (140-142): the gate is >=,
-# so fix/pmf renumbers above 29 when it lands.
-OAKMOSS_MODS_VERSION=29
+# so fix/pmf renumbers above 30 when it lands. 30: feat/brick-own-uboot (162, the TrimUI panel in U-Boot).
+OAKMOSS_MODS_VERSION=30
 need_mods() {
     local v
     [ -f "$SDK_DIR/.oakmoss-mods" ] || die "SDK modifications not applied (run scripts/apply-sdk-mods.sh)"

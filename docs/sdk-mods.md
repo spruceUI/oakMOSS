@@ -635,3 +635,25 @@ takes 150, 151, 152, 160 and 161 (`patched`); a tree at 27 (feat/powkiddy-v90s) 
 tree at 28 takes 136. A tree that still carries round 31's 151 reverses it first (round 32). The stamp
 moves to 29, which wipes the kernel build tree, and the new Kconfig symbols (150's, 151's, 160's) need
 `build.sh ext` before any image (B191). `mods_version` -> 29.
+
+## Round 35 (2026-10-27): the TrimUI panel in U-Boot, stamped 30
+
+The Brick moves to our own U-Boot (feat/brick-own-uboot): TrimUI's boot0 (its DRAM setup), BL31, SCP and
+device tree stay, and only the U-Boot item of TrimUI's boot package is ours. Our U-Boot is one binary for
+every board (B205's is byte-identical on the Zero 28, Zero 40 and XU20), so the Brick takes it from any SDK
+image, but it needs the panel TrimUI's trees name, `otm1289a`, which only the kernel had (160).
+
+| what | where | why |
+|---|---|---|
+| `162-uboot-lcd-panel-trimui-a133p.patch` | `lichee/brandy-2.0/u-boot-2018/drivers/video/sunxi/disp2/disp/lcd/` (`trimui_brick.c/.h`, `trimui_brick_panels.h`, `panels.c/.h`, `Kconfig`, `../Makefile`) | 160's driver on U-Boot's disp2, as 103 carries 070. The tables are 160's byte for byte. With no command line to read, the DCS IDs decide (the vendor U-Boot's order); the env variable `trimui_lcd` forces a table. Hunks sit after 103's, which applies first. `default y`, so no defconfig line; inert on boards whose tree names another panel. |
+| `scripts/lib.sh` `OAKMOSS_MODS_VERSION` | `build.sh` | refuses a tree without 162 |
+
+Checked 2026-10-27 on the desk only: the patch made with GNU diff against the SDK's U-Boot disp2 files
+with 103 applied, and dry-run forward onto a fresh copy; the driver passes clang `-fsyntax-only`
+(`-std=gnu89 -Wall -Wextra -Werror`, stub disp2 headers); its panel choice passes 12 cases (the eight
+controllers' IDs, a Brick Pro by `lcd_ht` 1184, no ID answer, `trimui_lcd` set, unknown and empty). Not yet
+built with the SDK's compiler, not on hardware.
+
+On an existing tree: `scripts/apply-sdk-mods.sh` (162 reports `patched`). The stamp moves to 30, which
+wipes the kernel build tree, so the first image after it needs `build.sh ext` (bk4's kit runs it when the
+stamp was not 29). `mods_version` -> 30.
