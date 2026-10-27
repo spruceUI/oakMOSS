@@ -16,8 +16,8 @@ Writes into <out dir>:
                 other file (bat1-5, magic.bin) and the FAT's size stay.
   MANIFEST.txt  what was taken from where, with sha256s.
 --charge-mode also sets charge_mode = <1> in the tree's /soc/power_sply, which TrimUI's lacks and the MagicX trees carry
-(their sys_config [power_sply]): our U-Boot then boots a charger power-on into Linux's charge mode
-(androidboot.mode=charger, the base's charge screen) instead of on into the system. Needs fdtput and dtc (dtc's
+(their sys_config [power_sply]). It only states U-Boot's default (power_manage.c reads a missing one as 1): what keeps
+a charger power-on out of Linux's charge mode is the bootcmd, fixed by tree patch 163. Needs fdtput and dtc (dtc's
 package); the tree is decompiled before and after, and only that property may differ.
 A card takes package.bin at sector 32800 only (the main copy): boot0 falls back to the spare copy at 24576,
 which stays TrimUI's, when the main one fails its checksum. bootres.fat goes to the start of p1.

@@ -657,3 +657,25 @@ built with the SDK's compiler, not on hardware.
 On an existing tree: `scripts/apply-sdk-mods.sh` (162 reports `patched`). The stamp moves to 30, which
 wipes the kernel build tree, so the first image after it needs `build.sh ext` (bk4's kit runs it when the
 stamp was not 29). `mods_version` -> 30.
+
+## Round 36 (2026-10-27): charge mode on the own lane's bootcmd, stamped 31
+
+A charger power-on of the Brick on our U-Boot (bk5, 2026-10-27) showed U-Boot's charge picture and then
+booted on into the system: U-Boot had chosen charge mode (`oakmoss.src=3`, `oakmoss.chg=1`), but the
+command line had no `androidboot.mode`. `update_bootargs()` adds it only when `bootcmd` is exactly
+`run setargs_mmc boot_normal` (or the nand one), and `OWN_EMMC` env's is
+`run oakroot_${root_partition} setargs_mmc boot_normal` (`docs/trimui.md`).
+
+| what | where | why |
+|---|---|---|
+| `163-uboot-charger-mode-own-lane-bootcmd.patch` | `lichee/brandy-2.0/u-boot-2018/board/sunxi/sunxi_bootargs.c` | `androidboot.mode` (`normal` or `charger`) for any `run [<var> ...] setargs_mmc boot_normal` (and the nand one): `run ` first, the tail last after a space. The SDK lane's bootcmd is the exact string at runtime (`sunxi_update_bootcmd()` turns the env's `setargs_nand` into `setargs_mmc` on a card), so nothing changes there; recovery and fastboot swap `boot_normal` and still get no mode. Applies after 104. |
+| `scripts/lib.sh` `OAKMOSS_MODS_VERSION` | `build.sh` | refuses a tree without 163 |
+
+Checked 2026-10-27 on the desk only: the patch made with GNU diff against the SDK's `sunxi_bootargs.c` with
+104 applied, dry-run forward onto a fresh copy and reversed; the test compiled by clang (`-std=gnu89 -Wall
+-Wextra -Werror`) passes 18 bootcmd cases, every SDK match staying one (the SDK lane's two strings, the own
+lane's, recovery, fastboot, UBI, NOR, the built-in defaults, near misses, empty, unset). Not yet built with the
+SDK's compiler, not on hardware.
+
+On an existing tree: `scripts/apply-sdk-mods.sh` (163 reports `patched`). The stamp moves to 31, which
+wipes the kernel build tree, so the first image after it needs `build.sh ext`. `mods_version` -> 31.

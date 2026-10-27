@@ -1,0 +1,35 @@
+diff -ruN a/lichee/brandy-2.0/u-boot-2018/board/sunxi/sunxi_bootargs.c b/lichee/brandy-2.0/u-boot-2018/board/sunxi/sunxi_bootargs.c
+--- a/lichee/brandy-2.0/u-boot-2018/board/sunxi/sunxi_bootargs.c
++++ b/lichee/brandy-2.0/u-boot-2018/board/sunxi/sunxi_bootargs.c
+@@ -233,6 +233,20 @@
+ 
+ #endif
+ 
++/*
++ * oakMOSS (sdk-patches/tree/163): a normal boot is "run [<var> ...] <tail>", so the own lane's
++ * "run oakroot_${root_partition} setargs_mmc boot_normal" passes androidboot.mode as the SDK's does.
++ */
++static int oakmoss_boot_normal(const char *cmd, const char *tail)
++{
++	size_t n, t = strlen(tail);
++
++	if (!cmd || strncmp(cmd, "run ", 4))
++		return 0;
++	n = strlen(cmd);
++	return n >= 4 + t && cmd[n - t - 1] == ' ' && !strcmp(cmd + n - t, tail);
++}
++
+ void update_bootargs(void)
+ {
+ 	int dram_clk = 0;
+@@ -244,8 +258,8 @@
+ 	__attribute__((unused)) char disp_reserve[80];
+ 	strcpy(cmdline, str);
+ 
+-	if ((!strcmp(env_get("bootcmd"), "run setargs_mmc boot_normal")) ||
+-	    !strcmp(env_get("bootcmd"), "run setargs_nand boot_normal")) {
++	if (oakmoss_boot_normal(env_get("bootcmd"), "setargs_mmc boot_normal") ||
++	    oakmoss_boot_normal(env_get("bootcmd"), "setargs_nand boot_normal")) {
+ 		if (gd->chargemode == 0) {
+ 			pr_msg("in boot normal mode,pass normal para to cmdline\n");
+ 			strcat(cmdline, " androidboot.mode=normal");
