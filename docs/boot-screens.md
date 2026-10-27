@@ -111,8 +111,9 @@ power key woke it, after a 10 s wait. It now also takes the joypads `Powkiddy V9
 On our own U-Boot (`scripts/make-brick-own-uboot.py`) a charger power-on shows the Brick's
 `bat/battery_charge.bmp`. Until tree patch 163 it then booted on into the system: the own lane's
 `bootcmd` (`run oakroot_${root_partition} setargs_mmc boot_normal`) kept U-Boot from adding
-`androidboot.mode=charger` (`docs/sdk-mods.md`, round 36). The charge screen takes no Brick pad yet,
-so only the power key wakes it.
+`androidboot.mode=charger` (`docs/sdk-mods.md`, round 36). On hardware (2026-10-27, B209): a restart on USB
+boots normally; a power-off on the cable (the unit comes straight back, PMIC 0xf0 bit 3) and a plug-in while off
+both give the charge screen. It also takes the Brick's pad, `TRIMUI Player1` (`trimui_inputd`, started at S14).
 
 ## Adding a board
 

@@ -121,7 +121,7 @@ while :; do
     for d in /sys/class/input/event*; do
         case "$(cat "$d/device/name" 2>/dev/null)" in
             axp2202-pek) pek=/dev/input/${d##*/} ;;
-            magicx-input|"Powkiddy V90S Gamepad"|"Powkiddy V20 Gamepad") pad=/dev/input/${d##*/} ;;
+            magicx-input|"Powkiddy V90S Gamepad"|"Powkiddy V20 Gamepad"|"TRIMUI Player1") pad=/dev/input/${d##*/} ;;
         esac
     done
     [ -n "$pek" ] && [ -n "$pad" ] && break
