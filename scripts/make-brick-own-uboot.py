@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The Brick's card on our own U-Boot (feat/brick-own-uboot): the two pieces that differ from TrimUI's chain.
 
-    scripts/make-brick-own-uboot.py <TrimUI package> <TrimUI boot-resource> <SDK image> <out dir>
+    scripts/make-brick-own-uboot.py [--charge-mode] <TrimUI package> <TrimUI boot-resource> <SDK image> <out dir>
 
   <TrimUI package>        TrimUI's boot package (unpack-trimui-stock.sh: items/12345678_BOOTPKG-00000000)
   <TrimUI boot-resource>  TrimUI's boot-resource FAT (items/RFSFAT16_BOOT-RESOURCE_FE)
@@ -15,6 +15,10 @@ Writes into <out dir>:
                 bat/{battery_charge,bat0,low_pwr}.bmp, make-charge-screens.py brick) in place of TrimUI's; every
                 other file (bat1-5, magic.bin) and the FAT's size stay.
   MANIFEST.txt  what was taken from where, with sha256s.
+--charge-mode also sets charge_mode = <1> in the tree's /soc/power_sply, which TrimUI's lacks and the MagicX trees carry
+(their sys_config [power_sply]): our U-Boot then boots a charger power-on into Linux's charge mode
+(androidboot.mode=charger, the base's charge screen) instead of on into the system. Needs fdtput and dtc (dtc's
+package); the tree is decompiled before and after, and only that property may differ.
 A card takes package.bin at sector 32800 only (the main copy): boot0 falls back to the spare copy at 24576,
 which stays TrimUI's, when the main one fails its checksum. bootres.fat goes to the start of p1.
 """
@@ -42,9 +46,13 @@ def tool(*args):
 
 
 def main():
-    if len(sys.argv) != 5:
+    args = sys.argv[1:]
+    charge = args[:1] == ["--charge-mode"]
+    if charge:
+        args = args[1:]
+    if len(args) != 4:
         sys.exit(__doc__.strip().splitlines()[2].strip())
-    pkg_in, bootres_in, sdk_img, out = sys.argv[1:]
+    pkg_in, bootres_in, sdk_img, out = args
     os.makedirs(out, exist_ok=True)
     pics = os.path.join(ROOT, "boards", "brick", "boot-resource")
     man = []
@@ -64,7 +72,25 @@ def main():
     pkg = os.path.join(out, "package.bin"); open(pkg, "wb").write(stock)
     tool("toc1-item.py", "--replace", pkg, "u-boot", ours)
     tool("toc1-checksum.py", "--fix", pkg); tool("toc1-checksum.py", "--check", pkg)
-    for item in ("monitor", "scp", "dtb"):
+    if charge:
+        # TrimUI's tree with charge_mode = <1> in /soc/power_sply, and nothing else changed
+        dt, dt2 = os.path.join(out, ".dtb"), os.path.join(out, ".dtb-charge")
+        tool("toc1-item.py", "--extract", pkg, "dtb", dt)
+        open(dt2, "wb").write(open(dt, "rb").read()[:struct.unpack(">I", open(dt, "rb").read(8)[4:8])[0]])
+        r = subprocess.run(["fdtput", "-t", "i", dt2, "/soc/power_sply", "charge_mode", "1"], capture_output=True, text=True)
+        if r.returncode:
+            sys.exit(f"fdtput: {r.stderr}")
+        dts = [subprocess.run(["dtc", "-q", "-I", "dtb", "-O", "dts", f], capture_output=True, text=True, check=True).stdout for f in (dt, dt2)]
+        a, b = dts[0].splitlines(), dts[1].splitlines()
+        added = [l for l in b if l not in a]; gone = [l for l in a if l not in b]
+        if gone or [l.strip() for l in added] != ["charge_mode = <0x01>;"]:
+            sys.exit(f"the tree changed beyond charge_mode: +{added} -{gone}")
+        if os.path.getsize(dt2) > os.path.getsize(dt):
+            sys.exit("the tree with charge_mode does not fit TrimUI's dtb item")
+        tool("toc1-item.py", "--replace", pkg, "dtb", dt2)
+        tool("toc1-checksum.py", "--fix", pkg); tool("toc1-checksum.py", "--check", pkg)
+        man.append(f"dtb     {sha(open(dt2, 'rb').read())}  TrimUI's tree with charge_mode = <1> in /soc/power_sply (only that differs, by dtc)")
+    for item in (("monitor", "scp") if charge else ("monitor", "scp", "dtb")):
         a, b = os.path.join(out, f".stock-{item}"), os.path.join(out, f".new-{item}")
         tool("toc1-item.py", "--extract", pkg_in, item, a); tool("toc1-item.py", "--extract", pkg, item, b)
         if open(a, "rb").read() != open(b, "rb").read():
