@@ -54,9 +54,10 @@ LOW_BATTERY = {"bat0": ["Battery too low to start", "Charging, please wait"],
 LEVELS = range(0, 101, 5)
 BOOT_FRAMES = ("v90s", "v20", "zero28", "zero40", "xu20", "brick")
 FULL_UBOOT = ("v90s", "v20")
-# Linux frames only: the Brick keeps TrimUI's boot-resource byte-identical (OWN_STOCK_DT, keep-boot-chain), so
-# U-Boot shows TrimUI's logo and charge pictures and no U-Boot picture is made for it.
-LINUX_ONLY = ("brick",)
+# The Brick's U-Boot pictures (centred, as our U-Boot draws them) go only into the boot-resource that
+# make-brick-own-uboot.py builds for a card on our own U-Boot (feat/brick-own-uboot): the stock-chain card
+# keeps TrimUI's boot-resource byte-identical (OWN_STOCK_DT, keep-boot-chain).
+LINUX_ONLY = ()
 
 
 def _font(bold, px):

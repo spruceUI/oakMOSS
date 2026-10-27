@@ -35,7 +35,7 @@ BOARDS = {"xu20": (1024, 768, 180), "zero40": (480, 800, 0), "zero28": (480, 640
 # with the picture turned 90 degrees clockwise - the way its long-standing overlay logo
 # (the SDK original rotated 270) has always been drawn. The Powkiddy panels are landscape
 # and upright (640x480, no rotation).
-LOGO_ROT = {"xu20": 180, "zero40": 0, "zero28": 270, "v90s": 0, "v20": 0}
+LOGO_ROT = {"xu20": 180, "zero40": 0, "zero28": 270, "v90s": 0, "v20": 0, "brick": 0}   # the Brick: landscape, upright
 # Logo side in pixels. The Zero 28's own boot chain gives its boot-resource partition
 # only 512 sectors (256 KiB); a 400 px 32-bit logo (640 KB) made the SDK pack fail with
 # "dl file boot-resource.fex size too large" (2026-09-18), so it gets 200 px (160 KB).

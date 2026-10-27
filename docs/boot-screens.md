@@ -41,10 +41,11 @@ runs, and nothing drew again until spruce started. `bootframe` draws right after
     (32-bit, like the stock logo), `bat/battery_charge.bmp`, `bat/bat0.bmp`, `bat/bempty.bmp` and
     `bat/low_pwr.bmp`. The Powkiddy U-Boot reads `bat0`, `battery_charge` and `bempty` (strings in
     its binary).
-  - The boards in `LINUX_ONLY` (brick) get the Linux frames and no U-Boot picture. The Brick keeps
-    TrimUI's boot-resource byte-identical (`OWN_STOCK_DT`, `keep-boot-chain`), so U-Boot shows
-    TrimUI's logo and charge pictures, and the oakMOSS screens start with `bootframe`. Its fb0 is
-    1024x768 (32 bpp, stride 4096, read 2026-10-27), so its frames are byte-identical to the XU20's.
+  - The Brick (fb0 1024x768, 32 bpp, stride 4096, read 2026-10-27; its frames are byte-identical to the
+    XU20's) also gets centred U-Boot pictures in `boards/brick/boot-resource`, upright. They reach a card
+    only through `scripts/make-brick-own-uboot.py`, for a Brick on our own U-Boot (feat/brick-own-uboot),
+    which writes them over TrimUI's in TrimUI's boot-resource; a card on TrimUI's chain keeps TrimUI's
+    boot-resource byte-identical (`OWN_STOCK_DT`, `keep-boot-chain`) and shows TrimUI's logo.
 
   Run it in the Lima VM, which has the DejaVu fonts: `lima bash -lc 'cd <worktree> &&
   python3 -I scripts/make-charge-screens.py zero28'`. Its output is deterministic.
