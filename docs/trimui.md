@@ -81,8 +81,10 @@ scripts/build.sh image brick
 scripts/make-own-kernel-stock.sh brick builds/<stamp>-brick
 ```
 
-The first card is diagnostic (`OWN_DIAG` unset): the early probe turns the panel magenta when our
-root runs and writes its report to the card's UDISK; the hand-off shows the colour ladder.
+The first cards were diagnostic (`OWN_DIAG` unset): the early probe turns the panel magenta when our
+root runs and writes its report to the card's UDISK; the hand-off shows the colour ladder. Since the
+Brick boots spruce (2026-10-26), `OWN_DIAG=0` gives it the stock hand-off, as the V90S and V20 have;
+`DIAG=1` still builds the diagnostic card.
 
 ## Not done yet
 
