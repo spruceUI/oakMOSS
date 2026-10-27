@@ -41,16 +41,18 @@ case " $(cat /proc/cmdline 2>/dev/null) " in
     *" androidboot.mode=charger "*) /usr/magicx/bin/charge-screen.sh || exit 0 ;;
 esac
 
-# A stable WiFi MAC for the XR829 (Zero 40). Its driver keeps the address in
+# A stable WiFi MAC for the XR829 (Zero 40, Brick). Its driver keeps the address in
 # /data/misc/wifi/xr_wifi.conf - an Android path this base did not have - and drew a
 # random one on every load when it could not save it there: a new MAC, DHCP lease and
 # IP on every boot (2026-09-18). The file holds an address derived from the SoC serial,
 # so the board keeps it across reboots and reflashes. It must pass the driver's own
 # check (MACADDR_VAILID: unicast and NOT locally administered), or the driver replaces
 # it with a random one: so the driver's default vendor prefix DC:44:6D plus three bytes
-# of the serial's md5. The Realtek radios (Zero 28, XU20) read theirs from efuse.
+# of the serial's md5. The Realtek radios (Zero 28, XU20) read theirs from efuse. The Brick
+# drew a new MAC and lease on every boot until it was listed here (2026-10-26: .50, then .53).
 wifi_mac_file=/data/misc/wifi/xr_wifi.conf
-if [ "$(cat /usr/magicx/device 2>/dev/null)" = zero40 ]; then
+case "$(cat /usr/magicx/device 2>/dev/null)" in
+zero40|brick)
     serial=$(sed -n 's/^sunxi_serial *: *//p' /sys/class/sunxi_info/sys_info 2>/dev/null)
     if [ -n "$serial" ]; then
         h=$(printf '%s' "$serial" | md5sum | cut -c1-6)
@@ -60,7 +62,8 @@ if [ "$(cat /usr/magicx/device 2>/dev/null)" = zero40 ]; then
                 log "wifi MAC for the XR829: $mac (from the SoC serial)"
         fi
     fi
-fi
+    ;;
+esac
 
 MAGICX_PATH=/mnt/SDCARD/magicx/init.sh
 UPDATER_PATH=/mnt/SDCARD/.tmp_update/updater
