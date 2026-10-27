@@ -40,7 +40,8 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 _spec = importlib.util.spec_from_file_location("mbr", os.path.join(ROOT, "scripts", "make-boot-resource.py"))
 mbr = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(mbr)
 
-FB = {"zero28": (640, 480), "zero40": (480, 800), "xu20": (1024, 768), "v90s": (640, 480), "v20": (640, 480)}   # the size apps draw in
+FB = {"zero28": (640, 480), "zero40": (480, 800), "xu20": (1024, 768), "v90s": (640, 480), "v20": (640, 480),
+      "brick": (1024, 768)}   # the size apps draw in (the Brick's fb0, read 2026-10-27: 1024x1536 virtual, stride 4096, 32 bpp)
 
 CHARGE_TEXT = "Charging, press Power to turn on"
 NOFRONTEND_TEXT = "No frontend detected, charging"
@@ -51,8 +52,11 @@ NOFRONTEND_OFF_TEXT = "No frontend, power off in 10s"
 LOW_BATTERY = {"bat0": ["Battery too low to start", "Charging, please wait"],
                "low_pwr": ["Battery too low", "Connect the charger"]}
 LEVELS = range(0, 101, 5)
-BOOT_FRAMES = ("v90s", "v20", "zero28", "zero40", "xu20")
+BOOT_FRAMES = ("v90s", "v20", "zero28", "zero40", "xu20", "brick")
 FULL_UBOOT = ("v90s", "v20")
+# Linux frames only: the Brick keeps TrimUI's boot-resource byte-identical (OWN_STOCK_DT, keep-boot-chain), so
+# U-Boot shows TrimUI's logo and charge pictures and no U-Boot picture is made for it.
+LINUX_ONLY = ("brick",)
 
 
 def _font(bold, px):
@@ -117,6 +121,10 @@ def main(board):
         save("boot-loading", card(w, h, ["Loading..."]))
         save("reboot", card(w, h, ["Rebooting"]))
         save("poweroff", card(w, h, ["Shutting down"]))
+    if board in LINUX_ONLY:
+        print(f"{board}: {len(LEVELS)} level frames x 2 + loading + updating + nofrontend-off + boot-loading + reboot + poweroff"
+              f" ({w}x{h}); no U-Boot pictures (the stock boot-resource stays)")
+        return
     # U-Boot centres its pictures, so each is cut to its content symmetrically about the centre;
     # the charge picture is the level screen with the battery left black, so Linux's first frame
     # draws the same tree and text at the same place and only the battery appears. They fit

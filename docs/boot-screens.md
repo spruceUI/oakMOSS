@@ -31,7 +31,7 @@ runs, and nothing drew again until spruce started. `bootframe` draws right after
 ## The pieces
 
 - `scripts/make-charge-screens.py <board>` renders every frame. The boards in its
-  `BOOT_FRAMES` (zero28, zero40, xu20, v90s, v20) also get:
+  `BOOT_FRAMES` (zero28, zero40, xu20, v90s, v20, brick) also get:
   - `boot-loading`, `reboot` and `poweroff` in `boards/<board>/overlay/usr/magicx/share/charge/`;
   - a U-Boot `boards/<board>/boot-resource/bootlogo.bmp` in the frames' layout with an empty status
     line. On the MagicX boards it is cut out symmetrically about the screen's centre and turned for
@@ -41,6 +41,10 @@ runs, and nothing drew again until spruce started. `bootframe` draws right after
     (32-bit, like the stock logo), `bat/battery_charge.bmp`, `bat/bat0.bmp`, `bat/bempty.bmp` and
     `bat/low_pwr.bmp`. The Powkiddy U-Boot reads `bat0`, `battery_charge` and `bempty` (strings in
     its binary).
+  - The boards in `LINUX_ONLY` (brick) get the Linux frames and no U-Boot picture. The Brick keeps
+    TrimUI's boot-resource byte-identical (`OWN_STOCK_DT`, `keep-boot-chain`), so U-Boot shows
+    TrimUI's logo and charge pictures, and the oakMOSS screens start with `bootframe`. Its fb0 is
+    1024x768 (32 bpp, stride 4096, read 2026-10-27), so its frames are byte-identical to the XU20's.
 
   Run it in the Lima VM, which has the DejaVu fonts: `lima bash -lc 'cd <worktree> &&
   python3 -I scripts/make-charge-screens.py zero28'`. Its output is deterministic.
