@@ -3,7 +3,7 @@
 # against plain files: boot, frontend, reboot and poweroff draw their frame onto both pages of a
 # two-page framebuffer and unblank it; a board without the boot screens and a debug-text boot get
 # nothing drawn; the updating screen is unchanged. RUN="<shell>" runs the script under that shell
-# (the Lima rehearsal: the unit's BusyBox ash, its applets first on PATH).
+# (a rehearsal in a Linux VM: the unit's BusyBox ash, its applets first on PATH).
 set -euo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 CS=$HERE/../overlay/usr/magicx/bin/charge-screen.sh

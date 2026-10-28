@@ -544,9 +544,9 @@ label (`fsck.fat`: "12 bit entries"). U-Boot goes by the label and Linux by the 
 would follow every multi-cluster file (the logo, the charge pictures) through the wrong table.
 `build.sh` therefore rewrites the partition in the finished image before the update is made, puts
 the result in the dump's `boot-resource.fex` and drops the PhoenixSuit image, which nothing flashes. Every update to these images rewrites boot-resource,
-so a card from an older image loses the `.orig` at its next update. On hardware since B176
-(2026-10-24, the three MagicX boards). The rewrite writes each directory in name order: fsbuild
-keeps the build host's listing order, so the same files from salusa (B189) and Caladan (B195) gave
+so a card from an older image loses the `.orig` at its next update. On hardware since
+2026-10-24 (the three MagicX boards). The rewrite writes each directory in name order: fsbuild
+keeps the build host's listing order, so the same files from two build hosts gave
 two partitions; sorted, they are byte-identical (`tests/test-fat16-order.sh`).
 
 ## Round 31 (2026-10-23): the Powkiddy V90S and V20 panel and pad
@@ -556,13 +556,13 @@ Two new boards on the same A133P, from the stock firmware the V90S and V20 share
 Tina tree that our kernel binds except for two things this round adds: the panel and the pad.
 Numbered 31 and stamped 25 to stay clear of `fix/pmf`'s rounds 29-30 (stamps 22-23): whichever
 of the two merges second renumbers. Stamp 24 was this round without 152, a tree that stops the
-build at the kernel's configure step (B168 on one build host, 2026-10-23).
+build at the kernel's configure step (on one build host, 2026-10-23).
 
 | what | where | why |
 |---|---|---|
 | `150-lcd-panel-rgp35-nv3051.patch` | `lichee/linux-4.9/drivers/video/fbdev/sunxi/disp2/disp/lcd/` (`rgp35_nv3051.c/.h`, `panels.c/.h`, `Kconfig`, `../Makefile`) | The 640x480 4-lane DSI NV3051 panel the stock tree names (`lcd_driver_name = "RGP35_NV3051"`). No source was released: the power sequence and 27-entry init table are Knulli's reconstruction from the stock V90s kernel (GPL-2.0), on the 4.9 disp2 calls 070 uses. Built in, like 070 (config line in 152). |
 | `151-input-adc-joypad-powkiddy.patch` | `lichee/linux-4.9/drivers/input/joystick/` (`adc-joypad.c`, `Kconfig`, `Makefile`), `drivers/input/sensor/sunxi_gpadc.c` | The stock tree's `adc-joypad` binding: GPIO buttons (EV_KEY, or the hat d-pad as EV_ABS), up to four stick axes behind an analog multiplexer on GPADC channel 0, rumble on a PWM channel. Follows ROCKNIX's rocknix-singleadc-joypad (the driver the vendor ported) for the axis maths and defaults. Polls from a freezable work item: the SDK has `INPUT_POLLDEV` only as a module. In `sunxi_gpadc.c`, the channel read's unconditional `printk` becomes `pr_debug`: the pad reads it per axis, every poll. Built in (needs `SENSORS_GPADC`, which the SDK config has; config line in 152). |
-| `152-kernel-config-powkiddy.patch` | `device/config/chips/a133/configs/aw3/linux/config-4.9` | `CONFIG_JOYSTICK_ADC_JOYPAD=y`, `CONFIG_LCD_SUPPORT_RGP35_NV3051=y`. A Kconfig `default y` does not answer a new symbol: the build's non-interactive `silentoldconfig` stops at it (B168). Its own patch rather than 020, so a tree with the current 020 takes it forward; both lines sit where no 020 hunk reaches, so 020 still checks as applied (GNU patch, offsets only). |
+| `152-kernel-config-powkiddy.patch` | `device/config/chips/a133/configs/aw3/linux/config-4.9` | `CONFIG_JOYSTICK_ADC_JOYPAD=y`, `CONFIG_LCD_SUPPORT_RGP35_NV3051=y`. A Kconfig `default y` does not answer a new symbol: the build's non-interactive `silentoldconfig` stops at it. Its own patch rather than 020, so a tree with the current 020 takes it forward; both lines sit where no 020 hunk reaches, so 020 still checks as applied (GNU patch, offsets only). |
 | `scripts/lib.sh` `OAKMOSS_MODS_VERSION` | `build.sh` | refuses a tree without 150-152 |
 
 Compile-checked 2026-10-23 against a prepared SDK 4.9 tree with its own cross compiler: both
@@ -634,13 +634,13 @@ On an existing tree, from this checkout with `SDK_DIR` as `scripts/lib.sh` sets 
 takes 150, 151, 152, 160 and 161 (`patched`); a tree at 27 (feat/powkiddy-v90s) takes 136, 160 and 161; a
 tree at 28 takes 136. A tree that still carries round 31's 151 reverses it first (round 32). The stamp
 moves to 29, which wipes the kernel build tree, and the new Kconfig symbols (150's, 151's, 160's) need
-`build.sh ext` before any image (B191). `mods_version` -> 29.
+`build.sh ext` before any image. `mods_version` -> 29.
 
 ## Round 35 (2026-10-27): the TrimUI panel in U-Boot, stamped 30
 
 The Brick moves to our own U-Boot (feat/brick-own-uboot): TrimUI's boot0 (its DRAM setup), BL31, SCP and
 device tree stay, and only the U-Boot item of TrimUI's boot package is ours. Our U-Boot is one binary for
-every board (B205's is byte-identical on the Zero 28, Zero 40 and XU20), so the Brick takes it from any SDK
+every board (one build's is byte-identical on the Zero 28, Zero 40 and XU20), so the Brick takes it from any SDK
 image, but it needs the panel TrimUI's trees name, `otm1289a`, which only the kernel had (160).
 
 | what | where | why |

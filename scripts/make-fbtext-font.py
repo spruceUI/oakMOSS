@@ -5,7 +5,7 @@ a pixel, ASCII 32-126, written as src/fbtext-font.h with the font's licence.
     scripts/make-fbtext-font.py
 
 Needs Pillow and the DejaVu fonts (Debian fonts-dejavu-core), as make-charge-screens.py does:
-run it in the Lima VM. The output is deterministic, so a re-run reproduces the header.
+run it on a Linux host that has them. The output is deterministic, so a re-run reproduces the header.
 """
 import os
 import sys

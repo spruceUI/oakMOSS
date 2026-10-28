@@ -22,7 +22,7 @@ case $BOARD in
     *) die "unknown TrimUI board $BOARD (brick)" ;;
 esac
 pin() { local v="${P}_$1_SHA256"; printf '%s' "${!v:?no pin $v in scripts/lib.sh}"; }
-# Debian keeps debugfs in /usr/sbin, which a non-login shell's PATH lacks (as mke2fs, B169).
+# Debian keeps debugfs in /usr/sbin, which a non-login shell's PATH lacks (as mke2fs).
 DEBUGFS=$(command -v debugfs || command -v /usr/sbin/debugfs || command -v /sbin/debugfs || true)
 [ -n "$DEBUGFS" ] || die "need debugfs (e2fsprogs)"
 [ -f "$ZIP" ] || die "no $ZIP (scripts/fetch-inputs.sh)"

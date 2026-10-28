@@ -6,7 +6,7 @@
   <TrimUI package>        TrimUI's boot package (unpack-trimui-stock.sh: items/12345678_BOOTPKG-00000000)
   <TrimUI boot-resource>  TrimUI's boot-resource FAT (items/RFSFAT16_BOOT-RESOURCE_FE)
   <SDK image>             any oakMOSS SDK-lane sd1.img of the same build: our U-Boot is one binary for every
-                          board (B205: byte-identical on the Zero 28, Zero 40 and XU20), read from its package
+                          board (byte-identical on the Zero 28, Zero 40 and XU20 in one build), read from its package
 
 Writes into <out dir>:
   package.bin   TrimUI's package with only its u-boot item replaced by ours; boot0 (TrimUI's DRAM setup),

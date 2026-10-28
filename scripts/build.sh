@@ -103,7 +103,7 @@ apply_overlay() {
     rm -rf "${bres:?}/bat"
     # A board with OWN_BOOTRES_FILES=1 (the Powkiddy boards) puts its full-screen pictures into its own image's
     # stock 32 MiB p1 (make-own-kernel-stock.sh); its SDK image, never flashed, takes the logo alone: all of them
-    # overflowed the 4 MiB partition (B186), and a bigger one changes the boot package's tree (its partitions node).
+    # overflowed the 4 MiB partition, and a bigger one changes the boot package's tree (its partitions node).
     if [ -f "$OAKMOSS_ROOT/boards/$board/sys_partition.fex" ] && [ -d "$OAKMOSS_ROOT/boards/$board/boot-resource" ]; then
         if grep -q '^OWN_BOOTRES_FILES=1' "$OAKMOSS_ROOT/boards/$board/board.conf"; then
             cp -a "$OAKMOSS_ROOT/boards/$board/boot-resource/bootlogo.bmp" "$logo"

@@ -47,8 +47,8 @@ runs, and nothing drew again until spruce started. `bootframe` draws right after
     which writes them over TrimUI's in TrimUI's boot-resource; a card on TrimUI's chain keeps TrimUI's
     boot-resource byte-identical (`OWN_STOCK_DT`, `keep-boot-chain`) and shows TrimUI's logo.
 
-  Run it in the Lima VM, which has the DejaVu fonts: `lima bash -lc 'cd <worktree> &&
-  python3 -I scripts/make-charge-screens.py zero28'`. Its output is deterministic.
+  Run it on a Linux host with the DejaVu fonts (Debian `fonts-dejavu-core`):
+  `python3 -I scripts/make-charge-screens.py zero28`. Its output is deterministic.
 - `charge-screen.sh boot | frontend | reboot | poweroff` draws one frame and exits. It draws
   only when the board ships `boot-loading.rgba.gz`, which is the opt-in, and never during a
   debug-text boot. `tests/test-screens.sh` covers both rules.
@@ -91,7 +91,7 @@ the switch is the file that already turns debug mode on: `oakmoss-debug` at the 
 - The kernel console stays off the panel: `fbcon` is only in `KDEBUG_FBCON=1` debug kernels
   (`scripts/build.sh`), so this needs no kernel change. `oakmoss-fbtext` (`src/fbtext.c`) is a static tool built by `build.sh`. It
   draws DejaVu Sans Mono in 8x16 cells, 80 columns by 30 rows at 640x480, from
-  `src/fbtext-font.h`, which `scripts/make-fbtext-font.py` writes (run it in Lima too).
+  `src/fbtext-font.h`, which `scripts/make-fbtext-font.py` writes (on the same kind of host).
   `tests/test-fbtext.sh` renders into files on any Linux host.
 
 ## Charge mode on the Powkiddy boards
@@ -111,7 +111,7 @@ power key woke it, after a 10 s wait. It now also takes the joypads `Powkiddy V9
 On our own U-Boot (`scripts/make-brick-own-uboot.py`) a charger power-on shows the Brick's
 `bat/battery_charge.bmp`. Until tree patch 163 it then booted on into the system: the own lane's
 `bootcmd` (`run oakroot_${root_partition} setargs_mmc boot_normal`) kept U-Boot from adding
-`androidboot.mode=charger` (`docs/sdk-mods.md`, round 36). On hardware (2026-10-27, B209): a restart on USB
+`androidboot.mode=charger` (`docs/sdk-mods.md`, round 36). On hardware (2026-10-27): a restart on USB
 boots normally; a power-off on the cable (the unit comes straight back, PMIC 0xf0 bit 3) and a plug-in while off
 both give the charge screen. It also takes the Brick's pad, `TRIMUI Player1` (`trimui_inputd`, started at S14).
 

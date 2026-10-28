@@ -136,15 +136,13 @@ whose `/usr/magicx/lane` reads `own`: a spruce-side change, due before the first
   proven (below). That the boot ROM reads boot0 from 256 is not: zero sector 16's boot0 on a
   test card and see it still boot.
 
-Proven on the V90S, own lane (2026-10-24, records `20261024-2313-v90s-boot7-b181-ota`,
-`20261024-2349-v90s-boot9-b183-ota`):
-- **Updates:** B181 to B182 into slot B, then B182 to B183 back into slot A, each confirmed on its
+Proven on the V90S, own lane (2026-10-24):
+- **Updates:** one build to the next into slot B, then to a third back into slot A, each confirmed on its
   first boot (`updated slot confirmed`), so the slot check runs under the stock U-Boot and both
   copies of its redundant env take the writes (their flags step from both sides).
 - **Lanes:** the installer logged `bootres: not in this update (lane own)`; the stock boot-resource
   stayed.
-- **The update screen:** a third update (B183 to B184 into slot B, record
-  `20261025-0005-v90s-boot10-b184-ota`), installed by an image with the frames, showed the
+- **The update screen:** a further update (into slot B, 2026-10-25), installed by an image with the frames, showed the
   "Updating" frame between the stock Powkiddy logo and the reboot.
 - Not yet seen: a clean FAT after the update's reboot. Linux never clears a FAT's dirty flag it
   found set at mount (state byte 0x41 was 0x01 on both cards since the first update), so the cards

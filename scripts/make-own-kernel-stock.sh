@@ -94,7 +94,7 @@ OURPKG=$(ls "$BUILD"/*.img.dump/boot_package.fex 2>/dev/null | head -1)
 grep -q "^device=$BOARD" "$BUILD/BUILD-INFO.txt" 2>/dev/null || die "$BUILD is not a $BOARD build"
 [ -d "$DUMP" ] || die "stock firmware not unpacked at $STOCK_DIR (scripts/$UNPACKER)"
 squashfs_tools; mkenvimage_tool
-# Debian keeps mke2fs in /usr/sbin, which a non-login shell's PATH lacks (B169, 2026-10-23).
+# Debian keeps mke2fs in /usr/sbin, which a non-login shell's PATH lacks (2026-10-23).
 MKE2FS=$(command -v mke2fs || command -v /usr/sbin/mke2fs || command -v /sbin/mke2fs || true); [ -n "$MKE2FS" ] || die "need mke2fs (e2fsprogs)"
 D=$OAKMOSS_ROOT/diag
 FBFILL=$BUILDS_DIR/fbfill
@@ -111,7 +111,7 @@ BOOTPKG=$(f '12345678_BOOTPKG-00000000'); BOOTIMG=$(f 'RFSFAT16_BOOT_FEX00000000
 if [ -n "${BOOTRES:-}" ]; then [ -f "$BOOTRES" ] || die "BOOTRES=$BOOTRES: no such file"; log "boot-resource: $BOOTRES (board-sized bootloader screens)"
 elif [ "$STOCK" = tina ] && [ ! -f "$DUMP/RFSFAT16_BOOT-RESOURCE_FE" ]; then
     # the Tina stock chain is public without its logo partition: take this build's (our logo)
-    # The SDK image's 4 MiB boot-resource holds the logo alone (B186): an OWN_BOOTRES_FILES board's pictures do not fit.
+    # The SDK image's 4 MiB boot-resource holds the logo alone: an OWN_BOOTRES_FILES board's pictures do not fit.
     [ "${OWN_BOOTRES_FILES:-0}" != 1 ] || die "OWN_BOOTRES_FILES: set BOOTRES= to the card's stock p1 (the SDK image's 4 MiB boot-resource holds only the logo)"
     BOOTRES=$(ls "$BUILD"/*.img.dump/boot-resource.fex 2>/dev/null | head -1); [ -f "$BOOTRES" ] || die "no boot-resource.fex under $BUILD"
     log "boot-resource: this build's ($BOOTRES)"

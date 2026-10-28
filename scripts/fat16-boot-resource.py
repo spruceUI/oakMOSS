@@ -139,7 +139,7 @@ def write_fat16(old, tree):
 
     def directory(items, self_cluster, parent_cluster):
         """A directory's raw bytes; subdirectories and files are allocated in name order, so the
-        partition does not depend on the order the build host listed them (salusa vs Caladan, B195)."""
+        partition does not depend on the order the build host listed them (two build hosts differed, 2026-10-24)."""
         raw = b''
         items = ([i for i in items if i[2] is None]       # the label, "." and "..": first, as they were
                  + sorted((i for i in items if i[2] is not None), key=lambda i: i[1][:11]))
