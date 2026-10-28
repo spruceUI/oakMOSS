@@ -66,8 +66,9 @@ The Brick's buttons are GPIOs that TrimUI's closed userspace daemon `trimui_inpu
 Pro's from two MCUs on `ttyS3`/`ttyS4`). Our kernel has everything it needs. With
 `OWN_TRIMUI_INPUTD=1` the image carries the board's own copy from the stock rootfs, started by
 `/etc/init.d/trimui-inputd` after the GPIO lines stock sets first (`OWN_TRIMUI_GPIO`; Brick: PD11
-high for VCC-5V, PH3 rumble low, PH19 DIP switch in). **Such an image is local only** (user,
-2026-10-25): `/usr/magicx/local-only` and `publish=NO` in BUILD-INFO say so. Open alternatives: a
+high for VCC-5V, PH3 rumble low, PH19 DIP switch in). Such an image marks itself
+(`/usr/magicx/local-only`, `publish=NO` in BUILD-INFO); images like it were kept local until
+v0.7.0-beta.1, which ships one by the maintainer's decision (2026-10-27). Open alternatives: a
 GPL kernel driver for the Brick's buttons in TortOS (under review), and `Jpe230/Trimui_Inputd`
 (GPL-3.0; Smart Pro, Smart Pro S, Brick).
 

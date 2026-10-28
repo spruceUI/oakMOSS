@@ -113,6 +113,13 @@ build paths are theirs and already present in the upstream firmware, and
 rewriting them would make these files no longer the artifacts being attributed.
 Replacing them with an SDL2 built from source in this tree is a TODO.md item.
 
+The TrimUI Brick image (`boards/brick`) carries two more sets of TrimUI's binaries, unmodified, from
+TrimUI's public 1.1.1 firmware for the Brick (`scripts/unpack-trimui-stock.sh`): its boot0, BL31, SCP
+and device tree (the U-Boot item in that package is ours, `scripts/make-brick-own-uboot.py`), and the
+closed input daemon `trimui_inputd`, which reads the Brick's buttons. They are TrimUI's, redistributed
+on the footing the LICENSE note describes; a free replacement for the daemon is an open item
+(`docs/trimui.md`).
+
 ## Hynitron, via Radxa
 
 The GPL-2.0 text this section refers to is in `LICENSES/GPL-2.0.txt`.

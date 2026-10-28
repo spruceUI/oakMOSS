@@ -4,13 +4,28 @@ oakMOSS is bench-tested on one of each board, a Zero 28, a Zero 40 and an XU20 V
 spruceOS on the user card (September 2026). The releases on GitHub are betas. Treat anything
 below that is not marked as tested as untested.
 
-## Powkiddy V90S and V20 (in progress)
+## Powkiddy V90S and V20, TrimUI Brick
 
-Branch work of 2026-10-23, in no release: board trees, the panel and pad drivers (`docs/sdk-mods.md`
-round 31) and the stock-chain image (`docs/building.md`). Not yet booted on the lab V90S; the V20 is
-carried untested. `docs/hardware-notes.md`, "Powkiddy V90S and V20", lists what is known.
+The V90S and V20 boot our kernel behind their own stock boot0 and U-Boot (`docs/building.md`), with
+the panel and pad drivers of `docs/sdk-mods.md` round 31. The V90S is bench-tested: panel, pad, audio,
+WiFi through a USB dongle, the boot and update screens, and updates into both slots. The V20 is
+untested: there is no V20 on the bench. `docs/hardware-notes.md`, "Powkiddy V90S and V20".
+
+The Brick runs from a TF card beside its stock eMMC, which nothing writes (`docs/trimui.md`): TrimUI's
+boot0, BL31, SCP and device tree with our U-Boot (its panel, `162`, and charge mode, `163`). Bench-tested:
+the boot and charge screens, charge mode (a plug-in while off, or a power-off on the cable, shows the
+charge screen; a restart boots normally), a stable WiFi MAC, the pad through TrimUI's `trimui_inputd`.
 
 ## Releases and spruceOS
+
+v0.7.0-beta.1 (2026-10-27) adds the Powkiddy V90S, the V20 (untested) and the TrimUI Brick. On every
+board it adds the boot screens (the oakMOSS logo, Loading, Rebooting, Shutting down) and keeps the
+DAC volume across streams (`136`); the boot-resource is now a true FAT16, which Linux can write without
+corrupting it for U-Boot, and an update leaves the bootloader alone when it has not changed. The images
+were tested on one of each board but the V20 on 2026-10-27, installed as updates over a development
+build; the update from v0.6.0-beta.1 itself is not yet tested. The MagicX boards pair with spruceOS
+v4.5.5-20261020 or newer; the V90S, V20 and Brick need spruceOS's oakMOSS board support, not yet merged.
+The Brick image carries TrimUI's boot components and its closed `trimui_inputd` (ATTRIBUTION.md).
 
 v0.6.0-beta.1 (2026-10-20) switches the AXP2202 off itself at a power-off from spruce's menu, so
 the board no longer stays on, dark and warm, until the power key is held (`docs/sdk-mods.md` round

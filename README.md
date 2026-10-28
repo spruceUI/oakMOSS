@@ -1,8 +1,9 @@
 # oakMOSS
 
-oakMOSS is a small base operating system for three Allwinner A133P handhelds: the
-**MagicX Mini Zero 28**, the **MagicX Zero 40** and the **XU RETRO / MagicX XU20 V32**. It
-lives on the internal card (SD1) and has one job: start the board, mount the user card in
+oakMOSS is a small base operating system for Allwinner A133P handhelds: the **MagicX Mini Zero
+28**, the **MagicX Zero 40**, the **XU RETRO / MagicX XU20 V32**, the **Powkiddy V90S** and **V20**,
+and the **TrimUI Brick**. It lives on the board's first card (SD1; on the Brick, a TF card beside the
+stock eMMC) and has one job: start the board, mount the user card in
 the second slot, and hand off to the launcher on it, normally
 [spruceOS](https://github.com/spruceUI/spruceOS). It is built from the vendor's Tina Linux
 SDK and follows the shape of Shaun Inman's
@@ -27,11 +28,11 @@ really sleep and wake. From v0.4.1-beta.1 on, the images pair with spruceOS v4.5
 newer nightly. It is bench-tested on one of each board; the releases are betas. Details
 and known gaps: [docs/status.md](docs/status.md).
 
-In progress (not in a release): the **Powkiddy V90S** and **V20**, A133P boards on their own stock
-boot chain (`boards/v90s`, `boards/v20`; the V20 untested). See `docs/hardware-notes.md`,
-"Powkiddy V90S and V20". The **TrimUI Brick** (then Brick Pro and Smart Pro) from a TF card on
-TrimUI's untouched boot chain, beside the stock eMMC (`boards/brick`, not yet built):
-[docs/trimui.md](docs/trimui.md).
+From v0.7.0-beta.1: the **Powkiddy V90S** and **V20** on their own stock boot chain
+(`boards/v90s`, `boards/v20`; the V20 is untested, see `docs/hardware-notes.md`, "Powkiddy V90S and
+V20"), and the **TrimUI Brick** from a TF card beside its stock eMMC, with TrimUI's boot0 and
+oakMOSS's U-Boot ([docs/trimui.md](docs/trimui.md)). These three need a spruceOS with oakMOSS's
+support for them, which is not yet in a nightly. The Brick Pro and Smart Pro are not started.
 
 ## Documentation
 
