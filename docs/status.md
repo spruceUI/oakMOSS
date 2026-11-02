@@ -27,7 +27,9 @@ board it adds the boot screens (the oakMOSS logo, Loading, Rebooting, Shutting d
 DAC volume across streams (`136`); the boot-resource is now a true FAT16, which Linux can write without
 corrupting it for U-Boot, and an update leaves the bootloader alone when it has not changed. The images
 were tested on one of each board but the V20 on 2026-10-27, installed as updates over a development
-build; the update from v0.6.0-beta.1 itself is not yet tested. The MagicX boards pair with spruceOS
+build, and from 2026-10-30 written to new cards, with spruceOS from its oakMOSS board-support PR: device
+checks, every button, sleep and wake, WiFi, touch, and the display levels kept across a reboot. The
+update from v0.6.0-beta.1 itself is not yet tested. The MagicX boards pair with spruceOS
 v4.5.5-20261020 or newer; the V90S, V20 and Brick need spruceOS's oakMOSS board support, not yet merged.
 The Brick image carries TrimUI's boot components and its closed `trimui_inputd` (ATTRIBUTION.md).
 

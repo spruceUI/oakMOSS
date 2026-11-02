@@ -124,10 +124,14 @@ image now carries an empty slot B, about 440 MiB of zeros, so publish the compre
 
 For an own-lane board (V90S, V20) the update to upload is the own one,
 `oakmoss-<board>-own-<version>.omupd` from `make-own-kernel-stock.sh`, beside the own image. Its
-image keeps the board's stock boot0, U-Boot and boot-resource, which are vendor data: publish
-neither that image nor an `OMUPD_BOOTCHAIN=1` update of it, only the update without the boot
-chain. Spruce's Firmware Update app has to fetch `oakmoss-<board>-own-<tag>.omupd` on a card
-whose `/usr/magicx/lane` reads `own`: a spruce-side change, due before the first such release.
+image keeps the board's stock boot0, U-Boot and boot-resource, which are Powkiddy's: from
+v0.7.0-beta.1 a release carries that image, by the maintainer's decision (2026-11-01; ATTRIBUTION.md,
+"Powkiddy"), and the update without the boot chain, but no `OMUPD_BOOTCHAIN=1` update of it.
+Spruce's Firmware Update app has to fetch `oakmoss-<board>-own-<tag>.omupd` on a card whose
+`/usr/magicx/lane` reads `own` (the V90S, V20 and Brick). It does not yet: on 2026-11-01 it sends only
+the MagicX boards to its oakMOSS updater, which fetches `oakmoss-<board>-<tag>.omupd`. Until it does,
+these boards update by hand: the `.omupd` at the root of a card, then a restart (the base installs it
+at boot, as above).
 
 ## Still to prove on hardware
 

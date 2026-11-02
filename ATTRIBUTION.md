@@ -120,6 +120,16 @@ closed input daemon `trimui_inputd`, which reads the Brick's buttons. They are T
 on the footing the LICENSE note describes; a free replacement for the daemon is an open item
 (`docs/trimui.md`).
 
+## Powkiddy
+
+The Powkiddy V90S and V20 images (`boards/v90s`, `boards/v20`, `scripts/make-own-kernel-stock.sh`) boot
+on each board's own stock boot chain, taken from its stock firmware (`scripts/unpack-powkiddy-stock.sh`):
+Powkiddy's boot0, the U-Boot package with its U-Boot and SCP, and the stock boot-resource. They are
+unmodified but for the package's device tree, which is ours (its checksum redone), and oakMOSS's pictures
+in the boot-resource. The V90S's come from its stock firmware as Knulli ships it; the V20's were read off
+a V20's own stock card. They are Powkiddy's, redistributed on the footing the LICENSE note describes. The
+update packages (`oakmoss-<board>-own-<version>.omupd`) carry none of them.
+
 ## Hynitron, via Radxa
 
 The GPL-2.0 text this section refers to is in `LICENSES/GPL-2.0.txt`.
