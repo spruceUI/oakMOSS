@@ -1,9 +1,9 @@
 # oakMOSS on the TrimUI A133P boards
 
-Written for oakMOSS maintainers. Status 2026-10-25: the TrimUI Brick is in progress on branch
-`feat/trimui-a133p`; the Brick Pro and Smart Pro follow. Desk-checked only: nothing here has been
-built with the SDK's compiler or booted on a unit yet. The Smart Pro S is an A523 on a 5.15 kernel
-and out of scope.
+Written for oakMOSS maintainers. Status 2026-11-01: the TrimUI Brick image ships in v0.7.0-beta.1
+as a beta image, bench-tested on one Brick (`docs/status.md`). The Brick Pro and Smart Pro parts are
+desk-checked only: not yet built with the SDK's compiler or booted on a unit. The Smart Pro S is an
+A523 on a 5.15 kernel and out of scope.
 
 ## What a card carries
 

@@ -29,10 +29,12 @@ newer nightly. It is bench-tested on one of each board; the releases are betas. 
 and known gaps: [docs/status.md](docs/status.md).
 
 From v0.7.0-beta.1: the **Powkiddy V90S** and **V20** on their own stock boot chain
-(`boards/v90s`, `boards/v20`; the V20 is untested, see `docs/hardware-notes.md`, "Powkiddy V90S and
-V20"), and the **TrimUI Brick** from a TF card beside its stock eMMC, with TrimUI's boot0 and
-oakMOSS's U-Boot ([docs/trimui.md](docs/trimui.md)). These three need a spruceOS with oakMOSS's
-support for them, which is not yet in a nightly. The Brick Pro and Smart Pro are not started.
+(`boards/v90s`, `boards/v20`; see `docs/hardware-notes.md`, "Powkiddy V90S and V20"), and the
+**TrimUI Brick** from a TF card beside its stock eMMC, with TrimUI's boot0 and oakMOSS's U-Boot
+([docs/trimui.md](docs/trimui.md)). **The Brick and V20 images are beta images:** the V20 is
+untested, as there is no V20 on the bench, and the Brick is tested on one unit. These three need a
+spruceOS with oakMOSS's support for them, which is not yet in a nightly. The Brick Pro and Smart Pro
+are not started.
 
 ## Documentation
 

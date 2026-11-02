@@ -8,17 +8,21 @@ below that is not marked as tested as untested.
 
 The V90S and V20 boot our kernel behind their own stock boot0 and U-Boot (`docs/building.md`), with
 the panel and pad drivers of `docs/sdk-mods.md` round 31. The V90S is bench-tested: panel, pad, audio,
-WiFi through a USB dongle, the boot and update screens, and updates into both slots. The V20 is
-untested: there is no V20 on the bench. `docs/hardware-notes.md`, "Powkiddy V90S and V20".
+WiFi through a USB dongle, the boot and update screens, and updates into both slots. The V20 image is
+a beta image, and untested: there is no V20 on the bench. `docs/hardware-notes.md`, "Powkiddy V90S
+and V20".
 
-The Brick runs from a TF card beside its stock eMMC, which nothing writes (`docs/trimui.md`): TrimUI's
-boot0, BL31, SCP and device tree with our U-Boot (its panel, `162`, and charge mode, `163`). Bench-tested:
-the boot and charge screens, charge mode (a plug-in while off, or a power-off on the cable, shows the
-charge screen; a restart boots normally), a stable WiFi MAC, the pad through TrimUI's `trimui_inputd`.
+The Brick image is a beta image, tested on one Brick. It runs from a TF card beside its stock eMMC,
+which nothing writes (`docs/trimui.md`): TrimUI's boot0, BL31, SCP and device tree with our U-Boot
+(its panel, `162`, and charge mode, `163`). Bench-tested: the boot and charge screens, charge mode (a
+plug-in while off, or a power-off on the cable, shows the charge screen; a restart boots normally), a
+stable WiFi MAC, the pad through TrimUI's `trimui_inputd`. The charge screen reading the pad
+(`TRIMUI Player1`) is in the v0.7.0-beta.1 image but not yet tried on a Brick.
 
 ## Releases and spruceOS
 
-v0.7.0-beta.1 (2026-10-27) adds the Powkiddy V90S, the V20 (untested) and the TrimUI Brick. On every
+v0.7.0-beta.1 (2026-10-27) adds the Powkiddy V90S and, as beta images, the V20 (untested) and the
+TrimUI Brick (tested on one unit). On every
 board it adds the boot screens (the oakMOSS logo, Loading, Rebooting, Shutting down) and keeps the
 DAC volume across streams (`136`); the boot-resource is now a true FAT16, which Linux can write without
 corrupting it for U-Boot, and an update leaves the bootloader alone when it has not changed. The images
