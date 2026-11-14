@@ -82,6 +82,11 @@ nodes our kernel needs enabled (`scripts/make-board-dts.py`,
 `scripts/fdt-enable-nodes.py`). Those two files are therefore not oakMOSS's own
 work in the sense LICENSE describes; they carry MagicX's and Allwinner's
 hardware description, and the kernel device trees they start from are GPL-2.0.
+`boards/zero28/board.dts` is the SDK's own board tree
+(`device/config/chips/a133/configs/aw3/board.dts`) with a few properties changed
+(docs/sdk-mods.md), and the other two are generated from it. It is Allwinner's
+hardware description as the SDK ships it, and not oakMOSS's own work in that
+sense either.
 
 ## Allwinner
 
@@ -129,6 +134,11 @@ unmodified but for the package's device tree, which is ours (its checksum redone
 in the boot-resource. The V90S's come from its stock firmware as Knulli ships it; the V20's were read off
 a V20's own stock card. They are Powkiddy's, redistributed on the footing the LICENSE note describes. The
 update packages (`oakmoss-<board>-own-<version>.omupd`) carry none of them.
+
+`boards/v90s/board.dts` and `boards/v20/board.dts` are each board's stock device tree, decompiled and
+edited (`scripts/make-board-dts-powkiddy.py`). Like the MagicX trees above, they are not oakMOSS's own
+work in the sense LICENSE describes: they carry Powkiddy's and Allwinner's hardware description, and the
+kernel device trees they start from are GPL-2.0.
 
 ## Hynitron, via Radxa
 
