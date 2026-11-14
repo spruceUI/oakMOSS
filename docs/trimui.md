@@ -25,8 +25,7 @@ checks that boot0, the package and the boot-resource on the image are the stock 
 ## Why the stock chain stays whole
 
 TrimUI's recovery lives in its U-Boot: the volume-key awimg updater, `reboot recovery`, and USB
-efex; the rescue card and boot-ROM FEL need nothing on the eMMC at all
-(`CFW/Spruce/docs/research/oakmoss-to-trimui-a133p/emmc-awimg-sd-install-viability-20261012.md`).
+efex; the rescue card and boot-ROM FEL need nothing on the eMMC at all.
 Keeping the chain byte-identical on the card keeps all of them, and keeps the later eMMC install
 honest. So a card marked `/usr/magicx/keep-boot-chain` refuses update packages that would write
 boot0, the U-Boot package or the boot-resource (`oakmoss-update.sh`, `tests/test-update.sh`).

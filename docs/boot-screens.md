@@ -1,6 +1,6 @@
 # Boot screens
 
-On the MagicX Zero 28, Zero 40 and XU20 and the Powkiddy V90S and V20, the
+On the MagicX Zero 28, Zero 40 and XU20, the Powkiddy V90S and V20 and the TrimUI Brick, the
 panel shows an oakMOSS screen at every step of a boot and a shutdown. It never goes blank between
 U-Boot and spruce. This is the oakMOSS form of what dArkMoss does for the XU Mini M and the G350
 (`bootlogo.service` and its siblings there). A board opts in by shipping the frames (below), and a
@@ -43,7 +43,7 @@ runs, and nothing drew again until spruce started. `bootframe` draws right after
     its binary).
   - The Brick (fb0 1024x768, 32 bpp, stride 4096, read 2026-10-27; its frames are byte-identical to the
     XU20's) also gets centred U-Boot pictures in `boards/brick/boot-resource`, upright. They reach a card
-    only through `scripts/make-brick-own-uboot.py`, for a Brick on our own U-Boot (feat/brick-own-uboot),
+    only through `scripts/make-brick-own-uboot.py`, for a Brick on our own U-Boot,
     which writes them over TrimUI's in TrimUI's boot-resource; a card on TrimUI's chain keeps TrimUI's
     boot-resource byte-identical (`OWN_STOCK_DT`, `keep-boot-chain`) and shows TrimUI's logo.
 

@@ -19,7 +19,10 @@ included, and the TrimUI SDL2 libraries the launcher expects are under `/usr/mag
 scripts build that container for you. Host packages:
 `git curl unzip xz-utils squashfs-tools util-linux cmake build-essential libconfuse-dev pkg-config automake autoconf`,
 plus `python3-pil fonts-dejavu-core` for the pictures the scripts draw (boot logo,
-bootloader and charge screens).
+bootloader and charge screens). The lanes that use a board's stock firmware (XU20, Zero 40,
+Powkiddy, Brick) also call `debugfs`, `mke2fs` and `e2fsck` (`e2fsprogs`); the Brick's U-Boot
+step calls `dtc` and `fdtput` (`device-tree-compiler`); and `mcopy` (`mtools`) is needed only
+where the SDK's own `out/host/bin/mcopy` has not been built yet.
 
 **About 45 GB of disk** for the inputs and one board's build. The unpacked SDK takes ~18 GB,
 ~30 GB once built; `inputs/` holds ~13 GB of archives; every extra image lane adds its own
@@ -173,16 +176,16 @@ host once left two dozen `sync` processes blocked and a build hung with nothing 
 
 | path | what |
 |---|---|
-| `scripts/` | The build, in order: `fetch-inputs`, `prepare-toolchain`, `build-openixcard`, `unpack-sdk`, `apply-sdk-mods`, `build.sh` (`uboot`, `all`, `image`, `cont`, ...). Pictures: `make-boot-resource.py` (bootloader screens, boot logo), `make-charge-screens.py` (charge and low-battery screens). Board trees: `make-board-dts.py`. Debug: `kdebug.sh`, `kmark-env.py`, `kmark-pm-decode.py`, `kmark-ring.py`. Cards: `analyze-card-readback.py`, `verify-card.ps1`. Older lanes: `make-own-kernel-stock.sh`, `make-hybrid-stock.sh` and its wrappers, `make-hybrid-zero40.sh`, `adapt-zero40-rootfs.sh`, `unpack-*-stock.sh`, `build-awutils.sh`. Helpers: `run-in-sdk.sh`, `replace-rootfs.sh`, `fdt-enable-nodes.py`, `make-diag-image.sh`, and `lib.sh` (paths, pinned checksums). |
+| `scripts/` | The build, in order: `fetch-inputs`, `prepare-toolchain`, `build-openixcard`, `unpack-sdk`, `apply-sdk-mods`, `build.sh` (`uboot`, `all`, `image`, `cont`, ...). Pictures: `make-boot-resource.py` (bootloader screens, boot logo), `make-charge-screens.py` (charge and low-battery screens). Board trees: `make-board-dts.py`. Debug: `kdebug.sh`, `kmark-env.py`, `kmark-pm-decode.py`, `kmark-ring.py`. Cards: `analyze-card-readback.py`, `verify-card.ps1`. Older lanes: `make-own-kernel-stock.sh`, `make-hybrid-stock.sh` and its wrappers, `make-hybrid-zero40.sh`, `adapt-zero40-rootfs.sh`, `unpack-*-stock.sh`, `build-awutils.sh`. Helpers: `run-in-sdk.sh`, `replace-rootfs.sh`, `fdt-enable-nodes.py`, `make-diag-image.sh`, and `lib.sh` (paths, pinned checksums). Userland lanes: `build-ports-userland.sh` with `run-userland-lane.sh` and `fetch-userland.sh` (the oakMOSS libraries, `docs/flip-set.md`). `build-armhf-userland.sh` and `build-armhf-runtimes.sh` are the 32-bit (armhf) card lanes for spruce, built with the Miyoo A30 toolchain and kept beside them; they need a `cores-armhf` builder image that this repository does not build, so they do not run from a clone alone. |
 | `sdk-patches/` | Every change to the SDK tree: `tree/` (unified diffs), `package-patches/`, `ncurses-6.2/`, `gcc-7.5.0-patches/`, `toolchain/`, `sunxi_encrypt/` (`ENCRYPT_OBJ=stub`), and `debug/` (the kernel marker and hang detection, on by default, and ftrace). Each is recorded in `docs/sdk-mods.md`. |
 | `boards/<board>/` | Per board: `board.conf` (device marker, kernel object), `board.dts`, `sys_config.fex` (charge mode), `sys_partition.fex`, `boot-resource/` (U-Boot's charge and low-battery pictures, and the Zero 40's and XU20's boot logo) and `overlay/` (the charge screen frames), layered over the shared `overlay/`. |
 | `overlay/` | Root filesystem additions: `etc/rc.local` (audio defaults, the hand-off), `etc/init.d/chargeframe` (the first charge frame), `etc/hotplug.d/block/20-oakmoss-cards` (SD2 inserted later), `usr/magicx/bin/runmagicx.sh`, `oakmoss-cards.sh` (`docs/cards.md`), `oakmoss-update.sh`, `oakmoss-debug.sh` and `charge-screen.sh`, the TrimUI SDL2 libraries under `usr/magicx/lib/`, and small fixes (`wpa_supplicant` no-op, empty `modules.d/net-xr829`). A `bootlogo.bmp` here (gitignored) replaces the SDK's logo. |
-| `src/` | Programs built into the image: `sd1part.c` (`oakmoss-sd1part`, SD1's `SPRUCEOS` partition), `backlight.c` (`oakmoss-backlight`, the charge screen's backlight). |
+| `src/` | Programs built into the image: `sd1part.c` (`oakmoss-sd1part`, SD1's `SPRUCEOS` partition), `backlight.c` (`oakmoss-backlight`, the charge screen's backlight), `fbtext.c` (`oakmoss-fbtext`, the debug text on the panel). |
 | `configs/` | Tina configs: `ext-armgnu13.config` (the build), Moss's `phase1`/`phase2` and the from-source fallback `phase2-gcc750`. |
 | `tools-patches/` | Patches to tools built from source (awutils, for the XU20 image header). |
-| `docker/` | The Ubuntu 18.04 build container. |
+| `docker/` | The Ubuntu 18.04 build container, and `userland-lane/` (Debian 12) for the oakMOSS libraries. |
 | `diag/` | The diagnostic hand-off, `fbfill.c`, the input-bitmap decoder, and opt-in `experiments/`. |
 | `assets/` | spruceOS's tree mark, for the boot logo. |
-| `docs/` | This guide, `using.md`, `status.md`, `sdk-mods.md` (ledger of SDK changes), `hardware-notes.md`, `toolchain.md`, `DEPENDENCIES.md`. |
+| `docs/` | This guide, `using.md`, `status.md`, `cards.md`, `updates.md`, `boot-screens.md`, `debugging.md`, `batteryplus.md`, `trimui.md`, `flip-set.md`, `sdk-mods.md` (ledger of SDK changes), `hardware-notes.md`, `toolchain.md`, `DEPENDENCIES.md`. |
 | `LICENSES/` | License texts for third-party code carried here. |
 | `inputs/`, `sdk/`, `toolchains/`, `tools/`, `builds/` | Working trees, not tracked. |

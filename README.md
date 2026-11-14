@@ -22,7 +22,7 @@ Releases are on the [releases page](https://github.com/spruceUI/oakMOSS/releases
 
 ## Where things stand
 
-All three boards boot spruceOS with their panel, pad, WiFi and audio, touch on the two
+The three MagicX boards boot spruceOS with their panel, pad, WiFi and audio, touch on the two
 boards that have it, and Bluetooth audio on the Zero 40. Charge mode works when a board is plugged in while off, and the boards
 really sleep and wake. From v0.4.1-beta.1 on, the images pair with spruceOS v4.5.0 or a
 newer nightly. It is bench-tested on one of each board; the releases are betas. Details
@@ -32,8 +32,8 @@ From v0.7.0-beta.1: the **Powkiddy V90S** and **V20** on their own stock boot ch
 (`boards/v90s`, `boards/v20`; see `docs/hardware-notes.md`, "Powkiddy V90S and V20"), and the
 **TrimUI Brick** from a TF card beside its stock eMMC, with TrimUI's boot0 and oakMOSS's U-Boot
 ([docs/trimui.md](docs/trimui.md)). **The Brick and V20 images are beta images:** the V20 is
-untested, as there is no V20 on the bench, and the Brick is tested on one unit. These three need a
-spruceOS with oakMOSS's support for them, which is not yet in a nightly. The Brick Pro and Smart Pro
+untested, as there is no V20 on the bench, and the Brick is tested on one unit. These three need
+spruceOS v4.6.0 or newer, which has oakMOSS's support for them. The Brick Pro and Smart Pro
 are not started.
 
 ## Documentation
@@ -42,9 +42,14 @@ are not started.
 |---|---|
 | [docs/using.md](docs/using.md) | flashing, and what the board does on boot, on the charger and in sleep |
 | [docs/status.md](docs/status.md) | what has been tested on which board, and the known gaps |
+| [docs/cards.md](docs/cards.md) | SD1 and SD2: which card hosts the launcher, and the `SPRUCEOS` partition on SD1 |
+| [docs/updates.md](docs/updates.md) | update packages (`.omupd`) and the two slots |
+| [docs/boot-screens.md](docs/boot-screens.md) | what the panel shows during a boot, a shutdown and on the charger |
 | [docs/debugging.md](docs/debugging.md) | debug mode: boot and shutdown records, kernel marks, debug switches |
 | [docs/batteryplus.md](docs/batteryplus.md) | the battery percent from the cell's voltage, for the launcher to read |
+| [docs/trimui.md](docs/trimui.md) | the TrimUI Brick: the card beside its eMMC, and its boot chain |
 | [docs/building.md](docs/building.md) | building the images yourself, and the repository layout |
+| [docs/flip-set.md](docs/flip-set.md) | the oakMOSS libraries in `/usr/lib/oakmoss` |
 | [docs/hardware-notes.md](docs/hardware-notes.md) | what the boards turned out to be, and how problems were found |
 | [docs/sdk-mods.md](docs/sdk-mods.md) | every change made to the vendor SDK, with the reason |
 | [docs/DEPENDENCIES.md](docs/DEPENDENCIES.md) | what spruceOS and PortMaster need from the base |

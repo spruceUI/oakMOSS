@@ -49,7 +49,8 @@ cards carry spruce, SD2's runs; SD1's runs when SD2 has none.
   need one full flash first.
 - **Debug mode:** an `oakmoss-debug` file at the root of SD1's `SPRUCEOS` partition makes the
   board record each boot and shutdown on the card, with the kernel's progress marks
-  (`docs/debugging.md`). Without the file it records nothing.
+  (`docs/debugging.md`). Without the file it records nothing; a card that has no `SPRUCEOS`
+  partition keeps debug mode on.
 - **Plugged in while off:** the board comes up in charge mode. U-Boot shows a charging
   picture, then a screen with the battery level. The screen and its backlight go off after
   30 seconds, and any button brings them back. Power while it is lit starts the launcher.

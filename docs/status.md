@@ -30,7 +30,8 @@ were tested on one of each board but the V20 on 2026-10-27, installed as updates
 build, and from 2026-10-30 written to new cards, with spruceOS from its oakMOSS board-support PR: device
 checks, every button, sleep and wake, WiFi, touch, and the display levels kept across a reboot. The
 update from v0.6.0-beta.1 itself is not yet tested. The MagicX boards pair with spruceOS
-v4.5.5-20261020 or newer; the V90S, V20 and Brick need spruceOS's oakMOSS board support, not yet merged.
+v4.5.5-20261020 or newer; the V90S, V20 and Brick need spruceOS v4.6.0 or newer, which has its oakMOSS
+board support (merged 2026-11-01).
 The Brick image carries TrimUI's boot components and its closed `trimui_inputd` (ATTRIBUTION.md).
 
 v0.6.0-beta.1 (2026-10-20) switches the AXP2202 off itself at a power-off from spruce's menu, so
