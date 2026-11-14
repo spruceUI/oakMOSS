@@ -241,8 +241,9 @@ those packages are offered under the license of the package they modify.
 
 ## The oakMOSS libraries (`/usr/lib/oakmoss`)
 
-From v0.6.0-beta.1 on, the Zero 28, Zero 40 and XU20 images carry 130 shared libraries in
-`/usr/lib/oakmoss` ([docs/flip-set.md](docs/flip-set.md)). None of them is stored in this repository.
+Every image carries 130 shared libraries in `/usr/lib/oakmoss` ([docs/flip-set.md](docs/flip-set.md)):
+the Zero 28, Zero 40 and XU20 images from v0.6.0-beta.1 on, and the V90S, V20 and Brick images from
+their first release, v0.7.0-beta.1. None of them is stored in this repository.
 `scripts/build-ports-userland.sh` (`PORTS_SET=flip`) builds each one from its upstream source release,
 with the options and the few source edits written in that script. `inputs/userland/urls.txt` names
 every source archive and `inputs/userland/SHA256SUMS` its checksum, and each archive carries its own
@@ -333,6 +334,18 @@ folder, so each can be rebuilt and replaced. For every library the source is the
 The other archives in `urls.txt` are build-time inputs (headers, protocol descriptions and link-time
 copies of libraries the image already has, such as zlib, expat, SQLite, FreeType, SDL2, ALSA and
 D-Bus) or belong to the card lanes. No library of theirs is in `/usr/lib/oakmoss`.
+
+## Realtek USB WiFi drivers
+
+The V90S and V20 have no radio of their own, so their images carry two kernel modules for USB WiFi
+dongles in `/usr/lib/oakmoss/modules/usb-wifi`, with a `PROVENANCE.txt` beside them: `8188eu.ko` from
+[lwfinger/rtl8188eu](https://github.com/lwfinger/rtl8188eu) (commit `f42fc9c`) and `8812au.ko` from
+[aircrack-ng/rtl8812au](https://github.com/aircrack-ng/rtl8812au) (commit `7344855`). Both are Realtek's
+drivers under GPL-2.0. `scripts/fetch-inputs.sh` fetches the two sources at those commits (sha256 in
+`scripts/lib.sh`) and `scripts/build-usb-wifi.sh` builds them against this kernel; neither is stored
+here. `sdk-patches/usb-wifi/8188eu-0001-build-on-4.9-random-guard-typo-and-timer-shim.patch` is oakMOSS's
+build fix for kernel 4.9, offered under the driver's licence. An image that carries the modules carries
+GPL-2.0 code; its source is those two commits and that patch.
 
 ## Mikhailzrick: BatteryPlus
 
