@@ -229,6 +229,101 @@ SDK builds come from its `dl/` directory under their own licenses. The small
 patches under `sdk-patches/package-patches/` and `sdk-patches/tree/` that touch
 those packages are offered under the license of the package they modify.
 
+## The oakMOSS libraries (`/usr/lib/oakmoss`)
+
+From v0.6.0-beta.1 on, the Zero 28, Zero 40 and XU20 images carry 130 shared libraries in
+`/usr/lib/oakmoss` ([docs/flip-set.md](docs/flip-set.md)). None of them is stored in this repository.
+`scripts/build-ports-userland.sh` (`PORTS_SET=flip`) builds each one from its upstream source release,
+with the options and the few source edits written in that script. `inputs/userland/urls.txt` names
+every source archive and `inputs/userland/SHA256SUMS` its checksum, and each archive carries its own
+licence text. In an image, `/usr/lib/oakmoss/BUILD-INFO` names the oakMOSS commit the set was built
+from and `/usr/lib/oakmoss/SHA256SUMS` lists its files.
+
+An image that carries the set carries these libraries under their own licences. Three are
+GPL-2.0-or-later: a52dec, libmpeg2 and FAAD2. The LGPL ones are separate shared objects in one
+folder, so each can be rebuilt and replaced. For every library the source is the archive named in
+`urls.txt`, built by the recipe in that script.
+
+| Source | Licence | Libraries |
+|---|---|---|
+| FFmpeg 4.4.5 | LGPL-2.1-or-later (configured without `--enable-gpl`, `--enable-version3` and `--enable-nonfree`) | `libavcodec.so.58`, `libavformat.so.58`, `libavutil.so.56`, `libswresample.so.3`, `libswscale.so.5` |
+| a52dec 0.7.4 | GPL-2.0-or-later | `liba52-0.7.4.so` |
+| libmpeg2 0.5.1 (mpeg2dec) | GPL-2.0-or-later | `libmpeg2.so.0` |
+| FAAD2 2.10.1 | GPL-2.0-or-later | `libfaad.so.2` |
+| LAME 3.100 | LGPL-2.0-or-later | `libmp3lame.so.0` |
+| mpg123 1.32.9 | LGPL-2.1 | `libmpg123.so.0` |
+| OpenAL Soft 1.23.1 | LGPL-2.0-or-later | `libopenal.so.1` |
+| PulseAudio 13.99.1 (the client libraries) | LGPL-2.1-or-later; built with D-Bus, which is AFL-2.1 or GPL-2.0-or-later | `libpulse.so.0`, `libpulse-simple.so.0`, `libpulsecommon-13.99.so` |
+| AppArmor 3.0.13 (libapparmor) | LGPL-2.1 | `libapparmor.so.1` |
+| libasyncns 0.8 | LGPL-2.1-or-later | `libasyncns.so.0` |
+| systemd 249.17 (libsystemd alone) | LGPL-2.1-or-later | `libsystemd.so.0` |
+| keyutils 1.6.1 (the library) | LGPL-2.1-or-later | `libkeyutils.so.1` |
+| libtasn1 4.16.0 | LGPL-2.1-or-later | `libtasn1.so.6` |
+| GnuTLS 3.6.16 | LGPL-2.1-or-later | `libgnutls.so.30` |
+| libgcrypt 1.8.11, libgpg-error 1.47 | LGPL-2.1-or-later | `libgcrypt.so.20`, `libgpg-error.so.0` |
+| libxcrypt 4.4.36 | LGPL-2.1-or-later, with permissively licensed parts | `libcrypt.so.1` |
+| cairo 1.16.0 | LGPL-2.1 or MPL-1.1 | `libcairo.so.2` |
+| FriBidi 1.0.8 | LGPL-2.1-or-later | `libfribidi.so.0` |
+| Game_Music_Emu 0.6.3 | LGPL-2.1-or-later | `libgme.so.0` |
+| libmikmod 3.3.11.1 | LGPL-2.0-or-later | `libmikmod.so.3` |
+| libxmp 4.6.0 | LGPL-2.1-or-later | `libxmp.so.4` |
+| Speech Dispatcher 0.11.5 (the client library) | LGPL-2.1-or-later | `libspeechd.so.2` |
+| Nettle 3.5.1 and 3.7.3 | LGPL-3.0-or-later or GPL-2.0-or-later | `libnettle.so.7`, `libhogweed.so.5`, `libnettle.so.8`, `libhogweed.so.6` |
+| GMP 6.2.1 | LGPL-3.0-or-later or GPL-2.0-or-later | `libgmp.so.10` |
+| libidn2 2.3.0 | LGPL-3.0-or-later or GPL-2.0-or-later | `libidn2.so.0` |
+| libunistring 0.9.10 | LGPL-3.0-or-later or GPL-2.0-or-later | `libunistring.so.2` |
+| OpenSSL 1.1.1w | OpenSSL and SSLeay licences | `libssl.so.1.1`, `libcrypto.so.1.1` |
+| OpenLDAP 2.4.59 | OpenLDAP Public License 2.8 | `liblber-2.4.so.2`, `libldap_r-2.4.so.2` |
+| Cyrus SASL 2.1.28 | Carnegie Mellon's BSD-style licence, with its attribution clause | `libsasl2.so.2` |
+| MIT Kerberos 1.17.2 | MIT (the krb5 `NOTICE`) | `libgssapi_krb5.so.2`, `libkrb5.so.3`, `libk5crypto.so.3`, `libkrb5support.so.0` |
+| Heimdal 7.7.1 | BSD-3-Clause | `libasn1.so.8`, `libgssapi.so.3`, `libhcrypto.so.4`, `libheimbase.so.1`, `libheimntlm.so.0`, `libhx509.so.5`, `libkrb5.so.26`, `libroken.so.18`, `libwind.so.0` |
+| e2fsprogs 1.47.0 (com_err alone) | MIT-style | `libcom_err.so.2` |
+| ICU 63.2 | Unicode licence (ICU's `LICENSE`, with its third-party notices) | `libicudata.so.63`, `libicuuc.so.63`, `libicui18n.so.63` |
+| Python 3.10.19 | Python Software Foundation License 2.0 | `libpython3.10.so.1.0`, `libpython3.so` |
+| Tcl 8.6.14, Tk 8.6.14 | Tcl/Tk licence (BSD-style) | `libtcl8.6.so`, `libtk8.6.so` |
+| Boost 1.71.0 | Boost Software License 1.0 | `libboost_filesystem.so.1.71.0` |
+| libjpeg-turbo 2.1.5 | IJG, BSD-3-Clause and zlib | `libjpeg.so.8` |
+| libpng 1.6.43 | libpng licence | `libpng16.so.16` |
+| LibTIFF 4.2.0 | libtiff licence (BSD-style) | `libtiff.so.5` |
+| giflib 5.2.1 | MIT | `libgif.so.7` |
+| libwebp 1.0.3 | BSD-3-Clause, with Google's patent grant | `libwebp.so.7`, `libwebpdemux.so.2` |
+| libavif 1.0.4 | BSD-2-Clause | `libavif.so.16` |
+| dav1d 1.2.1 | BSD-2-Clause | `libdav1d.so.6` |
+| libvpx 1.6.1, 1.8.2, 1.11.0 and 1.13.1 | BSD-3-Clause, with Google's patent grant | `libvpx.so.4`, `libvpx.so.6`, `libvpx.so.7`, `libvpx.so.8` |
+| libogg 1.3.5, libvorbis 1.3.7, libtheora 1.1.1 | BSD-3-Clause | `libogg.so.0`, `libvorbis.so.0`, `libvorbisfile.so.3`, `libvorbisenc.so.2`, `libtheoradec.so.1`, `libtheoraenc.so.1` |
+| Tremor (libvorbisidec) 1.2.1+git20180316 | BSD-3-Clause | `libvorbisidec.so.1` |
+| Opus 1.4, opusfile 0.12 | BSD-3-Clause (Opus with its patent licences) | `libopus.so.0`, `libopusfile.so.0` |
+| Speex 1.2.1 | BSD-3-Clause | `libspeex.so.1` |
+| WavPack 5.6.0 | BSD-3-Clause | `libwavpack.so.1` |
+| libopenmpt 0.4.11 | BSD-3-Clause | `libopenmpt.so.0` |
+| libmodplug 0.8.9.0 | public domain | `libmodplug.so.1` |
+| XZ Utils 5.4.7 (liblzma) | public domain | `liblzma.so.5` |
+| Zstandard 1.5.6 | BSD-3-Clause or GPL-2.0 | `libzstd.so.1` |
+| LZ4 1.9.4 (the library) | BSD-2-Clause | `liblz4.so.1` |
+| Brotli 1.0.9 | MIT | `libbrotlicommon.so.1`, `libbrotlidec.so.1` |
+| libzip 1.5.2 | BSD-3-Clause | `libzip.so.5` |
+| nghttp2 1.40.0 | MIT | `libnghttp2.so.14` |
+| libpsl 0.21.0 | MIT | `libpsl.so.5` |
+| p11-kit 0.23.22 | BSD-3-Clause | `libp11-kit.so.0` |
+| libffi 3.3 | MIT | `libffi.so.7` |
+| libbsd 0.10.0 | BSD-3-Clause and the other permissive licences in its `COPYING` | `libbsd.so.0` |
+| libcap 2.69 | BSD-3-Clause or GPL-2.0 | `libcap.so.2` |
+| tcp_wrappers 7.6, with Debian's 7.6.q-31 patches | Wietse Venema's BSD-style licence | `libwrap.so.0` |
+| liblcf 0.8 | MIT | `liblcf.so.0` |
+| SDL2_image 2.8.2, SDL2_mixer 2.8.0, SDL2_ttf 2.22.0 | zlib; the decoders and font code bundled in them (stb, dr_flac, minimp3, Timidity, FreeType, HarfBuzz) keep their own terms | `libSDL2_image-2.0.so.0`, `libSDL2_mixer-2.0.so.0`, `libSDL2_ttf-2.0.so.0` |
+| SDL2_gfx 1.0.4, SDL2_net 2.2.0 | zlib | `libSDL2_gfx-1.0.so.0`, `libSDL2_net-2.0.so.0` |
+| pixman 0.42.2 | MIT | `libpixman-1.so.0` |
+| fontconfig 2.12.6 | MIT-style | `libfontconfig.so.1` |
+| X.Org: libX11 1.8.7, libXext 1.3.5, libXfixes 6.0.1, libXrender 0.9.11, libXcursor 1.2.1, libXi 1.8.1, libXrandr 1.5.4, libXScrnSaver 1.2.4, libXau 1.0.11, libXdmcp 1.1.4, libICE 1.1.1, libSM 1.2.4, libxcb 1.16 | MIT and the X.Org family's other permissive licences (each archive's `COPYING`) | `libX11.so.6`, `libXext.so.6`, `libXfixes.so.3`, `libXrender.so.1`, `libXcursor.so.1`, `libXi.so.6`, `libXrandr.so.2`, `libXss.so.1`, `libXau.so.6`, `libXdmcp.so.6`, `libICE.so.6`, `libSM.so.6`, `libxcb.so.1`, `libxcb-render.so.0`, `libxcb-shm.so.0` |
+| Wayland 1.22.0 | MIT | `libwayland-client.so.0`, `libwayland-cursor.so.0`, `libwayland-egl.so.1` |
+| waylandpp 1.0.0 | BSD-2-Clause | `libwayland-egl++.so.1` |
+| libxkbcommon 1.6.0 | MIT and X.Org-style | `libxkbcommon.so.0` |
+| libdecor 0.2.2 | MIT | `libdecor-0.so.0` |
+
+The other archives in `urls.txt` are build-time inputs (headers, protocol descriptions and link-time
+copies of libraries the image already has, such as zlib, expat, SQLite, FreeType, SDL2, ALSA and
+D-Bus) or belong to the card lanes. No library of theirs is in `/usr/lib/oakmoss`.
+
 ## Mikhailzrick: BatteryPlus
 
 **[knubat.components](https://github.com/Mikhailzrick/knubat.components)**

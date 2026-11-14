@@ -81,5 +81,6 @@ zlib 1.2.8 (the lane's floor; the image has 1.3.1). These are build-only package
 ## Licences
 
 The set is mostly LGPL, MIT and BSD; a52dec, libmpeg2 and faad2 are GPL-2.0, ICU is under the Unicode licence,
-Python under the PSF licence, OpenLDAP under its own. Each needs an `ATTRIBUTION.md` entry, and the sources stay
-in `inputs/userland`, before any image carrying the set is released.
+Python under the PSF licence, OpenLDAP under its own. `ATTRIBUTION.md` ("The oakMOSS libraries") lists every
+library with its source and licence, and `inputs/userland` names the sources. A library added to the set needs
+its entry there before an image carrying it is released.
