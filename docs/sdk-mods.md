@@ -40,6 +40,7 @@ found while porting the tree to GCC 13 / glibc 2.38.
 | `package/libs/libubox/patches/900-libubox-no-werror.patch` | drop `-Werror` from libubox's CMakeLists | GCC 13 `-Werror=array-bounds` in blobmsg.c | oakMOSS |
 | `package/libs/ncurses/` | REPLACED by OpenWrt v21.02.7's ncurses 6.2 package (`$(INCLUDE_DIR)` -> `$(BUILD_DIR)`, `--with-termlib=tinfo`, libtinfo installed); 5.9 moved to `.oakmoss-orig/ncurses-5.9` (left under `package/`, it stays registered and builds) | 5.9's wide-char build breaks under GCC 13 + glibc 2.38; spruce's rnano, mupen64plus and libmp3lame need `libncursesw.so.6` + `libtinfo.so.6` | OpenWrt |
 | `package/libs/openssl/` | REPLACED by `sdk-patches/openssl-1.1.1w` (round 19): the SDK's package at OpenSSL 1.1.1w with OpenWrt 22.03's 1.1.1 configure/compile steps and patches 100/110/120/130; 1.1.0i moved to `.oakmoss-orig/openssl-1.1.0i` | spruce's card libraries need OpenSSL 1.1.1 (round 19) | OpenWrt, oakMOSS |
+| `package/utils/bash/` | REPLACED by `sdk-patches/bash-5.2.37` (round 32): bash 5.2 with its official patches 001-037, its own readline 8.2 linked statically, process substitution through named pipes; 4.3.42 moved to `.oakmoss-orig/bash-4.3.42` | port scripts need a bash 5 (spruceUI/oakMOSS#3), and 132 is not needed any more | Buildroot (cache values), oakMOSS |
 | `toolchain/gcc/patches/7.5.0/` | OpenWrt v19.07.10's 22-patch GCC 7.5.0 set (18 byte-identical to the SDK's linaro-7.4 set) | goes with tree patch 030 | OpenWrt |
 | `dl/ncurses-6.2.tar.gz` (+ `dl/gcc-7.5.0.tar.xz`, `dl/binutils-2.28.tar.gz` for the fallback) | pre-fetched sources | the SDK's download URLs for these are dead or absent | GNU |
 | `lichee/linux-4.9/drivers/char/sunxi_encrypt/encrypt.zero28` | backup of the SDK's original object (452120 B, 2024-12-16, md5 `f28d35eb…`) | `build.sh` swaps the object per board | oakMOSS |
@@ -220,7 +221,6 @@ re-reported as a new one.
 |---|---|---|
 | `131-input-drop-repeated-mt-values.patch` | `drivers/input/input.c` | The vendor commented out the input core's "drop unchanged value" check (for a g-sensor that repeats samples), so every report passes. Our touch drivers use `input_mt`, which relies on that check: each report re-sent the slot's `ABS_MT_TRACKING_ID` (and `-1` for the four empty slots; raw capture on the Zero 40, 2026-10-02), and SDL turns every repeated tracking ID into a finger up and down, so no app sees a held touch. The check comes back for multitouch values only; other axes keep the vendor behaviour. |
 | `overlay/etc/udev/rules.d/60-oakmoss-touchscreen.rules` | `/etc/udev/rules.d` | The image has no `60-input-id.rules`, so udev tags no input device and libudev users find no touchscreen. The rule runs udev's `input_id` builtin on the two touch controllers only (`axs_ts`, `hyn_ts`): run on every input device it tags the pad a mouse (virtual-mouse buttons 272/273 plus `ABS_X/ABS_Y`), and SDL would stop treating it as a joystick. It also gives the XU20's touchscreen a calibration matrix (panel turned 180 degrees, axes inverted against it). |
-| `132-bash-links-installed-readline.patch` | `package/utils/bash/Makefile` | A build from an empty `out/` failed on both build hosts (2026-10-02): `Package bash is missing dependencies for the following libraries: libhistory.so.6`. bash declared only `libncurses`, so whether it linked its bundled readline or the staged `libreadline`/`libhistory` depended on which package finished first; warm trees happened to win (the shipped bash needs only `libtinfo` and `libc`), a cold parallel build loses every time. bash now declares `libreadline` and links it (`--with-installed-readline`), as OpenWrt's own package does; bash 4.3 and readline 6.3 are a matched pair and the image already ships `libreadline`. |
 
 `mods_version` 8 -> 10 (9 was round 15 without 132).
 
@@ -679,3 +679,27 @@ SDK's compiler, not on hardware.
 
 On an existing tree: `scripts/apply-sdk-mods.sh` (163 reports `patched`). The stamp moves to 31, which
 wipes the kernel build tree, so the first image after it needs `build.sh ext`. `mods_version` -> 31.
+
+## Round 32: bash 5.2.37 (spruceUI/oakMOSS#3)
+
+The SDK's bash is 4.3.42. spruceUI/oakMOSS#3 reports port scripts hanging on it at `exec > >(tee log)`
+(GMToolkit's patcher), and every launcher that runs ports has had to bring its own bash. The package is replaced
+by bash 5.2 with all 37 official patches (`upstream/`, applied unchanged). 5.2 ships readline 8.2, newer than
+the SDK's 6.3, so it links its own copy statically: tree patch 132 (declare and link `libreadline`, added
+against a cold-build race on `libhistory`) goes, and so does the dependency it added.
+
+A cross build cannot measure job control, named pipes or `/dev/fd`, and bash defaults all three to "missing"
+or "absent" when it cannot run the test. The package sets them: job control present, named pipes present,
+`/dev/fd` absent. Process substitution then goes through named pipes, which works on an image without `/dev/fd`
+(the launcher makes the link after boot); with `/dev/fd` compiled in, `exec > >(tee log)` fails there with
+`/dev/fd/62: No such file or directory`.
+
+| what | where | why |
+|---|---|---|
+| `sdk-patches/bash-5.2.37/` | `package/utils/bash/` (replaced) | see above |
+| `scripts/lib.sh` `BASH_*`, `fetch-inputs.sh`, `apply-sdk-mods.sh` | `dl/bash-5.2.tar.gz` | the SDK carries 4.3 only |
+| `132-bash-links-installed-readline.patch` | removed | 5.2 links its own readline |
+
+On an existing tree: `scripts/apply-sdk-mods.sh` (reports `replaced package/utils/bash -> 5.2.37`), then
+`scripts/build.sh image <board>`. `mods_version` -> 32 (the kernel build tree is wiped on the stamp move, so
+the first image after it needs `build.sh ext`).

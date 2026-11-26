@@ -107,6 +107,10 @@ redistribution; TrimUI published the patched SDL2 2.26.1 source (GE8300 support)
 in its Smart Pro SDK. `libSDL2_mixer` is linked against libmad (GPL-2.0), which
 the image builds from source (`dl/libmad-0.15.1b.tar.gz` in the SDK).
 
+On the Zero 28 and Zero 40 `libSDL2_mixer` is not the borrowed one: `scripts/build-sdl2-mixer.sh` builds
+SDL2_mixer 2.8.0 (zlib licence; its stb_vorbis, dr_flac and minimp3 keep their own terms) from source and installs
+it over it, because 2.0.1 cannot load Ogg.
+
 They do not all come from one build. `libSDL2_image`, `libSDL2_mixer` and
 `libSDL2_ttf` carry a `RUNPATH` and toolchain strings from a TrimUI Smart Pro SDK
 build tree (`tina_smartpro_4.0.0`, `a133-aw3`, GCC 7.4.1 OpenWrt); `libSDL2`

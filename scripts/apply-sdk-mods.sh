@@ -231,6 +231,16 @@ else
     rm -rf package/libs/openssl; cp -a "$P/openssl-1.1.1w" package/libs/openssl; changed=1; note replaced "package/libs/openssl -> 1.1.1w"
 fi
 
+# 3d. bash 4.3.42 -> 5.2.37: the package directory is replaced, as openssl is. The SDK's 42 upstream
+#     patches and its readline-6.3 link (tree patch 132, gone with this step) belong to 4.3.
+if grep -q '^PKG_PATCHLEVEL:=37' package/utils/bash/Makefile 2>/dev/null && diff -rq "$P/bash-5.2.37" package/utils/bash >/dev/null 2>&1; then note present "package/utils/bash (5.2.37)"
+elif [ "$CHECK" = 1 ]; then note MISSING "package/utils/bash 5.2.37"; missing=1
+else
+    mkdir -p .oakmoss-orig
+    [ -d .oakmoss-orig/bash-4.3.42 ] || mv package/utils/bash .oakmoss-orig/bash-4.3.42
+    rm -rf package/utils/bash; cp -a "$P/bash-5.2.37" package/utils/bash; changed=1; note replaced "package/utils/bash -> 5.2.37"
+fi
+
 # 4. GCC 7.5.0 patch set for the phase-2 fallback toolchain (menu option added by tree patch 030).
 if [ -d toolchain/gcc/patches/7.5.0 ] && diff -rq "$P/gcc-7.5.0-patches" toolchain/gcc/patches/7.5.0 >/dev/null 2>&1; then note present "toolchain/gcc/patches/7.5.0"
 elif [ "$CHECK" = 1 ]; then note MISSING "toolchain/gcc/patches/7.5.0"; missing=1
@@ -238,10 +248,10 @@ else mkdir -p toolchain/gcc/patches/7.5.0; cp -a "$P"/gcc-7.5.0-patches/. toolch
 fi
 
 # 5. Source tarballs the SDK cannot download any more.
-for t in "$NCURSES_TARBALL" "$BLUEZALSA_TARBALL" "$ZLIB_TARBALL" "$OPENSSL_TARBALL" "$GCC750_TARBALL" "$BINUTILS228_TARBALL"; do
+for t in "$NCURSES_TARBALL" "$BLUEZALSA_TARBALL" "$ZLIB_TARBALL" "$OPENSSL_TARBALL" "$BASH_TARBALL" "$GCC750_TARBALL" "$BINUTILS228_TARBALL"; do
     if [ -f "dl/$t" ]; then note present "dl/$t"
     elif [ -f "$INPUTS_DIR/$t" ]; then [ "$CHECK" = 1 ] || { cp -a "$INPUTS_DIR/$t" "dl/$t"; changed=1; note staged "dl/$t"; }
-    elif [ "$t" = "$NCURSES_TARBALL" ] || [ "$t" = "$BLUEZALSA_TARBALL" ] || [ "$t" = "$ZLIB_TARBALL" ] || [ "$t" = "$OPENSSL_TARBALL" ]; then note MISSING "dl/$t (scripts/fetch-inputs.sh)"; missing=1
+    elif [ "$t" = "$NCURSES_TARBALL" ] || [ "$t" = "$BLUEZALSA_TARBALL" ] || [ "$t" = "$ZLIB_TARBALL" ] || [ "$t" = "$OPENSSL_TARBALL" ] || [ "$t" = "$BASH_TARBALL" ]; then note MISSING "dl/$t (scripts/fetch-inputs.sh)"; missing=1
     fi
 done
 

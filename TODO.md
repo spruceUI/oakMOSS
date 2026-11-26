@@ -199,6 +199,7 @@ because the base does not.
       scripts call `timeout` six times and get a silent failure; `setsid` is only
       on the card. (`pkill -f`, `pgrep`, `ip` are present.)
 - [x] `bash` (round 8): the launcher copies its own into `/bin/bash` at every boot.
+- [x] `bash` 5.2.37 in the image (round 32, spruceUI/oakMOSS#3): the SDK's 4.3.42 is replaced, with named-pipe process substitution.
 - [ ] `evtest`, `bl`/`vol` helpers (main-zero40 ships them in `/usr/magicx/bin`;
       ours relies on the card's `bin64/evtest`).
 - [ ] `rootfs_data` is 2.9 MB and half used after the first day (`/overlay`,
@@ -208,6 +209,7 @@ because the base does not.
 - [ ] `dosfstools` (`fsck.fat`): every boot logs "Volume was not properly
       unmounted" for SD2; the launcher runs no fsck by policy, but a repair tool
       on the base costs little.
+- [x] SDL2_mixer 2.8.0 from source on the Zero 28 and Zero 40 (round 32, spruceUI/oakMOSS#3): Ogg, FLAC and MP3 decode without external libraries.
 - [ ] Our own SDL2 build (2.26 or 2.30) against the GE8300 EGL blobs and fbdev,
       replacing the borrowed TrimUI Smart Pro `usr/magicx/lib/libSDL2*` (works,
       but it is someone else's binary — ATTRIBUTION.md).
