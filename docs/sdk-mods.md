@@ -679,3 +679,22 @@ SDK's compiler, not on hardware.
 
 On an existing tree: `scripts/apply-sdk-mods.sh` (163 reports `patched`). The stamp moves to 31, which
 wipes the kernel build tree, so the first image after it needs `build.sh ext`. `mods_version` -> 31.
+
+## Round 37 (2026-11-27): a charger after a DAC is not held at 100 mA, stamped 33
+
+A Zero 28 on a 5 V 2.4 A brick, after a USB DAC session, charged at 100 mA: the PMIC's input limit
+(AXP2202 `IIN_LIM`, 0x17: mA = 50 x bits 5:0 + 100, bit 7 the BC1.2 switch) read 0x80, below the
+board's own draw, and the gauge fell while plugged in. The USB manager's `rmmod_device_driver()`
+(the port left device role) writes `INPUT_CURRENT_LIMIT` = 0; the driver clamped that to 100 mA and
+marked the limit claimed, which skips the adapter state machine's `pmu_usbad_cur` write (2500 mA in
+the board's DT). That machine is re-armed only by the usb-in interrupt, and swapping a DAC for a
+charger gives it no VBUS edge.
+
+| what | where | why |
+|---|---|---|
+| `sdk-patches/tree/137-axp2202-usb-iin-limit-rearm.patch` | `lichee/linux-4.9/drivers/power/supply/axp2202_usb_power.c` | a write of 0 clears the claim and re-arms the adapter state machine five seconds out (the usb-in interrupt's delay) instead of clamping to 100 mA; the work is touched only once probe has set it up and with BC1.2 off; other writes are unchanged; `get_property` masks bit 7, so sysfs reads the real limit (it said 6500) |
+| `scripts/lib.sh` `OAKMOSS_MODS_VERSION` | `build.sh` | refuses a tree without 137 |
+
+On an existing tree: `scripts/apply-sdk-mods.sh` applies 137; the stamp moves, which wipes the kernel
+build tree, so the next image needs `build.sh ext`. `mods_version` 31 -> 33: 32 is the bash 5.2 and
+SDL2_mixer line (branch sdk-bash5-mixer), so each level keeps one meaning. Not yet tested on hardware.

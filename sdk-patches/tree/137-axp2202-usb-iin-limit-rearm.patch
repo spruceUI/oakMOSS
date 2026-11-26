@@ -1,0 +1,51 @@
+oakMOSS: a charger plugged in after a DAC is not held at 100 mA.
+
+The USB manager's rmmod_device_driver() (the port left device role, as it does for a DAC)
+writes INPUT_CURRENT_LIMIT = 0 through the AXP2202 USB supply. axp2202_set_iin_limit clamps
+that to its 100 mA floor (code 0 of IIN_LIM, 0x17), and the property write marks the limit as
+claimed, so the adapter state machine skips its pmu_usbad_cur write (2500 mA in the DT). That
+machine is re-armed only by the usb-in interrupt, and a DAC swapped for a charger gives it no
+VBUS edge: the board charged at 100 mA, below its own draw, and the gauge fell on the charger
+(Zero 28, 2026-11-27: IIN_LIM 0x17 = 0x80, 5 V 2.4 A brick, 27 -> 25 % with the screen on).
+
+A write of 0 now clears the claim and re-arms the state machine five seconds out (the delay the
+usb-in interrupt uses), so pmu_usbad_cur applies unless a host enumerates and claims 500 mA
+first. Any other write is as before. The work is only touched once probe has initialised it,
+and only with BC1.2 off, where it exists. axp2202_usb_get_property also masks bit 7 (the BC1.2
+switch), so sysfs reports the real limit instead of 6500.
+
+--- a/lichee/linux-4.9/drivers/power/supply/axp2202_usb_power.c
++++ b/lichee/linux-4.9/drivers/power/supply/axp2202_usb_power.c
+@@ -126,7 +126,8 @@
+ 	if (ret < 0)
+ 		return ret;
+ 
+-	data = (data * 50) + 100;
++	/* bit 7 is the BC1.2 switch, not a current step (it read back as 6500 mA) */
++	data = ((data & GENMASK(5, 0)) * 50) + 100;
+ 	val->intval = data;
+ 
+ 	return ret;
+@@ -286,6 +287,22 @@
+ 
+ 	switch (psp) {
+ 	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
++		if (!val->intval) {
++			/* The USB manager writes 0 when the device-mode driver goes
++			 * (rmmod_device_driver: the port became a host). That is not
++			 * a request for the 100 mA floor, and no host has claimed the
++			 * port: leave the limit alone and let the adapter state
++			 * machine apply pmu_usbad_cur again. Without this a charger
++			 * plugged in after a DAC, with no VBUS edge for the usb-in
++			 * interrupt to act on, stayed at 100 mA. The work exists only
++			 * once probe has set it up, and only with BC1.2 off. */
++			atomic_set(&usb_power->set_current_limit, 0);
++			if (!usb_power->dts_info.pmu_bc12_en &&
++			    usb_power->usb_chg_state.work.func)
++				mod_delayed_work(system_wq, &usb_power->usb_chg_state,
++						 msecs_to_jiffies(5 * 1000));
++			break;
++		}
+ 		ret = axp2202_set_iin_limit(regmap, val->intval);
+ 		atomic_set(&usb_power->set_current_limit, 1);
+ 		break;
