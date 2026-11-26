@@ -21,6 +21,10 @@ amixer -D hw:audiocodec cset name='MIC2 gain volume' 0
 amixer -D hw:sndac10710036 cset name='Channel 1 PGA Gain' 20
 amixer -D hw:sndac10710036 cset name='Channel 2 PGA Gain' 20
 
+# /run, where libudev and other current libraries look for runtime state (udev's
+# database among it): /var/run already points at /tmp/run.
+[ -e /run ] || ln -s /var/run /run
+
 /usr/magicx/bin/runmagicx.sh
 
 exit 0

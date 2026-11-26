@@ -3,4 +3,9 @@
 # Tested on the V90S (2026-10-26); the V20's pad has sticks and is untested.
 ACTION=="remove", GOTO="oakmoss_pads_end"
 SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="Powkiddy V90S Gamepad|Powkiddy V20 Gamepad", ENV{ID_INPUT}="1", ENV{ID_INPUT_JOYSTICK}="1"
+# The Zero 40's pad (magicx-input) too: input_id tags it a mouse (see 60-), and Godot ports found no pad.
+SUBSYSTEM=="input", KERNEL=="event*", ATTRS{name}=="magicx-input", ENV{ID_INPUT}="1", ENV{ID_INPUT_JOYSTICK}="1"
+# Virtual devices (uinput: gptokeyb's keyboard and pads) through input_id, so libinput (Weston, Qt) takes them.
+# Only /devices/virtual: the board's own pads stay tagged by name above.
+SUBSYSTEM=="input", KERNEL=="event*", DEVPATH=="/devices/virtual/input/*", IMPORT{builtin}="input_id"
 LABEL="oakmoss_pads_end"
