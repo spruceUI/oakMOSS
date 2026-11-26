@@ -460,6 +460,11 @@ case $STEP in
         "$OAKMOSS_ROOT/scripts/build-usb-wifi.sh" "$SDK_DIR/package/add-rootfs-demo/usr/lib/oakmoss/modules/usb-wifi" 2>&1 | tee -a "$LOG" ||
             die "USB WiFi modules did not build (log: $LOG)"
     fi
+    # SDL2_mixer 2.8 over the overlay's borrowed 2.0.1, which cannot load Ogg (board.conf SDL2_MIXER=1).
+    if [ "${SDL2_MIXER:-0}" = 1 ]; then
+        "$OAKMOSS_ROOT/scripts/build-sdl2-mixer.sh" "$SDK_DIR/package/add-rootfs-demo" 2>&1 | tee -a "$LOG" ||
+            die "SDL2_mixer did not build (log: $LOG)"
+    fi
     if ! "$RUN" "$LUNCH add-rootfs-demo 2>&1 | tail -5; echo '=== pack' \$(date); pack 2>&1 | tee /tmp/oakmoss-pack.log | tail -25; if grep -q 'update_mbr failed\|size too large' /tmp/oakmoss-pack.log || ! grep -q 'Dragon execute image.cfg SUCCESS' /tmp/oakmoss-pack.log; then echo '=== image: pack FAILED'; exit 1; fi; ls -la out/a133-aw3/*.img" 2>&1 | tee -a "$LOG"; then
         die "image step failed (log: $LOG)"
     fi

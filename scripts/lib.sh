@@ -71,6 +71,15 @@ ZLIB_SHA256=9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23
 OPENSSL_TARBALL=openssl-1.1.1w.tar.gz
 OPENSSL_URL=https://www.openssl.org/source/old/1.1.1/$OPENSSL_TARBALL
 OPENSSL_SHA256=cf3098950cb4d853ad95c0841f1f9c6d3dc102dccfcacd521d93925208b76ac8
+SDL2_HDR_TARBALL=SDL2-2.26.1.tar.gz        # headers only: the mixer builds against the overlay's SDL2 2.26.1 binary
+SDL2_HDR_URL=https://github.com/libsdl-org/SDL/releases/download/release-2.26.1/$SDL2_HDR_TARBALL
+SDL2_HDR_SHA256=02537cc7ebd74071631038b237ec4bfbb3f4830ba019e569434da33f42373e04
+SDL2_MIXER_TARBALL=SDL2_mixer-2.8.0.tar.gz
+SDL2_MIXER_URL=https://github.com/libsdl-org/SDL_mixer/releases/download/release-2.8.0/$SDL2_MIXER_TARBALL
+SDL2_MIXER_SHA256=1cfb34c87b26dbdbc7afd68c4f545c0116ab5f90bbfecc5aebe2a9cb4bb31549
+BASH_TARBALL=bash-5.2.tar.gz
+BASH_URL=https://ftp.gnu.org/gnu/bash/$BASH_TARBALL
+BASH_SHA256=a139c166df7ff4471c5e0733051642ee5556c1cc8a4a78f145583c5c81ab32fb   # sdk-patches/bash-5.2.37 (+ its 37 patches, in the tree)
 # BatteryPlus (docs/batteryplus.md): Mikhailzrick's knubat.components at the last commit to BatteryPlus/,
 # GitHub's archive of that commit (GPL-2.0).
 BATTERYPLUS_COMMIT=1c31e89ec1828d51710ad35a607bdfad7e18464e
@@ -235,7 +244,7 @@ kdebug_patch_state() {
 # 29 = the merged line (integration/20261026): main's 21 + bundle/20261024 (26: patch 136) + feat/powkiddy-v90s
 # (24, 25, 27: patches 150-152) + feat/trimui-a133p (28: 160-161). NOT fix/pmf's 22-23 (140-142): the gate is >=,
 # so fix/pmf renumbers above 30 when it lands. 30: feat/brick-own-uboot (162, the TrimUI panel in U-Boot).
-OAKMOSS_MODS_VERSION=31
+OAKMOSS_MODS_VERSION=32
 need_mods() {
     local v
     [ -f "$SDK_DIR/.oakmoss-mods" ] || die "SDK modifications not applied (run scripts/apply-sdk-mods.sh)"

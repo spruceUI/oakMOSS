@@ -59,7 +59,7 @@ them (§3).
 | `spruce/flip/lib/lib-dynload/_crypt*.so` | `libcrypt.so.1` | mixed | needs BASE-OS libcrypt.so.1 |
 | `spruce/flip/lib/lib-dynload/_tkinter*.so` | bundled `libtcl8.6.so`/`libtk8.6.so` | SHIPPED | GLIBC_2.17 |
 | `spruce/flip/lib/libSDL2-2.0.so` (**SONAME `libSDL2-2.0.so.0`, filename has no `.0`**; still so on Development, 2026-10-04) | libX11, libwayland-client, … | **broken by name**, see §3 and §8.2; on these boards the base's `/usr/magicx/lib` copy stands in | GLIBC_2.29 |
-| `overlay/usr/magicx/lib/libSDL2{,_image,_mixer,_ttf}-2.0.so.0.*` | correctly named/symlinked | BORROWED (TrimUI Smart Pro / Moss-zero28) | GLIBC_2.29 max |
+| `overlay/usr/magicx/lib/libSDL2{,_image,_mixer,_ttf}-2.0.so.0.*` | correctly named/symlinked | BORROWED (TrimUI Smart Pro / Moss-zero28); the mixer is replaced at image time by SDL2_mixer 2.8.0 built from source on the Zero 28 and Zero 40 (`SDL2_MIXER=1`, `scripts/build-sdl2-mixer.sh`), because the borrowed 2.0.1 cannot load Ogg | GLIBC_2.29 max |
 | `spruce/flip/lib/libavformat.so.58`, `libavutil.so.56`, `libmp3lame.so.0` | many | SHIPPED | GLIBC_2.38 |
 | `spruce/flip/lib/{libsystemd,libxkbcommon,libwayland-egl++,liblzma,libvpx,libzstd,libdecor-0}` | — | SHIPPED | GLIBC_2.30–2.34 |
 | `spruce/bin64/{busybox,curl,ffmpeg,rsync,ssh-keygen,jq,wget,…}` (47 tools) | mostly libc.so.6 only | SHIPPED | GLIBC_2.17–2.21 |
