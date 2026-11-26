@@ -163,12 +163,15 @@ apply_overlay() {
         # The debug boot's text screen (src/fbtext.c, oakmoss-debug-text.sh), the same way
         "$cc" -static -Os -s -Wall -Wextra -Werror -o "$SDK_DIR/package/add-rootfs-demo/usr/magicx/bin/oakmoss-fbtext" \
             "$OAKMOSS_ROOT/src/fbtext.c" || die "oakmoss-fbtext did not build"
+        # The Zero 40 stick's dead zone (src/stickflat.c, rc.local), the same way
+        "$cc" -static -Os -s -Wall -Wextra -Werror -o "$SDK_DIR/package/add-rootfs-demo/usr/magicx/bin/oakmoss-stickflat" \
+            "$OAKMOSS_ROOT/src/stickflat.c" || die "oakmoss-stickflat did not build"
         # BatteryPlus (docs/batteryplus.md), started by /etc/init.d/batteryplus; its hook directories ship empty,
         # so it never has to create them on a read-only root
         cp -f "$(batteryplus_bin)" "$SDK_DIR/package/add-rootfs-demo/usr/magicx/bin/batteryplus" || die "no BatteryPlus"
         mkdir -p "$SDK_DIR/package/add-rootfs-demo/etc/batteryplus/"{charging.d,discharging.d,state.d}
     else
-        warn "no Arm toolchain at $ARMGNU_DIR: the image gets no oakmoss-sd1part (no SD1 installs), no oakmoss-backlight (the charge screen's backlight stays on while dark), no oakmoss-fbtext (no debug text) and no BatteryPlus"
+        warn "no Arm toolchain at $ARMGNU_DIR: the image gets no oakmoss-sd1part (no SD1 installs), no oakmoss-backlight (the charge screen's backlight stays on while dark), no oakmoss-fbtext (no debug text), no oakmoss-stickflat (no stick dead zone) and no BatteryPlus"
     fi
     printf '%s\n' "$DEVICE_MARKER" > "$SDK_DIR/package/add-rootfs-demo/usr/magicx/device"
     # A board whose first slot has a card-detect switch too (the Powkiddy boards: TF1 PF6, TF2 PG6)
