@@ -888,8 +888,8 @@ Worth knowing when you use a DAC:
 
 - **The port must be a host.** USB Debugging forces `otg_role` to `usb_device`,
   and the port then gives a DAC no power. With it off, the OTG manager goes host
-  by itself when the DAC's ID pin is grounded. The only USB-C port is then the
-  DAC's, so there is no adb and no charging.
+  by itself when the DAC's ID pin is grounded. The OTG port is then the DAC's, so
+  there is no adb on it; the board's other (DC) port charges as usual.
 - **A re-plug looks like the first plug.** The OTG manager rebuilds the whole
   host controller on every unplug (`rmmod`/`insmod` of the EHCI/OHCI drivers in
   dmesg), so the DAC is `usb 3-1`, device number 2, every time. Anything that
