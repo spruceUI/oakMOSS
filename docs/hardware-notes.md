@@ -871,3 +871,36 @@ Details: the research note `powkiddy-v20-v90s-20261023` (wrapper docs), section 
 `boards/v90s/board.dts` and `boards/v20/board.dts` are the stock tree (decompiled) with the edits
 in `scripts/make-board-dts-powkiddy.py`; `sys_config.fex` is the Zero 28's with the stock values
 (`scripts/make-sys-config-powkiddy.py`). Both scripts take the decompiled stock tree as input.
+
+## USB audio (Zero 28, Zero 40)
+
+The kernel builds `SND_USB_AUDIO`, `SND_HWDEP` and `SND_RAWMIDI` as modules
+(`020-kernel-config-4.9`), but Tina has no kmod package for them, so no image
+shipped any: a USB DAC enumerated and never became a sound card. `USB_AUDIO=1`
+in `board.conf` runs `scripts/install-usb-audio.sh`, which copies the four
+modules the kernel build already made (`snd-hwdep`, `snd-rawmidi`,
+`snd-usbmidi-lib`, `snd-usb-audio`) into `/lib/modules/4.9.191` and lists them
+in `/etc/modules.d/usb-audio`. There is no second build, so the compiler and the
+vermagic (`4.9.191 SMP preempt mod_unload aarch64`, MODVERSIONS off) are the
+kernel's own. The script checks both.
+
+Worth knowing when you use a DAC:
+
+- **The port must be a host.** USB Debugging forces `otg_role` to `usb_device`,
+  and the port then gives a DAC no power. With it off, the OTG manager goes host
+  by itself when the DAC's ID pin is grounded. The OTG port is then the DAC's, so
+  there is no adb on it; the board's other (DC) port charges as usual.
+- **A re-plug looks like the first plug.** The OTG manager rebuilds the whole
+  host controller on every unplug (`rmmod`/`insmod` of the EHCI/OHCI drivers in
+  dmesg), so the DAC is `usb 3-1`, device number 2, every time. Anything that
+  spots a re-plug by its device number sees the same one.
+- **After wake from sleep** the DAC disconnects and comes back about five
+  seconds later.
+- A DAC wakes at its own default volume, often 0 dB: lower it before the first
+  sound.
+
+Checked on a Zero 28 and a Zero 40 with a CX31993 dongle, music, games and
+volume. Those modules were built from this SDK's kernel tree with the boards'
+`/proc/config.gz` and loaded from the launcher, not from an image built with this
+step: the script itself was run against a stand-in tree only (vermagic gate,
+layout, load order).
