@@ -1,0 +1,14 @@
+#!/bin/sh /etc/rc.common
+# The boot log's size cap: /mnt/UDISK/oakmoss-boot.log gains a few lines every boot, on the small
+# rootfs_data overlay (on SD1 for the boards that boot from it). Past 64 KB it becomes
+# oakmoss-boot.log.1, replacing the one before. First in the boot, so nothing has it open
+# (debugtext's screen follows the file).
+
+START=00
+
+LOG=/mnt/UDISK/oakmoss-boot.log
+
+start() {
+    [ -f "$LOG" ] && size=$(wc -c < "$LOG") && [ "$size" -gt 65536 ] && mv -f "$LOG" "$LOG.1"
+    return 0
+}

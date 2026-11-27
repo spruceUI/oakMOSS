@@ -315,7 +315,8 @@ card to boot afterwards was `fix-xu20-pol0` (`lcd_pwm_pol 0`, touch flag 1), con
 
 Read this first next time, not the boot chain: every boot appends its decision
 to `/mnt/UDISK/oakmoss-boot.log` on the SD1 card (p8, ext4, readable on a PC
-with `mount -o ro /dev/sdX8`): `running /mnt/SDCARD/.tmp_update/updater` means
+with `mount -o ro /dev/sdX8`; past 64 KB the boot moves it to `oakmoss-boot.log.1`,
+`/etc/init.d/bootlog`): `running /mnt/SDCARD/.tmp_update/updater` means
 the base booted and SD2 mounted; `no card or nothing to run after 20 x 0.5 s;
 powering off` means SD2 never mounted; no `=== boot` line means the kernel never
 got that far. The kernel command line also carries the stock U-Boot's own
