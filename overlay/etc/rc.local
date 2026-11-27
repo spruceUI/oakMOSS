@@ -21,6 +21,12 @@ amixer -D hw:audiocodec cset name='MIC2 gain volume' 0
 amixer -D hw:sndac10710036 cset name='Channel 1 PGA Gain' 20
 amixer -D hw:sndac10710036 cset name='Channel 2 PGA Gain' 20
 
+# The stick's dead zone (src/stickflat.c): magicx-input reports none, and a stick
+# resting a little off centre held a direction down in SDL programs. SDL uses
+# the dead zone only when told to; the hand-off and everything it starts
+# inherit the setting. No-op on boards without magicx-input.
+/usr/magicx/bin/oakmoss-stickflat magicx-input 3000 && export SDL_LINUX_JOYSTICK_DEADZONES=1
+
 /usr/magicx/bin/runmagicx.sh
 
 exit 0
