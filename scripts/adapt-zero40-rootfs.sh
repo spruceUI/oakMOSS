@@ -69,14 +69,29 @@ uddk=$(strings "$R/usr/lib/libGLESv2.so" | grep -m1 -oE '[0-9]+\.[0-9]+@[0-9]+' 
 echo "--- modules: MagicX's set replaces ours (${theirs#vermagic=}; PowerVR DDK $kddk)"
 mkdir -p "$W/keep"
 for m in $RADIO_MODULES; do [ -f "$OM/$m.ko" ] && cp -a "$OM/$m.ko" "$W/keep/"; done
+# USB audio (scripts/install-usb-audio.sh): MagicX's kernel builds no snd-usb-audio, so their set has none.
+# Ours load into it (same 4.9.191 vermagic, checked above), and its autoload entry stays.
+USBA="snd-hwdep snd-rawmidi snd-usbmidi-lib snd-usb-audio"
+mkdir -p "$W/keep-usba"
+if [ -f "$R/etc/modules.d/usb-audio" ]; then
+    for m in $USBA; do
+        [ -f "$OM/$m.ko" ] || die "$m.ko missing from our rootfs though etc/modules.d/usb-audio exists"
+        mine=$(strings "$OM/$m.ko" | grep -m1 '^vermagic=' || true)
+        [ "$mine" = "$theirs" ] || die "$m: vermagic '$mine' is not MagicX's '$theirs'"
+        cp -a "$OM/$m.ko" "$W/keep-usba/"
+    done
+    cp -a "$R/etc/modules.d/usb-audio" "$W/usb-audio.autoload"
+fi
 rm -rf "$OM"; mkdir -p "$OM"
 cp -a "$VM"/*.ko "$OM/"
 cp -a "$W/keep"/*.ko "$OM/" 2>/dev/null || true
+cp -a "$W/keep-usba"/*.ko "$OM/" 2>/dev/null || true
 rm -f "$R"/etc/modules.d/*
 cp -a "$VD"/* "$R/etc/modules.d/"
+[ -f "$W/usb-audio.autoload" ] && cp -a "$W/usb-audio.autoload" "$R/etc/modules.d/usb-audio"
 : > "$R/etc/modules.d/net-xr829"   # the stub spruce's radio loader expects; loads nothing
 grep -rlE '^(8189es|xradio_[a-z]+|vin_io|vin_v4l2|cci)$' "$R/etc/modules.d" | grep . && die "a module of ours would still autoload" || true
-echo "    $(ls "$OM"/*.ko | wc -l) modules ($(ls "$W/keep" | wc -l) of ours kept, radio only, not autoloaded)"
+echo "    $(ls "$OM"/*.ko | wc -l) modules ($(ls "$W/keep" | wc -l) of ours kept, radio only, not autoloaded; $(ls "$W/keep-usba" | wc -l) USB audio, autoloaded)"
 echo "    autoload: $(ls "$R/etc/modules.d" | tr '\n' ' ')"
 
 echo "--- repack (xz, 256 KiB blocks, root-owned, as the SDK does)"
