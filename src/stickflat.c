@@ -3,8 +3,10 @@
  *
  *   oakmoss-stickflat <device name> <flat>
  *
- * Sets flat on ABS_X and ABS_Y of every input device with that name; exits 1 if
- * there is none. The Zero 40's magicx-input reports flat 0, but a stick can rest
+ * Sets flat on every stick axis (ABS_X to ABS_RZ) the device reports, on every input
+ * device with that name; exits 1 if there is none. The Zero 28 has two sticks, on
+ * ABS_X/ABS_Y and ABS_Z/ABS_RZ, and the second one gets the same dead zone as the
+ * first. The Zero 40's magicx-input reports flat 0, but a stick can rest
  * a few percent off centre (ABS_Y -819 to -901 on one unit), and gptokeyb2 held a
  * direction down forever. SDL reads flat as a dead zone only with
  * SDL_LINUX_JOYSTICK_DEADZONES=1, which rc.local exports when this succeeds.
@@ -38,10 +40,13 @@ int main(int argc, char **argv)
 			continue;
 		memset(name, 0, sizeof name);
 		if (ioctl(fd, EVIOCGNAME(sizeof name - 1), name) >= 0 && !strcmp(name, argv[1])) {
-			for (int code = ABS_X; code <= ABS_Y; code++) {
+			unsigned char bits[ABS_MAX / 8 + 1] = { 0 };
+
+			ioctl(fd, EVIOCGBIT(EV_ABS, sizeof bits), bits);
+			for (int code = ABS_X; code <= ABS_RZ; code++) {
 				struct input_absinfo a;
 
-				if (ioctl(fd, EVIOCGABS(code), &a) < 0)
+				if (!(bits[code / 8] >> (code % 8) & 1) || ioctl(fd, EVIOCGABS(code), &a) < 0)
 					continue;
 				a.flat = flat;
 				if (ioctl(fd, EVIOCSABS(code), &a) == 0)
